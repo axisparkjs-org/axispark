@@ -54,6 +54,21 @@ export interface TimeoutOptions {
     message?: string | ((time: number) => string);
 }
 
+/**
+ * Options for configuring HTTP rate limiting.
+ */
+export interface RateLimitOptions {
+    /** The sliding time window in milliseconds. */
+    ttl: number;
+    /** The maximum number of requests allowed in the window. */
+    limit: number;
+    /** The response message when a client exceeds the limit. The function receives milliseconds until the oldest request expires. */
+    message?: string | ((time: number) => string);
+}
+
+/** Options supported by the `@RateLimit()` decorator. */
+export type RateLimitDecoratorOptions = Partial<Pick<RateLimitOptions, 'ttl' | 'limit'>>;
+
 /** Severity to apply to a route compatibility finding. */
 export type RouteValidationAction = 'error' | 'warn' | 'ignore';
 
@@ -143,6 +158,10 @@ export interface HttpPluginOptions extends PluginOptions {
      * Options for configuring the timeout middleware.
      */
     timeoutOptions?: TimeoutOptions;
+    /** Whether to use HTTP rate limiting. Disabled by default. */
+    rateLimit?: boolean;
+    /** Default rate limits applied to endpoints without decorator overrides. */
+    rateLimitOptions?: RateLimitOptions;
     /**
      * Whether to use the versioning guard.
      */

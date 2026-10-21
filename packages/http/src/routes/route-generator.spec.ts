@@ -31,6 +31,11 @@ describe('RouteGenerator', () => {
         create: jest.fn().mockReturnValue({})
     };
 
+    const rateLimitResolver = {
+        consume: jest.fn().mockReturnValue({ allowed: true, retryAfterMs: 0 }),
+        getMessage: jest.fn().mockReturnValue('Too many requests')
+    };
+
     const createGenerator = (options: Partial<HttpPluginOptions> = {}) => {
         return new RouteGenerator(
             httpEngine as any,
@@ -41,7 +46,8 @@ describe('RouteGenerator', () => {
                 basePath: '',
                 version: false,
                 ...options
-            } as HttpPluginOptions
+            } as HttpPluginOptions,
+            rateLimitResolver as any
         );
     };
 
@@ -58,6 +64,8 @@ describe('RouteGenerator', () => {
         httpEngine.execute.mockReset();
         httpEngine.versionMapping.mockReset();
         scopedContainerManager.create.mockClear();
+        rateLimitResolver.consume.mockReset().mockReturnValue({ allowed: true, retryAfterMs: 0 });
+        rateLimitResolver.getMessage.mockReset().mockReturnValue('Too many requests');
     });
 
     describe('generate', () => {
@@ -100,6 +108,110 @@ describe('RouteGenerator', () => {
             expect(result).toHaveLength(2);
             expect(result[0]).toBeInstanceOf(RouteDefinition);
             expect(result[1]).toBeInstanceOf(RouteDefinition);
+        });
+
+        it('should apply the global rate limit and execute allowed requests', async () => {
+            const routeMetadata = {
+                target: TestController,
+                propertyKey: 'index',
+                method: 'GET',
+                path: '/items'
+            };
+            setupMetadata({ prefix: 'users' }, [routeMetadata]);
+            (Metadata.get as jest.Mock).mockReturnValueOnce(undefined).mockReturnValueOnce(undefined);
+
+            const generator = createGenerator({ rateLimit: true });
+            const [route] = await generator.generate();
+            const response = { status: jest.fn().mockReturnThis(), header: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await route.handler({
+                request: { ip: '127.0.0.1' },
+                response
+            } as any);
+
+            expect(rateLimitResolver.consume).toHaveBeenCalledWith('127.0.0.1', 'GET:/users/items:TestController.index', {});
+            expect(httpEngine.execute).toHaveBeenCalledTimes(1);
+            expect(response.status).not.toHaveBeenCalled();
+        });
+
+        it('should respond with a rate limit error and skip the handler when over the limit', async () => {
+            setupMetadata({ prefix: 'users' }, [{ target: TestController, propertyKey: 'index', method: 'GET', path: '/items' }]);
+            (Metadata.get as jest.Mock).mockReturnValueOnce(undefined).mockReturnValueOnce(undefined);
+            rateLimitResolver.consume.mockReturnValue({ allowed: false, retryAfterMs: 1_500 });
+
+            const generator = createGenerator({ rateLimit: true });
+            const [route] = await generator.generate();
+            const response = { status: jest.fn().mockReturnThis(), header: jest.fn().mockReturnThis(), json: jest.fn() };
+
+            await route.handler({ request: { ip: '127.0.0.1' }, response } as any);
+
+            expect(response.status).toHaveBeenCalledWith(429);
+            expect(response.header).toHaveBeenCalledWith('Retry-After', '2');
+            expect(response.json).toHaveBeenCalledWith({ message: 'Too many requests' });
+            expect(httpEngine.execute).not.toHaveBeenCalled();
+        });
+
+        it('should use handler metadata to disable rate limiting', async () => {
+            setupMetadata({ prefix: 'users' }, [{ target: TestController, propertyKey: 'index', method: 'GET', path: '/items' }]);
+            (Metadata.get as jest.Mock).mockReturnValueOnce({ disabled: true }).mockReturnValueOnce(undefined);
+
+            const generator = createGenerator({ rateLimit: true });
+            const [route] = await generator.generate();
+
+            await route.handler({ request: { ip: '127.0.0.1' }, response: {} } as any);
+
+            expect(rateLimitResolver.consume).not.toHaveBeenCalled();
+            expect(httpEngine.execute).toHaveBeenCalledTimes(1);
+        });
+
+        it('should use handler rate limit metadata with omitted options', async () => {
+            setupMetadata({ prefix: 'users' }, [{ target: TestController, propertyKey: 'index', method: 'GET', path: '/items' }]);
+            (Metadata.get as jest.Mock).mockReturnValueOnce({ disabled: false }).mockReturnValueOnce(undefined);
+
+            const generator = createGenerator({ rateLimit: true });
+            const [route] = await generator.generate();
+
+            await route.handler({ request: { ip: '127.0.0.1' }, response: {} } as any);
+
+            expect(rateLimitResolver.consume).toHaveBeenCalledWith('127.0.0.1', 'GET:/users/items:TestController.index', {});
+        });
+
+        it('should use controller rate limit metadata when the handler has none', async () => {
+            setupMetadata({ prefix: 'users' }, [{ target: TestController, propertyKey: 'index', method: 'GET', path: '/items' }]);
+            (Metadata.get as jest.Mock).mockReturnValueOnce(undefined).mockReturnValueOnce({ disabled: false, options: { limit: 3 } });
+
+            const generator = createGenerator({ rateLimit: true });
+            const [route] = await generator.generate();
+
+            await route.handler({ request: { ip: '127.0.0.1' }, response: {} } as any);
+
+            expect(rateLimitResolver.consume).toHaveBeenCalledWith('127.0.0.1', 'GET:/users/items:TestController.index', { limit: 3 });
+        });
+
+        it('should ignore rate limit decorators when rate limiting is disabled', async () => {
+            setupMetadata({ prefix: 'users' }, [{ target: TestController, propertyKey: 'index', method: 'GET', path: '/items' }]);
+
+            const generator = createGenerator({ rateLimit: false });
+            const [route] = await generator.generate();
+
+            await route.handler({ request: { ip: '127.0.0.1' }, response: {} } as any);
+
+            expect(Metadata.get).toHaveBeenCalledTimes(2);
+            expect(rateLimitResolver.consume).not.toHaveBeenCalled();
+            expect(httpEngine.execute).toHaveBeenCalledTimes(1);
+        });
+
+        it('should bypass rate limits declared disabled on the controller', async () => {
+            setupMetadata({ prefix: 'users' }, [{ target: TestController, propertyKey: 'index', method: 'GET', path: '/items' }]);
+            (Metadata.get as jest.Mock).mockReturnValueOnce(undefined).mockReturnValueOnce({ disabled: true });
+
+            const generator = createGenerator({ rateLimit: true });
+            const [route] = await generator.generate();
+
+            await route.handler({ request: { ip: '127.0.0.1' }, response: {} } as any);
+
+            expect(rateLimitResolver.consume).not.toHaveBeenCalled();
+            expect(httpEngine.execute).toHaveBeenCalledTimes(1);
         });
 
         it('should use the controller prefix and route path', async () => {

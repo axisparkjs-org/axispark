@@ -68,6 +68,8 @@ describe('FastifyHttpAdapter', () => {
         healthChecks: false,
         timeout: false,
         timeoutOptions: undefined,
+        rateLimit: false,
+        rateLimitOptions: undefined,
         version: false,
         versionOptions: undefined,
         logErrors: false,
