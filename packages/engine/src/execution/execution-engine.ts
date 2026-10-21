@@ -34,9 +34,10 @@ export class ExecutionEngine implements Executable {
 
             if (plan.timeout) {
                 let finished = false;
+                let timeoutId: ReturnType<typeof setTimeout> | undefined;
                 const timeout = async () => {
                     await new Promise<void>((resolve, reject) => {
-                        setTimeout(
+                        timeoutId = setTimeout(
                             async () => {
                                 if (finished) {
                                     resolve();
@@ -59,6 +60,7 @@ export class ExecutionEngine implements Executable {
                     result = await Promise.race([execution(), timeout()]);
                 } finally {
                     finished = true;
+                    if (timeoutId !== undefined) clearTimeout(timeoutId);
                 }
             } else {
                 result = await execution();

@@ -458,8 +458,7 @@ describe('ExecutionEngine', () => {
 
             expect(timeoutProcessor.process).not.toHaveBeenCalled();
             expect(resultProcessor.process).toHaveBeenCalledWith('result', context);
-
-            jest.runOnlyPendingTimers();
+            expect(jest.getTimerCount()).toBe(0);
         });
 
         it('should invoke the timeout processor when execution does not finish before timeout', async () => {
@@ -569,8 +568,7 @@ describe('ExecutionEngine', () => {
             expect(resultProcessor.process).toHaveBeenCalledWith(result, context);
 
             expect(timeoutProcessor.process).not.toHaveBeenCalled();
-
-            jest.runOnlyPendingTimers();
+            expect(jest.getTimerCount()).toBe(0);
         });
 
         it('should process undefined when the timeout wins the race', async () => {
