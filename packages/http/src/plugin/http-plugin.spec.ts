@@ -74,6 +74,11 @@ describe('HttpPlugin', () => {
         timeout: true,
         timeoutOptions: {
             time: 5000
+        },
+        rateLimit: false,
+        rateLimitOptions: {
+            ttl: 60_000,
+            limit: 100
         }
     } as HttpPluginOptions;
 

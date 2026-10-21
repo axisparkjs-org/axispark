@@ -29,6 +29,11 @@ describe('HttpPluginOptionsFactory', () => {
                 timeoutOptions: {
                     time: 5000
                 },
+                rateLimit: false,
+                rateLimitOptions: {
+                    ttl: 60_000,
+                    limit: 100
+                },
                 version: false,
                 versionOptions: undefined,
                 logHttpErrors: false,
@@ -64,6 +69,11 @@ describe('HttpPluginOptionsFactory', () => {
                 healthChecks: true,
                 timeout: false,
                 timeoutOptions: undefined,
+                rateLimit: true,
+                rateLimitOptions: {
+                    ttl: 10_000,
+                    limit: 5
+                },
                 version: false,
                 versionOptions: undefined,
                 logHttpErrors: true,
@@ -92,6 +102,11 @@ describe('HttpPluginOptionsFactory', () => {
                 healthChecks: true,
                 timeout: false,
                 timeoutOptions: undefined,
+                rateLimit: true,
+                rateLimitOptions: {
+                    ttl: 10_000,
+                    limit: 5
+                },
                 version: false,
                 versionOptions: undefined,
                 logHttpErrors: true,

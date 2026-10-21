@@ -25,7 +25,19 @@ export class ChatWebSocket {
 
 The namespace argument is optional; `@WebSocket()` declares the default namespace. The adapter normalizes namespace names to start with `/`, so `@WebSocket('chat')` and `@WebSocket('/chat')` refer to `/chat`.
 
-Each class can declare multiple event handlers. The event string in `@WebSocketEvent()` must match the event name emitted by the client.
+Each class can declare multiple event handlers. Pass a string to match one exact event name, or a `RegExp` to handle event names that match a pattern:
+
+```ts
+@WebSocketEvent('message')
+onMessage() {}
+
+@WebSocketEvent(/^user:\w+$/)
+onUserEvent() {}
+```
+
+Regex patterns are tested against the complete event name using JavaScript `RegExp` semantics. The adapter does not add anchors, so an unanchored pattern can match part of an event name. All JavaScript regex flags are honored. Global (`g`) and sticky (`y`) patterns are evaluated from index zero for every event, and their `lastIndex` is restored afterward so matching does not depend on earlier events. String event names continue to match exactly.
+
+If multiple regex patterns match one event name, each matching handler runs. An exact event handler and a matching regex handler can both handle the same event.
 
 ## Handle a new connection
 

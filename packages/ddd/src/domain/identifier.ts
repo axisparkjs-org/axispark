@@ -1,7 +1,8 @@
 import { ValueObject } from './value-object';
 
 /**
- * Identifier is an abstract class that represents a unique identifier for entities in a domain-driven design context. It extends the ValueObject class and provides a base for creating specific identifier types that can be used to uniquely identify entities within the domain. Subclasses of Identifier can be created to represent different types of identifiers, allowing for strong typing and encapsulation of identifier logic.
+ * Value-object base for strongly typed entity identifiers.
+ * Subclasses implement `validate`; `toString()` converts the wrapped value with `String`.
  */
 export abstract class Identifier<T = string> extends ValueObject<T> {
     /**

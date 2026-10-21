@@ -9,6 +9,9 @@ import { HTTP_OPTIONS } from '../di';
 import { HttpEngine } from '../engine/http-engine';
 import { VersionType } from '../version';
 import { HttpContext } from '../types';
+import { RateLimitMetadata } from '../metadata/rate-limit-metadata';
+import { HttpRateLimitResolver } from '../implementations/rate-limits';
+import { RateLimitDecoratorOptions } from '../plugin/http-plugin-options';
 
 /**
  * A generator for creating route definitions based on controller and route metadata.
@@ -18,7 +21,8 @@ export class RouteGenerator implements Generator<RouteDefinition[]> {
     constructor(
         private readonly httpEngine: HttpEngine,
         private readonly scopedContainerManager: ScopedContainerManager,
-        @Inject(HTTP_OPTIONS) private readonly httpPluginOptions: HttpPluginOptions
+        @Inject(HTTP_OPTIONS) private readonly httpPluginOptions: HttpPluginOptions,
+        private readonly rateLimitResolver: HttpRateLimitResolver
     ) {}
 
     /**
@@ -45,19 +49,46 @@ export class RouteGenerator implements Generator<RouteDefinition[]> {
                             ? this.arrayifyFromVersion(versionOptions.defaultVersion)
                             : ['default']);
 
+                const routePath = this.pathCreator(this.httpPluginOptions.basePath, controllerMetadata.prefix, routeMetadata.path, versionUriEnabled);
+                const rateLimitOptions = this.resolveRateLimitOptions(routeMetadata.target, routeMetadata.propertyKey);
+                const rateLimitEndpoint = `${routeMetadata.method}:${routePath}:${routeMetadata.target.name}.${String(routeMetadata.propertyKey)}`;
                 const routeDefinition = new RouteDefinition(
                     routeMetadata.target,
                     routeMetadata.propertyKey,
                     routeMetadata.method,
-                    this.pathCreator(this.httpPluginOptions.basePath, controllerMetadata.prefix, routeMetadata.path, versionUriEnabled),
+                    routePath,
                     finalVersions,
-                    async (context) => await this.httpEngine.execute(this.fillContext(context, routeMetadata))
+                    async (context) => {
+                        if (rateLimitOptions) {
+                            const decision = this.rateLimitResolver.consume(context.request.ip, rateLimitEndpoint, rateLimitOptions);
+                            if (!decision.allowed) {
+                                context.response
+                                    .status(429)
+                                    .header('Retry-After', String(Math.max(1, Math.ceil(decision.retryAfterMs / 1000))))
+                                    .json({ message: this.rateLimitResolver.getMessage(decision.retryAfterMs) });
+                                return;
+                            }
+                        }
+                        await this.httpEngine.execute(this.fillContext(context, routeMetadata));
+                    }
                 );
                 routes.push(routeDefinition);
             }
         }
         if (this.httpPluginOptions.version) return this.groupRoutesByPathMergingVersions(routes);
         return routes;
+    }
+
+    private resolveRateLimitOptions(target: object, propertyKey: string | symbol): RateLimitDecoratorOptions | undefined {
+        if (!this.httpPluginOptions.rateLimit) return undefined;
+
+        const handlerMetadata = Metadata.get<RateLimitMetadata>(MetadataKeys.RATE_LIMIT, target, propertyKey);
+        if (handlerMetadata) return handlerMetadata.disabled ? undefined : (handlerMetadata.options ?? {});
+
+        const controllerMetadata = Metadata.get<RateLimitMetadata>(MetadataKeys.RATE_LIMIT, target);
+        if (controllerMetadata) return controllerMetadata.disabled ? undefined : (controllerMetadata.options ?? {});
+
+        return {};
     }
 
     private groupRoutesByPathMergingVersions(routes: RouteDefinition[]): RouteDefinition[] {

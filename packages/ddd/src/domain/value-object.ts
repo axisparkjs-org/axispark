@@ -1,5 +1,7 @@
 /**
- * ValueObject is an abstract class that represents a value object in a domain-driven design context. It provides a base for creating value objects that encapsulate a specific value and provide equality comparison based on that value. Subclasses of ValueObject can be created to represent specific types of values, allowing for strong typing and encapsulation of value logic.
+ * Base class for values whose equality is determined by their wrapped value.
+ * Subclasses validate values and provide a string representation. Equality compares
+ * the wrapped values by their JSON serialization.
  */
 export abstract class ValueObject<T> {
     protected readonly _value: T;

@@ -6,4 +6,5 @@ export * from './interceptors';
 export * from './parameters';
 export * from './results';
 export * from './timeouts';
+export * from './rate-limits';
 export * from './versions';

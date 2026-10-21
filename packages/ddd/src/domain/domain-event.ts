@@ -1,6 +1,4 @@
-/**
- * DomainEvent is an abstract class that represents a domain event in a domain-driven design context. It captures the occurrence of an event within the domain and provides a timestamp indicating when the event occurred. Subclasses of DomainEvent can be created to represent specific events in the domain, allowing for event-driven architectures and event sourcing patterns.
- */
+/** Base class for domain facts, timestamped when the event is constructed. */
 export abstract class DomainEvent {
     private readonly _occurredOn: Date;
 
