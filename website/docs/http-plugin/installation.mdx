@@ -35,7 +35,6 @@ app.use(HttpPlugin, HttpPluginOptionsFactory.create({
 
 Http Plugin offers a `HttpPluginOptionsFactory` class that allows you to configure the plugin with various options. The `HttpPluginOptionsFactory.create()` method accepts an object with the following properties:
 
-
 ```ts name="http-plugin-options.ts"
 /**
  * Options for configuring the header-based version resolver.
@@ -85,6 +84,18 @@ export interface TimeoutOptions {
     /**
      * The message to display when a timeout occurs. By default, it will display a generic timeout message.
      */
+    message?: string | ((time: number) => string);
+}
+
+/**
+ * Options for configuring HTTP rate limiting.
+ */
+export interface RateLimitOptions {
+    /** The sliding time window in milliseconds. */
+    ttl: number;
+    /** The maximum number of requests allowed in the window. */
+    limit: number;
+    /** The response message when a client exceeds the limit. */
     message?: string | ((time: number) => string);
 }
 
@@ -160,6 +171,10 @@ export interface HttpPluginOptions extends PluginOptions {
      * Options for configuring the timeout middleware.
      */
     timeoutOptions?: TimeoutOptions;
+    /** Whether to use HTTP rate limiting. Disabled by default. */
+    rateLimit?: boolean;
+    /** Default rate limits applied to endpoints without decorator overrides. */
+    rateLimitOptions?: RateLimitOptions;
     /**
      * Whether to use the versioning guard.
      */

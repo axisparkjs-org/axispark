@@ -30,6 +30,11 @@ export class HttpPluginOptionsFactoryStatic implements Factory<ExpressHttpPlugin
             timeoutOptions: {
                 time: 5000
             },
+            rateLimit: false,
+            rateLimitOptions: {
+                ttl: 60_000,
+                limit: 100
+            },
             version: false,
             versionOptions: undefined,
             logHttpErrors: false,

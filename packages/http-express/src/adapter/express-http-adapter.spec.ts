@@ -63,6 +63,8 @@ describe('ExpressHttpAdapter', () => {
         cookies: false,
         compression: false,
         timeout: false,
+        rateLimit: false,
+        rateLimitOptions: undefined,
         logErrors: false,
         logHttpErrors: false,
         logHttpRequests: false,
