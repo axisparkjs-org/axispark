@@ -13,13 +13,18 @@ import {
     GoneError,
     LengthRequiredError,
     PreconditionFailedError,
+    ContentTooLargeError,
     PayloadTooLargeError,
     UriTooLongError,
     UnsupportedMediaTypeError,
+    RangeNotSatisfiableError,
     RequestedRangeNotSatisfiableError,
     ExpectationFailedError,
+    UnusedError,
     IAmATeapotError,
+    MisdirectedRequestError,
     MisdirectedError,
+    UnprocessableContentError,
     UnprocessableEntityError,
     LockedError,
     FailedDependencyError,
@@ -70,14 +75,19 @@ describe('HTTP errors', () => {
         [GoneError, HttpStatusCode.Gone],
         [LengthRequiredError, HttpStatusCode.LengthRequired],
         [PreconditionFailedError, HttpStatusCode.PreconditionFailed],
-        [PayloadTooLargeError, HttpStatusCode.PayloadTooLarge],
+        [ContentTooLargeError, HttpStatusCode.ContentTooLarge],
+        [PayloadTooLargeError, HttpStatusCode.ContentTooLarge],
         [UriTooLongError, HttpStatusCode.UriTooLong],
         [UnsupportedMediaTypeError, HttpStatusCode.UnsupportedMediaType],
-        [RequestedRangeNotSatisfiableError, HttpStatusCode.RequestedRangeNotSatisfiable],
+        [RangeNotSatisfiableError, HttpStatusCode.RangeNotSatisfiable],
+        [RequestedRangeNotSatisfiableError, HttpStatusCode.RangeNotSatisfiable],
         [ExpectationFailedError, HttpStatusCode.ExpectationFailed],
-        [IAmATeapotError, HttpStatusCode.IAmATeapot],
-        [MisdirectedError, HttpStatusCode.Misdirected],
-        [UnprocessableEntityError, HttpStatusCode.UnprocessableEntity],
+        [UnusedError, HttpStatusCode.Unused],
+        [IAmATeapotError, HttpStatusCode.Unused],
+        [MisdirectedRequestError, HttpStatusCode.MisdirectedRequest],
+        [MisdirectedError, HttpStatusCode.MisdirectedRequest],
+        [UnprocessableContentError, HttpStatusCode.UnprocessableContent],
+        [UnprocessableEntityError, HttpStatusCode.UnprocessableContent],
         [LockedError, HttpStatusCode.Locked],
         [FailedDependencyError, HttpStatusCode.FailedDependency],
         [PreconditionRequiredError, HttpStatusCode.PreconditionRequired],
@@ -104,5 +114,20 @@ describe('HTTP errors', () => {
         expect(error.response).toBe('message');
         expect(error.status).toBe(status);
         expect(error.options).toBe(options);
+    });
+});
+
+describe('legacy HTTP error aliases', () => {
+    it.each([
+        [PayloadTooLargeError, ContentTooLargeError],
+        [RequestedRangeNotSatisfiableError, RangeNotSatisfiableError],
+        [IAmATeapotError, UnusedError],
+        [MisdirectedError, MisdirectedRequestError],
+        [UnprocessableEntityError, UnprocessableContentError]
+    ])('%p remains a subclass of %p', (LegacyError, CurrentError) => {
+        const error = new LegacyError('message');
+
+        expect(error).toBeInstanceOf(CurrentError);
+        expect(error.name).toBe(LegacyError.name);
     });
 });

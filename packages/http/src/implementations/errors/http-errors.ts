@@ -15,7 +15,8 @@ export class HttpError extends Error {
 }
 
 /**
- * An error thrown when the client sends a malformed request.
+ * An error for a request the server cannot or will not process due to a perceived client error.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.1
  */
 export class BadRequestError extends HttpError {
     constructor(response: string, options?: { cause?: unknown; description?: string }) {
@@ -119,15 +120,21 @@ export class PreconditionFailedError extends HttpError {
     }
 }
 /**
- * An error thrown when the server returns a 413 Payload Too Large response.
+ * An error thrown when the server returns a 413 Content Too Large response.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.14
  */
-export class PayloadTooLargeError extends HttpError {
+export class ContentTooLargeError extends HttpError {
     constructor(response: string, options?: { cause?: unknown; description?: string }) {
-        super(response, HttpStatusCode.PayloadTooLarge, options);
+        super(response, HttpStatusCode.ContentTooLarge, options);
     }
 }
+
 /**
- * An error thrown when the server returns a 414 Uri Too Long response.
+ * @deprecated Use ContentTooLargeError, the RFC 9110 name for status 413.
+ */
+export class PayloadTooLargeError extends ContentTooLargeError {}
+/**
+ * An error thrown when the server returns a 414 URI Too Long response.
  */
 export class UriTooLongError extends HttpError {
     constructor(response: string, options?: { cause?: unknown; description?: string }) {
@@ -143,13 +150,19 @@ export class UnsupportedMediaTypeError extends HttpError {
     }
 }
 /**
- * An error thrown when the server returns a 416 Requested Range Not Satisfiable response.
+ * An error thrown when the server returns a 416 Range Not Satisfiable response.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.17
  */
-export class RequestedRangeNotSatisfiableError extends HttpError {
+export class RangeNotSatisfiableError extends HttpError {
     constructor(response: string, options?: { cause?: unknown; description?: string }) {
-        super(response, HttpStatusCode.RequestedRangeNotSatisfiable, options);
+        super(response, HttpStatusCode.RangeNotSatisfiable, options);
     }
 }
+
+/**
+ * @deprecated Use RangeNotSatisfiableError, the RFC 9110 name for status 416.
+ */
+export class RequestedRangeNotSatisfiableError extends RangeNotSatisfiableError {}
 /**
  * An error thrown when the server returns a 417 Expectation Failed response.
  */
@@ -159,29 +172,48 @@ export class ExpectationFailedError extends HttpError {
     }
 }
 /**
- * An error thrown when the server returns a 418 I Am A Teapot response.
+ * An error for status 418, which RFC 9110 marks as reserved and unused.
+ * Avoid using this status for application responses.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.19
  */
-export class IAmATeapotError extends HttpError {
+export class UnusedError extends HttpError {
     constructor(response: string, options?: { cause?: unknown; description?: string }) {
-        super(response, HttpStatusCode.IAmATeapot, options);
+        super(response, HttpStatusCode.Unused, options);
     }
 }
+
+/**
+ * @deprecated Status 418 is reserved and unused according to RFC 9110.
+ */
+export class IAmATeapotError extends UnusedError {}
 /**
  * An error thrown when the server returns a 421 Misdirected Request response.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.20
  */
-export class MisdirectedError extends HttpError {
+export class MisdirectedRequestError extends HttpError {
     constructor(response: string, options?: { cause?: unknown; description?: string }) {
-        super(response, HttpStatusCode.Misdirected, options);
+        super(response, HttpStatusCode.MisdirectedRequest, options);
     }
 }
+
 /**
- * An error thrown when the server returns a 422 Unprocessable Entity response.
+ * @deprecated Use MisdirectedRequestError, the RFC 9110 name for status 421.
  */
-export class UnprocessableEntityError extends HttpError {
+export class MisdirectedError extends MisdirectedRequestError {}
+/**
+ * An error thrown when the server returns a 422 Unprocessable Content response.
+ * @see https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.21
+ */
+export class UnprocessableContentError extends HttpError {
     constructor(response: string, options?: { cause?: unknown; description?: string }) {
-        super(response, HttpStatusCode.UnprocessableEntity, options);
+        super(response, HttpStatusCode.UnprocessableContent, options);
     }
 }
+
+/**
+ * @deprecated Use UnprocessableContentError, the RFC 9110 name for status 422.
+ */
+export class UnprocessableEntityError extends UnprocessableContentError {}
 /**
  * An error thrown when the server returns a 423 Locked response.
  */

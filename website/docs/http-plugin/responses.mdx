@@ -74,6 +74,10 @@ These are the default status codes for each HTTP method when using automatic res
 
 In automatic response handling, the best idea to return errors is to throw an `HttpError` with the appropriate status code and message. You can use the `HttpError` class or any of its subclasses, such as `BadRequestError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, and more. The Http Plugin will catch the error and send an appropriate response to the client.
 
+The status code names follow [RFC 9110, Section 15](https://www.rfc-editor.org/rfc/rfc9110.html#section-15). Use `HttpStatusCode.MultipleChoices` for 300, `HttpStatusCode.ContentTooLarge` and `ContentTooLargeError` for 413, `HttpStatusCode.RangeNotSatisfiable` and `RangeNotSatisfiableError` for 416, `HttpStatusCode.MisdirectedRequest` and `MisdirectedRequestError` for 421, and `HttpStatusCode.UnprocessableContent` and `UnprocessableContentError` for 422. Previous names remain available as deprecated aliases.
+
+RFC 9110 marks status 418 as unused and reserved. `HttpStatusCode.Unused` and `UnusedError` identify it for completeness; avoid using it for application responses. The former `IAmATeapot` names remain deprecated compatibility aliases.
+
 ```ts title="automatic-response-error-example.ts"
 import { Controller, Get, HttpError, BadRequestError, HttpStatusCode } from '@axisparkjs/http';
 
