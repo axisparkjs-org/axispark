@@ -4,7 +4,8 @@ import { HasDomainEvents } from './has-domain-events';
 import { Identifier } from './identifier';
 
 /**
- * AggregateRoot is a base class for aggregate roots in a domain-driven design context. It extends the Entity class and implements the HasDomainEvents interface, allowing it to manage domain events associated with the aggregate root.
+ * Entity base that buffers domain events raised by an aggregate.
+ * Events remain in memory until pulled or cleared; this class does not publish them.
  */
 export abstract class AggregateRoot<T extends Identifier> extends Entity<T> implements HasDomainEvents {
     private readonly _domainEvents: DomainEvent[] = [];
