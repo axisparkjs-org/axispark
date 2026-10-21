@@ -9,7 +9,7 @@ export class WebSocketEventDefinition {
         public readonly target: ClassType,
         public readonly propertyKey: string | symbol,
         public readonly namespace: string,
-        public readonly event: string,
+        public readonly event: string | RegExp,
         public readonly handler: WebSocketEventHandler
     ) {}
 }
