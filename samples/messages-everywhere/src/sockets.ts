@@ -33,6 +33,11 @@ export class ChatWebSocket {
         };
     }
 
+    @WebSocketEvent(/^user:\w+$/)
+    public async onUserEvent(@WsMessage() message: WebSocketMessage) {
+        return { event: message.event, data: message.data };
+    }
+
     @WebSocketEvent('connection')
     public async onConnection(@WsConnection() connection: WebSocketConnection) {
         const data = { message: 'Connection event', connectionId: connection.id };

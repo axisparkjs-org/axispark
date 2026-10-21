@@ -100,6 +100,16 @@ describe.each([{ name: 'Socket.IO', app: appSocketio }])('Messages Everywhere Ap
         });
     });
 
+    it('should dispatch events whose names match a regular expression', async () => {
+        const data = { id: 42 };
+        const response = await new Promise<any>((resolve, reject) => {
+            socket.emit('user:created', data, (ackResponse: any) => resolve(ackResponse));
+            socket.on('error', (err) => reject(err));
+        });
+
+        expect(response).toEqual({ event: 'user:created', data });
+    });
+
     it('should receive a connection event', async () => {
         const response = await new Promise<any>((resolve, reject) => {
             socket.on('connection-event', (data: any) => {

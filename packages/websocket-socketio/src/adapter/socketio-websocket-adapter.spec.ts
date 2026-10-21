@@ -47,10 +47,12 @@ describe('SocketIOWebSocketAdapter', () => {
         const { adapter, io } = createAdapter({ useHttpPluginServer: false } as any);
         const connectionHandler = jest.fn();
         const chatHandler = jest.fn();
+        const regexHandler = jest.fn();
         const otherHandler = jest.fn();
         const events = [
             { namespace: '/chat', event: 'connection', handler: connectionHandler },
             { namespace: '/chat', event: 'chat', handler: chatHandler },
+            { namespace: '/chat', event: /^user:\w+$/gi, handler: regexHandler },
             { namespace: '/other', event: 'message', handler: otherHandler }
         ] as any;
 
@@ -62,9 +64,13 @@ describe('SocketIOWebSocketAdapter', () => {
         const chatNamespace = io.of('/chat') as any;
         const connect = chatNamespace.on.mock.calls[0][1] as (socket: any) => Promise<void>;
         const listeners: Record<string, (data: unknown, ack?: (response?: unknown) => void) => Promise<void>> = {};
+        let anyListener: ((eventName: string, ...args: unknown[]) => Promise<void>) | undefined;
         const socket = {
             on: jest.fn((name: string, handler: any) => {
                 listeners[name] = handler;
+            }),
+            onAny: jest.fn((handler: typeof anyListener) => {
+                anyListener = handler;
             }),
             id: 'socket-id',
             nsp: { name: '/chat' },
@@ -86,7 +92,39 @@ describe('SocketIOWebSocketAdapter', () => {
                 message: expect.objectContaining({ event: 'chat', data: 1, ack })
             })
         );
+        const regexAck = jest.fn();
+        await anyListener?.('USER:CREATED', { id: 7 }, regexAck);
+        expect(regexHandler).toHaveBeenCalledWith(
+            expect.objectContaining({
+                connection: expect.any(SocketIOWebSocketConnection),
+                message: expect.objectContaining({ event: 'USER:CREATED', data: { id: 7 }, ack: regexAck })
+            })
+        );
+        await anyListener?.('USER:UPDATED', { id: 7 }, regexAck);
+        expect(regexHandler).toHaveBeenCalledTimes(2);
         expect(socket.on).toHaveBeenCalledTimes(1);
+        expect(socket.onAny).toHaveBeenCalledTimes(1);
+    });
+
+    it('evaluates unanchored global regexes from the start of each event and restores their state', async () => {
+        const { adapter, io } = createAdapter({ useHttpPluginServer: false } as any);
+        const pattern = /user:\w+/g;
+        pattern.lastIndex = 4;
+        const regexHandler = jest.fn();
+        adapter.registerEvents([{ namespace: '/events', event: pattern, handler: regexHandler }] as any);
+
+        const namespace = io.of('/events') as any;
+        const connect = namespace.on.mock.calls[0][1] as (socket: any) => Promise<void>;
+        let anyListener: ((eventName: string, ...args: unknown[]) => Promise<void>) | undefined;
+        const socket = { on: jest.fn(), onAny: jest.fn((handler: typeof anyListener) => (anyListener = handler)) };
+        await connect(socket);
+
+        await anyListener?.('user:created', {});
+        await anyListener?.('user:updated', {});
+        await anyListener?.('prefix:user:created', {});
+
+        expect(regexHandler).toHaveBeenCalledTimes(3);
+        expect(pattern.lastIndex).toBe(4);
     });
 
     it('handles namespaces without connection events and an empty registration', async () => {
@@ -98,7 +136,7 @@ describe('SocketIOWebSocketAdapter', () => {
         expect(io.of).toHaveBeenCalledTimes(1);
         const namespace = io.of('/events') as any;
         const connect = namespace.on.mock.calls[0][1] as (socket: any) => Promise<void>;
-        const socket = { on: jest.fn() };
+        const socket = { on: jest.fn(), onAny: jest.fn() };
         await connect(socket);
 
         expect(socket.on).toHaveBeenCalledWith('update', expect.any(Function));
