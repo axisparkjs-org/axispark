@@ -42,7 +42,10 @@ export const createCommand = new Command('create')
                 message: 'Select a template:',
                 choices: [
                     { title: 'Basic', value: 'default' },
-                    { title: 'Http', value: 'http' }
+                    { title: 'HTTP', value: 'http' },
+                    { title: 'HTTP + Security', value: 'http-security' },
+                    { title: 'Scheduler', value: 'scheduler' },
+                    { title: 'HTTP + OpenAPI', value: 'http-openapi' }
                 ],
                 initial: 0
             });
