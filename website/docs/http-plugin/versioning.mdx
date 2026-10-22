@@ -28,7 +28,7 @@ Here is an example of how to configure the versions available for your API endpo
 
 ```ts title="versioning-example.ts"
 @Controller({
-    prefix: 'users',
+    path: 'users',
     version: ['v1', 'v2']
 })
 export class UserController {

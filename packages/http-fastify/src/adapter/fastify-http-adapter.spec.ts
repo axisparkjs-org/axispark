@@ -36,8 +36,8 @@ jest.mock('fastify', () => {
     );
 });
 
-const route = (target: any, path: string, handler: jest.Mock, propertyKey: string): RouteDefinition =>
-    new RouteDefinition(target, propertyKey, HttpMethod.Get, path, ['v1', 'v2'], handler);
+const route = (target: any, path: string, handler: jest.Mock, propertyKey: string, hosts: string[] = ['*']): RouteDefinition =>
+    new RouteDefinition(target, propertyKey, HttpMethod.Get, path, ['v1', 'v2'], hosts, handler);
 
 jest.mock('@fastify/static', () => jest.fn());
 jest.mock('@fastify/cookie', () => jest.fn());
@@ -226,6 +226,18 @@ describe('FastifyHttpAdapter', () => {
                 response: expect.any(FastifyHttpResponse),
                 session: expect.any(FastifyHttpSession)
             });
+        });
+
+        it('should delegate host-based dispatch to the framework route handler', async () => {
+            const adapter = new FastifyHttpAdapter(baseConfig, axisparkConfig as any);
+            const handler = jest.fn();
+            adapter.registerRoutes([route(class AdminController {}, '/users', handler, 'index', ['admin.example.com'])]);
+
+            const callback = app.route.mock.calls[0][0].handler;
+            await callback({ headers: { host: 'ADMIN.EXAMPLE.COM:3000' } }, {});
+
+            expect(handler).toHaveBeenCalledTimes(1);
+            expect(handler.mock.calls[0][0].request.headers.host).toBe('ADMIN.EXAMPLE.COM:3000');
         });
     });
 

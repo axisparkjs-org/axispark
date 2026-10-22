@@ -3,6 +3,7 @@ export * from './execution';
 export * from './implementations';
 export * from './parameter';
 export * from './result';
+export * from './rate-limit';
 export * from './step';
 export * from './timeout';
 export * from './pipe';

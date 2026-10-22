@@ -2,19 +2,29 @@ import { AxiSparkContext, PluginNotConfiguredError, Plugin } from '@axisparkjs/c
 import { HttpPluginOptions } from './http-plugin-options';
 import { HTTP_ADAPTER, HTTP_LOGGER, HTTP_OPTIONS } from '../di/tokens';
 import { HttpAdapter } from '../adapter/http-adapter';
-import { RouteGenerator, RouteDefinition, RouteConflict, RouteConflictType } from '../routes';
+import { RouteGenerator, RouteDefinition, RouteValidator } from '../routes';
 import { Logger } from '@axisparkjs/logger';
 import { ClassRegistry, Injectable, InjectableScopes, Injector } from '@axisparkjs/di';
 import { ClassType } from '@axisparkjs/common';
 import { HttpParameter } from '../types';
 import { VersionProcessor, VersionType } from '../version';
-import { ResultProcessor, TimeoutProcessor, ParameterGenerator, ExecutionTransport, TimeoutGenerator } from '@axisparkjs/engine';
+import {
+    ExecutionTransport,
+    ParameterGenerator,
+    RateLimitGenerator,
+    RateLimitProcessor,
+    ResultProcessor,
+    TimeoutGenerator,
+    TimeoutProcessor
+} from '@axisparkjs/engine';
 import {
     LogHttpRequestInterceptor,
     LogHttpResponseInterceptor,
     LogHttpErrorFilter,
     LogErrorFilter,
     HealthController,
+    HostGuard,
+    RateLimitGuard,
     VersionGuard,
     RequestResolver,
     ResponseResolver,
@@ -27,6 +37,7 @@ import {
     SessionResolver,
     HttpResultResolver,
     HttpTimeoutResolver,
+    HttpRateLimitResolver,
     UriVersionResolver,
     HeaderVersionResolver,
     MediaTypeVersionResolver
@@ -66,37 +77,9 @@ export class HttpPlugin extends Plugin {
         await this.logger.info(`Plugin registered`);
     }
 
-    private async validateRoutes(routes: readonly RouteDefinition[]): Promise<void> {
-        if (this.options.routeValidation === false) return;
-
-        const conflicts: RouteConflict[] = [];
-        for (let i = 0; i < routes.length; i++) {
-            for (let j = i + 1; j < routes.length; j++) {
-                conflicts.push(...routes[i].compare(routes[j]));
-            }
-        }
-        const options = this.options.routeValidationOptions;
-        const actionFor: Record<RouteConflictType, 'error' | 'warn' | 'ignore'> = {
-            duplicate: options?.onDuplicate ?? 'warn',
-            ambiguous: options?.onAmbiguous ?? 'warn',
-            unreachable: options?.onUnreachable ?? 'warn'
-        };
-        const actionable = conflicts.filter((conflict) => actionFor[conflict.type] !== 'ignore');
-        const errors = actionable.filter((conflict) => actionFor[conflict.type] === 'error');
-
-        for (const conflict of actionable) {
-            const [first, second] = conflict.routes;
-            const message = `HTTP route ${conflict.type}: ${conflict.message}. ` + `${describeRoute(first)}; ${describeRoute(second)}`;
-            if (actionFor[conflict.type] === 'error') continue;
-            await this.logger.warn(message);
-        }
-
-        if (errors.length) {
-            const report = errors
-                .map(({ type, message, routes: [first, second] }) => `- ${type}: ${message}. ${describeRoute(first)}; ${describeRoute(second)}`)
-                .join('\n');
-            throw new Error(`HTTP route validation failed with ${errors.length} conflict(s):\n${report}`);
-        }
+    private async validateRoutes(routes: RouteDefinition[]): Promise<void> {
+        const routeValidator = await this.injector.get(RouteValidator);
+        await routeValidator.validate(routes);
     }
 
     private registerContainerBindings(): void {
@@ -117,7 +100,7 @@ export class HttpPlugin extends Plugin {
             }
 
             await this.logger.debug(
-                `Registered route ${route.httpMethod.toLocaleUpperCase()} ${route.path} for controller ${route.target.name}${route.versions ? ` with versions ${route.versions.join(', ')}` : ''}`
+                `Registered route ${route.httpMethod.toLocaleUpperCase()} ${route.path} for controller ${route.target.name}${route.versions.length > 0 ? ` with versions ${route.versions.join(', ')}` : ''}`
             );
         }
         return routes;
@@ -130,6 +113,8 @@ export class HttpPlugin extends Plugin {
             [this.options.logHttpResponses ?? false, LogHttpResponseInterceptor],
             [this.options.logHttpErrors ?? false, LogHttpErrorFilter],
             [this.options.logErrors ?? false, LogErrorFilter],
+            [true, HostGuard],
+            [this.options.rateLimit ?? false, RateLimitGuard],
             [this.options.version ?? false, VersionGuard]
         ];
 
@@ -144,6 +129,17 @@ export class HttpPlugin extends Plugin {
         if (this.options.timeout) {
             TimeoutGenerator.registerTimeout(ExecutionTransport.Http, this.options.timeoutOptions?.time);
             TimeoutProcessor.registerTimeout(ExecutionTransport.Http, await this.injector.get(HttpTimeoutResolver));
+        }
+
+        if (this.options.rateLimit) {
+            RateLimitGenerator.registerRateLimit(ExecutionTransport.Http, {
+                ttl: this.options.rateLimitOptions?.ttl,
+                limit: this.options.rateLimitOptions?.limit
+            });
+            RateLimitProcessor.registerRateLimit(ExecutionTransport.Http, await this.injector.get(HttpRateLimitResolver));
+        } else {
+            RateLimitGenerator.registerRateLimit(ExecutionTransport.Http);
+            RateLimitProcessor.registerRateLimit(ExecutionTransport.Http);
         }
 
         ParameterGenerator.registerParameter(HttpParameter.Request, await this.injector.get(RequestResolver));
@@ -179,8 +175,4 @@ export class HttpPlugin extends Plugin {
         await this.adapter.stop();
         await this.logger.info(`Plugin stopped`);
     }
-}
-
-function describeRoute(route: RouteDefinition): string {
-    return `${route.httpMethod.toUpperCase()} ${route.path} (${route.target.name}.${String(route.propertyKey)})`;
 }

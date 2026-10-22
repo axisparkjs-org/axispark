@@ -1,4 +1,5 @@
-import { Controller, Get, NoRateLimit, RateLimit } from '@axisparkjs/http';
+import { Controller, Get } from '@axisparkjs/http';
+import { NoRateLimit, RateLimit } from '@axisparkjs/engine';
 
 @Controller('rate-limit')
 export class RateLimitController {

@@ -246,6 +246,9 @@ export class TooManyRequestsError extends HttpError {
         super(response, HttpStatusCode.TooManyRequests, options);
     }
 }
+
+/** An HTTP 429 error raised when a configured rate limit is exceeded. */
+export class RateLimitExceededError extends TooManyRequestsError {}
 /**
  * An error thrown when the server returns a 456 Unrecoverable Error response.
  */

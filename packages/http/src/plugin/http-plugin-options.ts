@@ -66,9 +66,6 @@ export interface RateLimitOptions {
     message?: string | ((time: number) => string);
 }
 
-/** Options supported by the `@RateLimit()` decorator. */
-export type RateLimitDecoratorOptions = Partial<Pick<RateLimitOptions, 'ttl' | 'limit'>>;
-
 /** Severity to apply to a route compatibility finding. */
 export type RouteValidationAction = 'error' | 'warn' | 'ignore';
 

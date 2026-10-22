@@ -6,6 +6,12 @@ import { HttpPluginOptions } from '../plugin/http-plugin-options';
 import { HttpContext } from '../types';
 
 describe('VersionProcessor', () => {
+    const createVersionDefinition = (acceptedVersions: string[] = []) => {
+        const definition = new VersionDefinition();
+        definition.setAcceptedVersions(acceptedVersions);
+        return definition;
+    };
+
     const request = {} as any;
 
     const createContext = (): HttpContext => ({
@@ -16,6 +22,7 @@ describe('VersionProcessor', () => {
         propertyKey: 'test',
         scopedContainer: {} as any,
         transport: {} as any,
+        host: undefined,
         version: undefined,
         error: undefined
     });
@@ -46,7 +53,7 @@ describe('VersionProcessor', () => {
                 type: VersionType.Header
             } as any);
 
-            const version = new VersionDefinition(['1']);
+            const version = createVersionDefinition(['1']);
             const context = createContext();
 
             processor.process(version, context);
@@ -77,7 +84,7 @@ describe('VersionProcessor', () => {
                 type: VersionType.Header
             } as any);
 
-            const version = new VersionDefinition(['1', '2']);
+            const version = createVersionDefinition(['1', '2']);
             const context = createContext();
 
             processor.process(version, context);
@@ -92,7 +99,7 @@ describe('VersionProcessor', () => {
         it('should do nothing when version options are not configured', () => {
             const processor = createProcessor();
 
-            const version = new VersionDefinition(['1']);
+            const version = createVersionDefinition(['1']);
             const context = createContext();
 
             processor.process(version, context);
@@ -103,7 +110,7 @@ describe('VersionProcessor', () => {
         it('should do nothing when version options have no type', () => {
             const processor = createProcessor({} as any);
 
-            const version = new VersionDefinition(['1']);
+            const version = createVersionDefinition(['1']);
             const context = createContext();
 
             processor.process(version, context);
@@ -142,7 +149,7 @@ describe('VersionProcessor', () => {
 
             const processor = createProcessor(options);
 
-            const version = new VersionDefinition(['1', '2']);
+            const version = createVersionDefinition(['1', '2']);
             const context = createContext();
 
             processor.process(version, context);
@@ -162,7 +169,7 @@ describe('VersionProcessor', () => {
                 type: VersionType.Header
             } as any);
 
-            const version = new VersionDefinition(['1', '2']);
+            const version = createVersionDefinition(['1', '2']);
             const context = createContext();
 
             processor.process(version, context);
@@ -181,7 +188,7 @@ describe('VersionProcessor', () => {
                 type: VersionType.Header
             } as any);
 
-            const version = new VersionDefinition(['1', '2']);
+            const version = createVersionDefinition(['1', '2']);
             const context = createContext();
 
             processor.process(version, context);
@@ -200,7 +207,7 @@ describe('VersionProcessor', () => {
                 type: VersionType.Header
             } as any);
 
-            const version = new VersionDefinition(['1', '2']);
+            const version = createVersionDefinition(['1', '2']);
             const context = createContext();
 
             processor.process(version, context);
@@ -214,7 +221,7 @@ describe('VersionProcessor', () => {
                 type: VersionType.Header
             } as any);
 
-            const version = new VersionDefinition(['1', '2']);
+            const version = createVersionDefinition(['1', '2']);
             const context = createContext();
 
             expect(() => {
@@ -237,7 +244,7 @@ describe('VersionProcessor', () => {
 
             const context = createContext();
 
-            processor.process(new VersionDefinition(['1']), context);
+            processor.process(createVersionDefinition(['1']), context);
 
             expect(resolver.resolve).toHaveBeenCalledWith(context.request, expect.anything());
         });
@@ -256,7 +263,7 @@ describe('VersionProcessor', () => {
 
             const processor = createProcessor(options);
             const context = createContext();
-            const version = new VersionDefinition(['1']);
+            const version = createVersionDefinition(['1']);
 
             processor.process(version, context);
 
@@ -280,7 +287,7 @@ describe('VersionProcessor', () => {
                 type: VersionType.Uri
             } as any);
 
-            const version = new VersionDefinition(['1', '2']);
+            const version = createVersionDefinition(['1', '2']);
             const context = createContext();
 
             processor.process(version, context);
@@ -307,7 +314,7 @@ describe('VersionProcessor', () => {
                 type: VersionType.Uri
             } as any);
 
-            const version = new VersionDefinition(['1', '2']);
+            const version = createVersionDefinition(['1', '2']);
             const context = createContext();
 
             processor.process(version, context);

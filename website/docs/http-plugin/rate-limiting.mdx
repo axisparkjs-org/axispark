@@ -22,7 +22,8 @@ HttpPluginOptionsFactory.create({
 Use `@RateLimit()` on a controller or handler to override those defaults. Partial handler options use the global defaults for values they omit:
 
 ```ts
-import { Controller, Get, RateLimit } from '@axisparkjs/http';
+import { Controller, Get } from '@axisparkjs/http';
+import { RateLimit } from '@axisparkjs/engine';
 
 @RateLimit({ ttl: 60_000, limit: 20 })
 @Controller('auth')
@@ -38,7 +39,8 @@ export class AuthController {
 Use `@NoRateLimit()` to exclude a controller or handler. A handler decorator takes precedence over the controller decorator, so it can also opt back in to rate limiting:
 
 ```ts
-import { Controller, Get, NoRateLimit, RateLimit } from '@axisparkjs/http';
+import { Controller, Get } from '@axisparkjs/http';
+import { NoRateLimit, RateLimit } from '@axisparkjs/engine';
 
 @NoRateLimit()
 @Controller('health')

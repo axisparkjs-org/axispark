@@ -1,10 +1,9 @@
 import { Metadata, MetadataKeys } from '@axisparkjs/common';
-import { RateLimitDecoratorOptions } from '../plugin/http-plugin-options';
-import { RateLimitMetadata } from '../metadata/rate-limit-metadata';
+import { RateLimitMetadata, RateLimitConfiguration } from '../metadata';
 
-/** Apply rate limit overrides to a controller or handler. */
-export function RateLimit(options: RateLimitDecoratorOptions = {}): MethodDecorator & ClassDecorator {
-    return function (target: object, propertyKey?: string | symbol) {
+/** Applies rate limit overrides to a class or handler. */
+export function RateLimit(options: RateLimitConfiguration = {}): MethodDecorator & ClassDecorator {
+    return (target: object, propertyKey?: string | symbol) => {
         const metadata: RateLimitMetadata = {
             target: Metadata.normalizeTarget(target),
             propertyKey,
@@ -17,9 +16,9 @@ export function RateLimit(options: RateLimitDecoratorOptions = {}): MethodDecora
     };
 }
 
-/** Disable rate limiting for a controller or handler. */
-export const NoRateLimit = (): MethodDecorator & ClassDecorator => {
-    return function (target: object, propertyKey?: string | symbol) {
+/** Disables rate limiting for a class or handler. */
+export function NoRateLimit(): MethodDecorator & ClassDecorator {
+    return (target: object, propertyKey?: string | symbol) => {
         const metadata: RateLimitMetadata = {
             target: Metadata.normalizeTarget(target),
             propertyKey,
@@ -29,4 +28,4 @@ export const NoRateLimit = (): MethodDecorator & ClassDecorator => {
         if (propertyKey !== undefined) Metadata.define(MetadataKeys.RATE_LIMIT, metadata, target, propertyKey);
         else Metadata.define(MetadataKeys.RATE_LIMIT, metadata, target);
     };
-};
+}

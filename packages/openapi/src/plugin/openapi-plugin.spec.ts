@@ -422,7 +422,8 @@ describe('OpenApiPlugin', () => {
                     propertyKey: 'getOpenApiJson',
                     path: '/api/docs/openapi.json',
                     httpMethod: HttpMethod.Get,
-                    versions: ['default']
+                    versions: ['*'],
+                    hosts: ['*']
                 })
             );
         });
@@ -444,7 +445,8 @@ describe('OpenApiPlugin', () => {
                     propertyKey: 'getOpenApiYaml',
                     path: '/api/docs/openapi.yaml',
                     httpMethod: HttpMethod.Get,
-                    versions: ['default']
+                    versions: ['*'],
+                    hosts: ['*']
                 })
             );
         });
@@ -484,7 +486,8 @@ describe('OpenApiPlugin', () => {
                     propertyKey: 'getOpenApiJson',
                     path: '/api/documentation/api.json',
                     httpMethod: HttpMethod.Get,
-                    versions: ['default'],
+                    versions: ['*'],
+                    hosts: ['*'],
                     handler: expect.any(Function)
                 })
             );
@@ -511,7 +514,8 @@ describe('OpenApiPlugin', () => {
                     propertyKey: 'getOpenApiYaml',
                     path: '/api/documentation/api.yaml',
                     httpMethod: HttpMethod.Get,
-                    versions: ['default'],
+                    versions: ['*'],
+                    hosts: ['*'],
                     handler: expect.any(Function)
                 })
             );

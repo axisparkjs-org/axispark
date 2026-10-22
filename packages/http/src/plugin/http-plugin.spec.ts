@@ -3,13 +3,22 @@ import { ClassRegistry, InjectableScopes, Injector } from '@axisparkjs/di';
 import { HttpPlugin } from './http-plugin';
 import { RouteGenerator } from '../routes/route-generator';
 import { RouteDefinition } from '../routes/route-definition';
+import { RouteValidator } from '../routes/route-validator';
 import { HTTP_ADAPTER, HTTP_LOGGER, HTTP_OPTIONS } from '../di/tokens';
 import { HttpPluginOptions } from './http-plugin-options';
-import { HealthController, VersionGuard } from '../implementations';
+import { HealthController, RateLimitGuard, VersionGuard } from '../implementations';
 import { LogErrorFilter, LogHttpErrorFilter } from '../implementations/filters';
 import { LogHttpRequestInterceptor, LogHttpResponseInterceptor } from '../implementations';
-import { HttpResultResolver, HttpTimeoutResolver } from '../implementations';
-import { ExecutionTransport, ParameterGenerator, ResultProcessor, TimeoutGenerator, TimeoutProcessor } from '@axisparkjs/engine';
+import { HttpRateLimitResolver, HttpResultResolver, HttpTimeoutResolver } from '../implementations';
+import {
+    ExecutionTransport,
+    ParameterGenerator,
+    RateLimitGenerator,
+    RateLimitProcessor,
+    ResultProcessor,
+    TimeoutGenerator,
+    TimeoutProcessor
+} from '@axisparkjs/engine';
 import { HttpParameter } from '../types';
 import { VersionProcessor, VersionType } from '../version';
 import { HttpMethod } from '../types';
@@ -36,6 +45,12 @@ jest.mock('@axisparkjs/engine', () => ({
     },
     TimeoutGenerator: {
         registerTimeout: jest.fn()
+    },
+    RateLimitProcessor: {
+        registerRateLimit: jest.fn()
+    },
+    RateLimitGenerator: {
+        registerRateLimit: jest.fn()
     }
 }));
 
@@ -60,7 +75,7 @@ describe('HttpPlugin', () => {
 
     const Adapter = class TestAdapter {};
     const route = (target: any, method: HttpMethod, path: string, versions?: string[]) =>
-        new RouteDefinition(target, 'handler', method, path, versions, jest.fn());
+        new RouteDefinition(target, 'handler', method, path, versions ?? [], ['*'], jest.fn());
 
     const options = {
         adapter: Adapter,
@@ -126,7 +141,7 @@ describe('HttpPlugin', () => {
                 };
             }
 
-            return {};
+            return { validate: jest.fn() };
         });
 
         container.resolve.mockImplementation((token: any) => {
@@ -181,7 +196,7 @@ describe('HttpPlugin', () => {
                     return { generate };
                 }
 
-                return {};
+                return { validate: jest.fn() };
             });
 
             await plugin.onRegister(context, options);
@@ -190,65 +205,35 @@ describe('HttpPlugin', () => {
             expect(adapter.registerRoutes).toHaveBeenCalledWith(routes);
         });
 
-        it('should warn about every compatibility finding by default', async () => {
-            logger.warn = jest.fn().mockResolvedValue(undefined);
-            class UsersController {}
-            const routes = [
-                route(UsersController, HttpMethod.Get, '/users/:id'),
-                route(UsersController, HttpMethod.Get, '/users/:slug'),
-                route(UsersController, HttpMethod.Get, '/users/me'),
-                route(UsersController, HttpMethod.Get, '/files/*'),
-                route(UsersController, HttpMethod.Get, '/files/report')
-            ];
-            injector.get.mockImplementation(async (target: any) => (target === RouteGenerator ? { generate: jest.fn().mockResolvedValue(routes) } : {}));
+        it('should validate the generated routes before initializing the adapter', async () => {
+            const routes = [route(class UsersController {}, HttpMethod.Get, '/users')];
+            const calls: string[] = [];
+            const validate = jest.fn().mockImplementation(async () => void calls.push('validate'));
+            adapter.initialize.mockImplementation(async () => void calls.push('initialize'));
+            injector.get.mockImplementation(async (target: any) => {
+                if (target === RouteGenerator) return { generate: jest.fn().mockResolvedValue(routes) };
+                if (target === RouteValidator) return { validate };
+                return { validate: jest.fn() };
+            });
 
             await plugin.onRegister(context, options);
 
-            expect(logger.warn).toHaveBeenCalledTimes(4);
-            expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('UsersController.handler'));
+            expect(validate).toHaveBeenCalledWith(routes);
+            expect(calls).toEqual(['validate', 'initialize']);
         });
 
-        it('should ignore configured compatibility findings', async () => {
-            logger.warn = jest.fn().mockResolvedValue(undefined);
-            const compare = jest.spyOn(RouteDefinition.prototype, 'compare');
-            const routes = [route(class UsersController {}, HttpMethod.Get, '/users/*'), route(class AdminController {}, HttpMethod.Get, '/users/:name')];
-            injector.get.mockImplementation(async (target: any) => (target === RouteGenerator ? { generate: jest.fn().mockResolvedValue(routes) } : {}));
+        it('should stop before adapter initialization when route validation fails', async () => {
+            const error = new Error('HTTP route validation failed');
+            injector.get.mockImplementation(async (target: any) => {
+                if (target === RouteGenerator) return { generate: jest.fn().mockResolvedValue([]) };
+                if (target === RouteValidator) return { validate: jest.fn().mockRejectedValue(error) };
+                return { validate: jest.fn() };
+            });
 
-            await plugin.onRegister(context, { ...options, routeValidationOptions: { onUnreachable: 'ignore' } });
-
-            expect(compare).toHaveBeenCalledTimes(1);
-            expect(logger.warn).not.toHaveBeenCalled();
-        });
-
-        it('should report all configured errors together and stop before adapter initialization', async () => {
-            logger.warn = jest.fn().mockResolvedValue(undefined);
-            class UsersController {}
-            const routes = [
-                route(UsersController, HttpMethod.Get, '/users/:id'),
-                route(UsersController, HttpMethod.Get, '/users/:slug'),
-                route(UsersController, HttpMethod.Get, '/users/me')
-            ];
-            injector.get.mockImplementation(async (target: any) => (target === RouteGenerator ? { generate: jest.fn().mockResolvedValue(routes) } : {}));
-
-            await expect(
-                plugin.onRegister(context, {
-                    ...options,
-                    routeValidationOptions: { onDuplicate: 'error', onAmbiguous: 'error' }
-                })
-            ).rejects.toThrow(/3 conflict\(s\):[\s\S]*duplicate:[\s\S]*ambiguous:/);
+            await expect(plugin.onRegister(context, options)).rejects.toThrow(error);
 
             expect(adapter.initialize).not.toHaveBeenCalled();
             expect(adapter.registerRoutes).not.toHaveBeenCalled();
-        });
-
-        it('should skip comparison when validation is disabled', async () => {
-            const compare = jest.spyOn(RouteDefinition.prototype, 'compare');
-            const routes = [route(class UsersController {}, HttpMethod.Get, '/users/:id'), route(class AdminController {}, HttpMethod.Get, '/users/:name')];
-            injector.get.mockImplementation(async (target: any) => (target === RouteGenerator ? { generate: jest.fn().mockResolvedValue(routes) } : {}));
-
-            await plugin.onRegister(context, { ...options, routeValidation: false });
-
-            expect(compare).not.toHaveBeenCalled();
         });
 
         it('should log every registered route', async () => {
@@ -263,7 +248,7 @@ describe('HttpPlugin', () => {
                     };
                 }
 
-                return {};
+                return { validate: jest.fn() };
             });
 
             await plugin.onRegister(context, options);
@@ -285,7 +270,7 @@ describe('HttpPlugin', () => {
                     };
                 }
 
-                return {};
+                return { validate: jest.fn() };
             });
 
             await plugin.onRegister(context, options);
@@ -320,7 +305,7 @@ describe('HttpPlugin', () => {
 
     describe('configureImplementations', () => {
         it('should keep all optional components when enabled', async () => {
-            await plugin.onRegister(context, options);
+            await plugin.onRegister(context, { ...options, rateLimit: true });
 
             expect(ClassRegistry.remove).not.toHaveBeenCalled();
             expect(container.unbind).not.toHaveBeenCalled();
@@ -332,6 +317,7 @@ describe('HttpPlugin', () => {
             ['logHttpResponses', LogHttpResponseInterceptor],
             ['logHttpErrors', LogHttpErrorFilter],
             ['logErrors', LogErrorFilter],
+            ['rateLimit', RateLimitGuard],
             ['version', VersionGuard]
         ])('should disable %s when it is not enabled', async (_option, target) => {
             await plugin.onRegister(context, optionsWithoutComponents);
@@ -345,7 +331,7 @@ describe('HttpPlugin', () => {
     describe('registerImplementations', () => {
         beforeEach(() => {
             injector.get.mockImplementation(async (target: any) => {
-                return { target };
+                return { target, validate: jest.fn() };
             });
         });
 
@@ -358,7 +344,8 @@ describe('HttpPlugin', () => {
                 }
 
                 return {
-                    generate: jest.fn().mockResolvedValue([])
+                    generate: jest.fn().mockResolvedValue([]),
+                    validate: jest.fn()
                 };
             });
 
@@ -378,7 +365,8 @@ describe('HttpPlugin', () => {
                 }
 
                 return {
-                    generate: jest.fn().mockResolvedValue([])
+                    generate: jest.fn().mockResolvedValue([]),
+                    validate: jest.fn()
                 };
             });
 
@@ -400,7 +388,8 @@ describe('HttpPlugin', () => {
                 }
 
                 return {
-                    generate: jest.fn().mockResolvedValue([])
+                    generate: jest.fn().mockResolvedValue([]),
+                    validate: jest.fn()
                 };
             });
 
@@ -418,7 +407,8 @@ describe('HttpPlugin', () => {
 
         it('should not register timeout when timeout is disabled', async () => {
             injector.get.mockResolvedValue({
-                generate: jest.fn().mockResolvedValue([])
+                generate: jest.fn().mockResolvedValue([]),
+                validate: jest.fn()
             });
 
             await plugin.onRegister(context, {
@@ -431,9 +421,34 @@ describe('HttpPlugin', () => {
             expect(TimeoutGenerator.registerTimeout).not.toHaveBeenCalled();
         });
 
+        it('should register the rate limit generator and HTTP resolver when enabled', async () => {
+            const resolver = {};
+            injector.get.mockImplementation(async (target: any) => {
+                if (target === HttpRateLimitResolver) return resolver;
+                return { generate: jest.fn().mockResolvedValue([]), validate: jest.fn() };
+            });
+
+            await plugin.onRegister(context, { ...options, rateLimit: true });
+
+            expect(RateLimitGenerator.registerRateLimit).toHaveBeenCalledWith(ExecutionTransport.Http, { ttl: 60_000, limit: 100 });
+            expect(RateLimitProcessor.registerRateLimit).toHaveBeenCalledWith(ExecutionTransport.Http, resolver);
+            expect(injector.get).toHaveBeenCalledWith(HttpRateLimitResolver);
+        });
+
+        it('clears the HTTP rate limit resolver and defaults when disabled', async () => {
+            injector.get.mockResolvedValue({ generate: jest.fn().mockResolvedValue([]), validate: jest.fn() });
+
+            await plugin.onRegister(context, { ...options, rateLimit: false });
+
+            expect(RateLimitGenerator.registerRateLimit).toHaveBeenCalledWith(ExecutionTransport.Http);
+            expect(RateLimitProcessor.registerRateLimit).toHaveBeenCalledWith(ExecutionTransport.Http);
+            expect(injector.get).not.toHaveBeenCalledWith(HttpRateLimitResolver);
+        });
+
         it('should register all HTTP parameter resolvers', async () => {
             injector.get.mockResolvedValue({
-                generate: jest.fn().mockResolvedValue([])
+                generate: jest.fn().mockResolvedValue([]),
+                validate: jest.fn()
             });
 
             await plugin.onRegister(context, options);
@@ -461,7 +476,8 @@ describe('HttpPlugin', () => {
 
         it('should register version resolvers when version is enabled', async () => {
             injector.get.mockResolvedValue({
-                generate: jest.fn().mockResolvedValue([])
+                generate: jest.fn().mockResolvedValue([]),
+                validate: jest.fn()
             });
 
             await plugin.onRegister(context, options);
@@ -477,7 +493,8 @@ describe('HttpPlugin', () => {
 
         it('should not register version resolvers when version is disabled', async () => {
             injector.get.mockResolvedValue({
-                generate: jest.fn().mockResolvedValue([])
+                generate: jest.fn().mockResolvedValue([]),
+                validate: jest.fn()
             });
 
             await plugin.onRegister(context, {

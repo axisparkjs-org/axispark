@@ -1,0 +1,36 @@
+{
+    "name": "host-routing",
+    "version": "1.0.0",
+    "description": "Host routing with AxiSpark.js",
+    "main": "index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "ts-node src/index.ts",
+        "lint": "eslint . --ext .ts",
+        "prettier": "prettier ."
+    },
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "@eslint/js": "^9.37.0",
+        "@types/node": "^24.13.2",
+        "eslint": "^9.37.0",
+        "globals": "^16.2.0",
+        "prettier": "^3.6.2",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.46.0"
+    },
+    "dependencies": {
+        "reflect-metadata": "^0.2.2",
+        "@axisparkjs/common": "0.0.2",
+        "@axisparkjs/core": "0.0.2",
+        "@axisparkjs/di": "0.0.2",
+        "@axisparkjs/engine": "0.0.2",
+        "@axisparkjs/http": "0.0.2",
+        "@axisparkjs/http-express": "0.0.2",
+        "@axisparkjs/http-fastify": "0.0.2",
+        "@axisparkjs/logger": "0.0.2"
+    }
+}

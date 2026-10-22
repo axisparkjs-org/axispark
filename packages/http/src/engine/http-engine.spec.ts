@@ -1,15 +1,21 @@
-import { Executable } from '@axisparkjs/common';
+import { ExecutionTransport, ExecutionEngine } from '@axisparkjs/engine';
 import { HttpEngine } from './http-engine';
 import { HttpContext } from '../types';
-import { ExecutionEngine } from '@axisparkjs/engine';
-import { VersionGenerator, VersionProcessor, VersionDefinition } from '../version';
+import { VersionDefinition, VersionMatcher, VersionProcessor } from '../version';
 import { RouteDefinition } from '../routes';
+import { HostDefinition, HostMatcher, HostProcessor } from '../host';
 
 describe('HttpEngine', () => {
     let httpEngine: HttpEngine;
     let executionEngine: jest.Mocked<ExecutionEngine>;
-    let versionGenerator: jest.Mocked<VersionGenerator>;
+    let hostProcessor: jest.Mocked<HostProcessor>;
     let versionProcessor: jest.Mocked<VersionProcessor>;
+    let hostMatcher: jest.Mocked<HostMatcher>;
+    let versionMatcher: jest.Mocked<VersionMatcher>;
+    let scopedContainerManager: { create: jest.Mock };
+
+    class UsersController {}
+    class AdminController {}
 
     const createContext = (): Pick<HttpContext, 'request' | 'response' | 'session'> => ({
         request: {} as any,
@@ -17,364 +23,170 @@ describe('HttpEngine', () => {
         session: {} as any
     });
 
+    const createRoute = (target: any, propertyKey: string, versions: string[] = ['*'], hosts: string[] = ['*']) =>
+        ({ target, propertyKey, versions, hosts, httpMethod: 'GET', path: '/users' }) as unknown as RouteDefinition;
+
     beforeEach(() => {
-        executionEngine = {
-            execute: jest.fn().mockResolvedValue(undefined)
-        } as unknown as jest.Mocked<ExecutionEngine>;
+        executionEngine = { execute: jest.fn().mockResolvedValue(undefined) } as unknown as jest.Mocked<ExecutionEngine>;
+        hostProcessor = { process: jest.fn() } as unknown as jest.Mocked<HostProcessor>;
+        versionProcessor = { process: jest.fn() } as unknown as jest.Mocked<VersionProcessor>;
+        hostMatcher = { match: jest.fn() } as unknown as jest.Mocked<HostMatcher>;
+        versionMatcher = { match: jest.fn() } as unknown as jest.Mocked<VersionMatcher>;
+        scopedContainerManager = { create: jest.fn().mockReturnValue({ scoped: true }) };
 
-        versionGenerator = {
-            generate: jest.fn()
-        } as unknown as jest.Mocked<VersionGenerator>;
-
-        versionProcessor = {
-            process: jest.fn()
-        } as unknown as jest.Mocked<VersionProcessor>;
-
-        httpEngine = new HttpEngine(executionEngine, versionGenerator, versionProcessor);
+        httpEngine = new HttpEngine(executionEngine, hostProcessor, versionProcessor, hostMatcher, versionMatcher, scopedContainerManager as any);
     });
 
     describe('execute', () => {
-        it('should generate and process the version before executing the engine', async () => {
-            const context = {
-                ...createContext(),
-                target: class TestController {},
-                propertyKey: 'test',
-                scopedContainer: {} as any,
-                transport: undefined,
-                version: undefined,
-                error: undefined
-            } as any as HttpContext;
+        it('should process host and version definitions using the original context', async () => {
+            const context = createContext();
+            const route = createRoute(UsersController, 'list');
+            hostMatcher.match.mockReturnValue([route]);
+            versionMatcher.match.mockReturnValue(route);
 
-            const versionDefinition = new VersionDefinition(['1']);
+            await httpEngine.execute(context, [route]);
 
-            versionGenerator.generate.mockReturnValue(versionDefinition);
+            expect(hostProcessor.process).toHaveBeenCalledWith(expect.any(HostDefinition), context);
+            expect(versionProcessor.process).toHaveBeenCalledWith(expect.any(VersionDefinition), context);
+        });
 
-            await httpEngine.execute(context);
+        it('should match hosts first and then versions among the host-matched routes', async () => {
+            const context = createContext();
+            const adminRoute = createRoute(AdminController, 'list', ['*'], ['admin.example.com']);
+            const usersRoute = createRoute(UsersController, 'list');
+            const hostRoutes = [adminRoute];
+            hostMatcher.match.mockReturnValue(hostRoutes);
+            versionMatcher.match.mockReturnValue(adminRoute);
 
-            expect(versionGenerator.generate).toHaveBeenCalledTimes(1);
-            expect(versionGenerator.generate).toHaveBeenCalledWith(context);
+            await httpEngine.execute(context, [adminRoute, usersRoute]);
 
-            expect(versionProcessor.process).toHaveBeenCalledTimes(1);
-            expect(versionProcessor.process).toHaveBeenCalledWith(versionDefinition, context);
+            const [hostMatcherRoutes, hostDefinition] = hostMatcher.match.mock.calls[0];
+            expect(hostMatcherRoutes).toEqual([adminRoute, usersRoute]);
+            expect(hostDefinition).toBeInstanceOf(HostDefinition);
 
-            expect(context.version).toBe(versionDefinition);
+            const [versionMatcherRoutes, versionDefinition] = versionMatcher.match.mock.calls[0];
+            expect(versionMatcherRoutes).toBe(hostRoutes);
+            expect(versionDefinition).toBeInstanceOf(VersionDefinition);
+        });
+
+        it('should fill the context with the selected route and accepted hosts and versions', async () => {
+            const context = createContext();
+            const route = createRoute(AdminController, 'list', ['1', '2'], ['admin.example.com']);
+            hostMatcher.match.mockReturnValue([route]);
+            versionMatcher.match.mockReturnValue(route);
+
+            hostProcessor.process.mockImplementation((host) => host?.setHost('admin.example.com'));
+            versionProcessor.process.mockImplementation((version) => version?.setVersion('2'));
+
+            await httpEngine.execute(context, [route]);
 
             expect(executionEngine.execute).toHaveBeenCalledTimes(1);
-            expect(executionEngine.execute).toHaveBeenCalledWith(context);
-        });
-
-        it('should assign the version definition to the context before execution', async () => {
-            const context = {
-                ...createContext(),
-                version: undefined
-            } as HttpContext;
-
-            const versionDefinition = new VersionDefinition(['1']);
-
-            versionGenerator.generate.mockReturnValue(versionDefinition);
-
-            executionEngine.execute.mockImplementation(async (receivedContext) => {
-                expect((receivedContext as any).version).toBe(versionDefinition);
+            const filledContext = executionEngine.execute.mock.calls[0][0] as HttpContext;
+            expect(filledContext).toMatchObject({
+                request: context.request,
+                response: context.response,
+                session: context.session,
+                scopedContainer: { scoped: true },
+                transport: ExecutionTransport.Http,
+                target: AdminController,
+                propertyKey: 'list',
+                error: undefined
             });
-
-            await httpEngine.execute(context);
-
-            expect(context.version).toBe(versionDefinition);
+            expect(filledContext.host?.host).toBe('admin.example.com');
+            expect(filledContext.host?.isHostAccepted()).toBe(true);
+            expect(filledContext.version?.version).toBe('2');
+            expect(filledContext.version?.isVersionAccepted()).toBe(true);
         });
 
-        it('should execute in the order generate, process, assign version and execute', async () => {
-            const context = {
-                ...createContext(),
-                version: undefined
-            } as HttpContext;
+        it('should mark the host and version as not accepted when they do not match the route', async () => {
+            const route = createRoute(AdminController, 'list', ['1'], ['admin.example.com']);
+            hostMatcher.match.mockReturnValue([route]);
+            versionMatcher.match.mockReturnValue(route);
+            hostProcessor.process.mockImplementation((host) => host?.setHost('api.example.com'));
+            versionProcessor.process.mockImplementation((version) => version?.setVersion('2'));
 
-            const versionDefinition = new VersionDefinition(['2']);
+            await httpEngine.execute(createContext(), [route]);
+
+            const filledContext = executionEngine.execute.mock.calls[0][0] as HttpContext;
+            expect(filledContext.host?.isHostAccepted()).toBe(false);
+            expect(filledContext.version?.isVersionAccepted()).toBe(false);
+        });
+
+        it('should create a scoped container for each execution', async () => {
+            const route = createRoute(UsersController, 'list');
+            hostMatcher.match.mockReturnValue([route]);
+            versionMatcher.match.mockReturnValue(route);
+
+            await httpEngine.execute(createContext(), [route]);
+            await httpEngine.execute(createContext(), [route]);
+
+            expect(scopedContainerManager.create).toHaveBeenCalledTimes(2);
+        });
+
+        it('should execute in the order process, match and execute', async () => {
+            const route = createRoute(UsersController, 'list');
             const calls: string[] = [];
-
-            versionGenerator.generate.mockImplementation(() => {
-                calls.push('generate');
-                return versionDefinition;
+            hostProcessor.process.mockImplementation(() => void calls.push('process-host'));
+            versionProcessor.process.mockImplementation(() => void calls.push('process-version'));
+            hostMatcher.match.mockImplementation(() => {
+                calls.push('match-host');
+                return [route];
             });
-
-            versionProcessor.process.mockImplementation(() => {
-                calls.push('process');
+            versionMatcher.match.mockImplementation(() => {
+                calls.push('match-version');
+                return route;
             });
+            executionEngine.execute.mockImplementation(async () => void calls.push('execute'));
 
-            executionEngine.execute.mockImplementation(async () => {
-                expect(context.version).toBe(versionDefinition);
-                calls.push('execute');
-            });
+            await httpEngine.execute(createContext(), [route]);
 
-            await httpEngine.execute(context);
-
-            expect(calls).toEqual(['generate', 'process', 'execute']);
+            expect(calls).toEqual(['process-host', 'process-version', 'match-host', 'match-version', 'execute']);
         });
 
-        it('should propagate an error when version generation fails', async () => {
-            const context = {
-                ...createContext()
-            } as HttpContext;
-
-            const error = new Error('Version generation failed');
-
-            versionGenerator.generate.mockImplementation(() => {
+        it('should propagate an error when host processing fails', async () => {
+            const error = new Error('Host processing failed');
+            hostProcessor.process.mockImplementation(() => {
                 throw error;
             });
 
-            await expect(httpEngine.execute(context)).rejects.toThrow(error);
+            await expect(httpEngine.execute(createContext(), [])).rejects.toThrow(error);
 
             expect(versionProcessor.process).not.toHaveBeenCalled();
             expect(executionEngine.execute).not.toHaveBeenCalled();
         });
 
         it('should propagate an error when version processing fails', async () => {
-            const context = {
-                ...createContext(),
-                version: undefined
-            } as HttpContext;
-
-            const versionDefinition = new VersionDefinition(['1']);
             const error = new Error('Version processing failed');
-
-            versionGenerator.generate.mockReturnValue(versionDefinition);
-
             versionProcessor.process.mockImplementation(() => {
                 throw error;
             });
 
-            await expect(httpEngine.execute(context)).rejects.toThrow(error);
+            await expect(httpEngine.execute(createContext(), [])).rejects.toThrow(error);
 
-            expect(versionGenerator.generate).toHaveBeenCalledWith(context);
-            expect(context.version).toBeUndefined();
+            expect(hostMatcher.match).not.toHaveBeenCalled();
+            expect(executionEngine.execute).not.toHaveBeenCalled();
+        });
+
+        it('should propagate an error when route matching fails', async () => {
+            const error = new Error('No route');
+            hostMatcher.match.mockImplementation(() => {
+                throw error;
+            });
+
+            await expect(httpEngine.execute(createContext(), [])).rejects.toThrow(error);
+
+            expect(versionMatcher.match).not.toHaveBeenCalled();
             expect(executionEngine.execute).not.toHaveBeenCalled();
         });
 
         it('should propagate an error when execution fails', async () => {
-            const context = {
-                ...createContext(),
-                version: undefined
-            } as HttpContext;
-
-            const versionDefinition = new VersionDefinition(['1']);
             const error = new Error('Execution failed');
-
-            versionGenerator.generate.mockReturnValue(versionDefinition);
+            const route = createRoute(UsersController, 'list');
+            hostMatcher.match.mockReturnValue([route]);
+            versionMatcher.match.mockReturnValue(route);
             executionEngine.execute.mockRejectedValue(error);
 
-            await expect(httpEngine.execute(context)).rejects.toThrow(error);
-
-            expect(versionGenerator.generate).toHaveBeenCalledWith(context);
-
-            expect(versionProcessor.process).toHaveBeenCalledWith(versionDefinition, context);
-
-            expect(context.version).toBe(versionDefinition);
+            await expect(httpEngine.execute(createContext(), [route])).rejects.toThrow(error);
         });
-
-        it('should support an undefined version definition', async () => {
-            const context = {
-                ...createContext(),
-                version: undefined
-            } as HttpContext;
-
-            versionGenerator.generate.mockReturnValue(undefined);
-
-            await httpEngine.execute(context);
-
-            expect(versionProcessor.process).toHaveBeenCalledWith(undefined, context);
-
-            expect(context.version).toBeUndefined();
-
-            expect(executionEngine.execute).toHaveBeenCalledWith(context);
-        });
-    });
-
-    describe('versionMapping', () => {
-        const createRoute = (versions: string[] | undefined, handler = jest.fn().mockResolvedValue(undefined)) => {
-            return {
-                versions,
-                handler,
-                httpMethod: 'GET',
-                path: '/users',
-                target: class TestController {}
-            } as unknown as RouteDefinition;
-        };
-
-        it('should resolve the requested version and execute the matching route', async () => {
-            const context = createContext();
-
-            versionProcessor.process.mockImplementation((versionDefinition) => {
-                versionDefinition?.setVersion('2');
-            });
-
-            const routeV1 = createRoute(['1']);
-            const routeV2 = createRoute(['2']);
-
-            const routes = [routeV1, routeV2];
-
-            await httpEngine.versionMapping(routes, context);
-
-            expect(versionProcessor.process).toHaveBeenCalledTimes(1);
-            expect(versionProcessor.process).toHaveBeenCalledWith(expect.any(VersionDefinition), expect.objectContaining(context));
-
-            expect(routeV1.handler).not.toHaveBeenCalled();
-            expect(routeV2.handler).toHaveBeenCalledTimes(1);
-            expect(routeV2.handler).toHaveBeenCalledWith(context);
-        });
-
-        it('should create a temporary VersionDefinition for version resolution', async () => {
-            const context = createContext();
-
-            versionProcessor.process.mockImplementation((definition) => {
-                expect(definition).toBeInstanceOf(VersionDefinition);
-                expect(definition).not.toBeUndefined();
-            });
-
-            const route = createRoute(['1']);
-
-            await httpEngine.versionMapping([route], context);
-
-            expect(versionProcessor.process).toHaveBeenCalledTimes(1);
-
-            const [definition] = versionProcessor.process.mock.calls[0];
-
-            expect(definition).toBeInstanceOf(VersionDefinition);
-            expect(definition?.acceptedVersions).toEqual([]);
-        });
-
-        it('should pass a copy of the context to the version processor', async () => {
-            const context = createContext();
-
-            versionProcessor.process.mockImplementation((_definition, processedContext) => {
-                expect(processedContext).not.toBe(context);
-                expect(processedContext).toEqual(context);
-            });
-
-            const route = createRoute(['1']);
-
-            await httpEngine.versionMapping([route], context);
-
-            expect(versionProcessor.process).toHaveBeenCalledTimes(1);
-        });
-
-        it('should select the default route when the requested version is not found', async () => {
-            const context = createContext();
-
-            versionProcessor.process.mockImplementation((definition) => {
-                definition?.setVersion('3');
-            });
-
-            const routeV1 = createRoute(['1']);
-            const defaultRoute = createRoute(['default']);
-            const routeV2 = createRoute(['2']);
-
-            await httpEngine.versionMapping([routeV1, defaultRoute, routeV2], context);
-
-            expect(routeV1.handler).not.toHaveBeenCalled();
-            expect(defaultRoute.handler).toHaveBeenCalledTimes(1);
-            expect(defaultRoute.handler).toHaveBeenCalledWith(context);
-            expect(routeV2.handler).not.toHaveBeenCalled();
-        });
-
-        it('should select the first route when no version or default route matches', async () => {
-            const context = createContext();
-
-            versionProcessor.process.mockImplementation((definition) => {
-                definition?.setVersion('3');
-            });
-
-            const routeV1 = createRoute(['1']);
-            const routeV2 = createRoute(['2']);
-
-            await httpEngine.versionMapping([routeV1, routeV2], context);
-
-            expect(routeV1.handler).toHaveBeenCalledTimes(1);
-            expect(routeV1.handler).toHaveBeenCalledWith(context);
-            expect(routeV2.handler).not.toHaveBeenCalled();
-        });
-
-        it('should select the first route when routes have no versions', async () => {
-            const context = createContext();
-
-            versionProcessor.process.mockImplementation((definition) => {
-                definition?.setVersion('1');
-            });
-
-            const routeWithoutVersions = createRoute(undefined);
-            const secondRoute = createRoute(['2']);
-
-            await httpEngine.versionMapping([routeWithoutVersions, secondRoute], context);
-
-            expect(routeWithoutVersions.handler).toHaveBeenCalledTimes(1);
-            expect(secondRoute.handler).not.toHaveBeenCalled();
-        });
-
-        it('should prefer an exact version match over the default route', async () => {
-            const context = createContext();
-
-            versionProcessor.process.mockImplementation((definition) => {
-                definition?.setVersion('2');
-            });
-
-            const defaultRoute = createRoute(['default']);
-            const matchingRoute = createRoute(['2']);
-
-            await httpEngine.versionMapping([defaultRoute, matchingRoute], context);
-
-            expect(matchingRoute.handler).toHaveBeenCalledTimes(1);
-            expect(defaultRoute.handler).not.toHaveBeenCalled();
-        });
-
-        it('should pass the original context to the selected route handler', async () => {
-            const context = createContext();
-
-            versionProcessor.process.mockImplementation((definition) => {
-                definition?.setVersion('1');
-            });
-
-            const route = createRoute(['1']);
-
-            await httpEngine.versionMapping([route], context);
-
-            expect(route.handler).toHaveBeenCalledWith(context);
-            expect((route.handler as jest.Mock).mock.calls[0][0]).toBe(context);
-        });
-
-        it('should propagate an error when version processing fails', async () => {
-            const context = createContext();
-            const error = new Error('Version processing failed');
-
-            versionProcessor.process.mockImplementation(() => {
-                throw error;
-            });
-
-            const route = createRoute(['1']);
-
-            await expect(httpEngine.versionMapping([route], context)).rejects.toThrow(error);
-
-            expect(route.handler).not.toHaveBeenCalled();
-        });
-
-        it('should propagate an error when the selected route handler fails', async () => {
-            const context = createContext();
-            const error = new Error('Route execution failed');
-
-            versionProcessor.process.mockImplementation((definition) => {
-                definition?.setVersion('1');
-            });
-
-            const route = createRoute(['1'], jest.fn().mockRejectedValue(error));
-
-            await expect(httpEngine.versionMapping([route], context)).rejects.toThrow(error);
-
-            expect(route.handler).toHaveBeenCalledWith(context);
-        });
-    });
-
-    it('should implement Executable', () => {
-        expect(httpEngine).toBeInstanceOf(HttpEngine);
-
-        const executable: Executable = httpEngine;
-
-        expect(executable.execute).toBeInstanceOf(Function);
     });
 });

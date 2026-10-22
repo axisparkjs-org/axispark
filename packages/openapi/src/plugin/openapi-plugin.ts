@@ -83,7 +83,8 @@ export class OpenApiPlugin extends Plugin {
                     'getOpenApiJson',
                     HttpMethod.Get,
                     this.docsUrls.jsonUrl,
-                    ['default'],
+                    ['*'],
+                    ['*'],
                     async (context) => {
                         context.response.json(this.document.toObject());
                     }
@@ -97,7 +98,8 @@ export class OpenApiPlugin extends Plugin {
                     'getOpenApiYaml',
                     HttpMethod.Get,
                     this.docsUrls.yamlUrl,
-                    ['default'],
+                    ['*'],
+                    ['*'],
                     async (context) => {
                         context.response.header('Content-Type', 'text/yaml').send(this.document.toYaml());
                     }

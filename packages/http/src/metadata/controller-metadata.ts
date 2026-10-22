@@ -1,6 +1,7 @@
 import { MetadataFromClass } from '@axisparkjs/common';
 
 export interface ControllerMetadata extends MetadataFromClass {
-    prefix: string;
+    path: string;
+    host?: string | string[];
     version?: string | string[];
 }
