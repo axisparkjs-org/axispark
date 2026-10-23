@@ -55,6 +55,18 @@ describe.each([
         expect(response.status).toBe(404);
     });
 
+    it('should return a Bad Request when the index is not a valid integer', async () => {
+        const response = await fetch('http://localhost:3000/api/todos/abc', {
+            method: 'GET'
+        });
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+            status: 400,
+            error: "Parsing failed for 'path' as integer: Value 'abc' is not a valid integer.",
+            cause: 'PipeStepParsingError'
+        });
+    });
+
     it('should handle POST requests to /todos', async () => {
         const newTodo = { task: 'Test Todo' };
         const response = await fetch('http://localhost:3000/api/todos', {
