@@ -27,6 +27,7 @@
     "dependencies": {
         "@axisparkjs/common": "1.2.0",
         "@axisparkjs/di": "1.2.0",
-        "@axisparkjs/logger": "1.2.0"
+        "@axisparkjs/logger": "1.2.0",
+        "class-validator": "^0.14.4"
     }
 }

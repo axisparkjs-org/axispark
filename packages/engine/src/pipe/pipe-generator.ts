@@ -34,7 +34,7 @@ export class PipeGenerator implements Generator<PipeDefinition[]> {
                 for (const step of pipe.steps) {
                     const config = {
                         pipeStep: 'pipeStep' in step ? step.pipeStep : step,
-                        PipeStepConfig: 'PipeStepConfig' in step ? step.PipeStepConfig : undefined
+                        pipeStepConfig: 'PipeStepConfig' in step ? step.PipeStepConfig : undefined
                     };
                     pipeSteps.push(config);
                 }
