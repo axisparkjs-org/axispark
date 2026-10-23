@@ -1,0 +1,38 @@
+{
+  "mode": "pre",
+  "tag": "pre",
+  "initialVersions": {
+    "@axisparkjs/cli": "1.2.0",
+    "@axisparkjs/common": "1.2.0",
+    "@axisparkjs/core": "1.2.0",
+    "@axisparkjs/data": "1.2.0",
+    "@axisparkjs/ddd": "1.2.0",
+    "@axisparkjs/di": "1.2.0",
+    "@axisparkjs/engine": "1.2.0",
+    "@axisparkjs/http": "1.2.0",
+    "@axisparkjs/http-express": "1.2.0",
+    "@axisparkjs/http-fastify": "1.2.0",
+    "@axisparkjs/kafka": "1.2.0",
+    "@axisparkjs/logger": "1.2.0",
+    "@axisparkjs/openapi": "1.2.0",
+    "@axisparkjs/rabbitmq": "1.2.0",
+    "@axisparkjs/schedule": "1.2.0",
+    "@axisparkjs/security": "1.2.0",
+    "@axisparkjs/test": "1.2.0",
+    "@axisparkjs/websocket": "1.2.0",
+    "@axisparkjs/websocket-socketio": "1.2.0"
+  },
+  "changesets": [
+    "bright-base-templates",
+    "bright-mangos-tap",
+    "dirty-toys-shake",
+    "early-cows-return",
+    "feature-host-routing",
+    "http-file-upload",
+    "pipe-step-bad-request",
+    "quiet-rates-share",
+    "schema-request-validation",
+    "tangy-cooks-bet",
+    "wet-spies-rescue"
+  ]
+}
