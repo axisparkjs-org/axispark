@@ -12,6 +12,7 @@ import session from '@fastify/session';
 import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
+import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import path from 'node:path';
 
@@ -39,6 +40,7 @@ export class FastifyHttpAdapter implements HttpAdapter {
         if (this.options.compression) await this.app.register(compress, this.options.compressionOptions ?? {});
         if (this.options.cors) await this.app.register(cors, this.options.corsOptions ?? {});
         if (this.options.urlEncoded) await this.app.register(formbody, this.options.urlEncodedOptions ?? {});
+        if (this.options.fileUpload) await this.app.register(multipart);
     }
 
     getRegisteredRoutes(): readonly RouteDefinition[] {

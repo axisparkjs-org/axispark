@@ -35,6 +35,11 @@ describe('HttpPluginOptionsFactory', () => {
                     ttl: 60_000,
                     limit: 100
                 },
+                fileUpload: false,
+                fileUploadOptions: {
+                    maxFileSize: 5 * 1024 * 1024,
+                    maxFiles: 10
+                },
                 version: false,
                 versionOptions: undefined,
                 logHttpErrors: false,
@@ -73,6 +78,12 @@ describe('HttpPluginOptionsFactory', () => {
                     ttl: 10_000,
                     limit: 5
                 },
+                fileUpload: true,
+                fileUploadOptions: {
+                    maxFileSize: 1024,
+                    maxFiles: 2,
+                    allowedMimeTypes: ['image/png']
+                },
                 version: false,
                 versionOptions: undefined,
                 logHttpErrors: true,
@@ -104,6 +115,12 @@ describe('HttpPluginOptionsFactory', () => {
                 rateLimitOptions: {
                     ttl: 10_000,
                     limit: 5
+                },
+                fileUpload: true,
+                fileUploadOptions: {
+                    maxFileSize: 1024,
+                    maxFiles: 2,
+                    allowedMimeTypes: ['image/png']
                 },
                 version: false,
                 versionOptions: undefined,

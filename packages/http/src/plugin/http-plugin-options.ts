@@ -66,6 +66,32 @@ export interface RateLimitOptions {
     message?: string | ((time: number) => string);
 }
 
+/** The reason why a multipart upload was rejected. */
+export type FileUploadLimitReason = 'fileSize' | 'files' | 'mimeType';
+
+/**
+ * Options for configuring file uploads (`multipart/form-data`).
+ */
+export interface FileUploadOptions {
+    /**
+     * Maximum size in bytes allowed per file.
+     */
+    maxFileSize: number;
+    /**
+     * Maximum number of files allowed per request.
+     */
+    maxFiles?: number;
+    /**
+     * Allowed MIME types (e.g. `['image/png', 'application/pdf']`). All allowed if omitted.
+     */
+    allowedMimeTypes?: string[];
+    /**
+     * The message to display when an upload limit is exceeded. By default, it will display a generic message.
+     * The function receives the exceeded limit (bytes for `fileSize`, number of files for `files` and number of allowed MIME types for `mimeType`) and the reason.
+     */
+    message?: string | ((limit: number, reason: FileUploadLimitReason) => string);
+}
+
 /** Severity to apply to a route compatibility finding. */
 export type RouteValidationAction = 'error' | 'warn' | 'ignore';
 
@@ -159,6 +185,14 @@ export interface HttpPluginOptions extends PluginOptions {
     rateLimit?: boolean;
     /** Default rate limits applied to endpoints without decorator overrides. */
     rateLimitOptions?: RateLimitOptions;
+    /**
+     * Whether to use the file upload (multipart/form-data) middleware. Disabled by default.
+     */
+    fileUpload?: boolean;
+    /**
+     * Options for configuring the file upload middleware.
+     */
+    fileUploadOptions?: FileUploadOptions;
     /**
      * Whether to use the versioning guard.
      */

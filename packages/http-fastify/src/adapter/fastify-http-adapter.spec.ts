@@ -4,6 +4,7 @@ import session from '@fastify/session';
 import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
+import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 
 import { HttpMethod, RouteDefinition } from '@axisparkjs/http';
@@ -45,6 +46,7 @@ jest.mock('@fastify/session', () => jest.fn());
 jest.mock('@fastify/compress', () => jest.fn());
 jest.mock('@fastify/cors', () => jest.fn());
 jest.mock('@fastify/formbody', () => jest.fn());
+jest.mock('@fastify/multipart', () => jest.fn());
 
 describe('FastifyHttpAdapter', () => {
     const app = (fastify as any).__app;
@@ -95,7 +97,8 @@ describe('FastifyHttpAdapter', () => {
                     session: true,
                     compression: true,
                     cors: true,
-                    urlEncoded: true
+                    urlEncoded: true,
+                    fileUpload: true
                 },
                 axisparkConfig as any
             );
@@ -116,6 +119,7 @@ describe('FastifyHttpAdapter', () => {
             expect(app.register).toHaveBeenCalledWith(compress, {});
             expect(app.register).toHaveBeenCalledWith(cors, {});
             expect(app.register).toHaveBeenCalledWith(formbody, {});
+            expect(app.register).toHaveBeenCalledWith(multipart);
         });
 
         it('should register all enabled plugins and use the default options', async () => {

@@ -10,5 +10,7 @@ export enum HttpParameter {
     Header = 'header',
     Ip = 'ip',
     Session = 'session',
-    Cookie = 'cookie'
+    Cookie = 'cookie',
+    UploadedFile = 'uploadedFile',
+    UploadedFiles = 'uploadedFiles'
 }

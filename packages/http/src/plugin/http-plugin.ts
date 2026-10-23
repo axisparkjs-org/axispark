@@ -25,6 +25,7 @@ import {
     HealthController,
     HostGuard,
     RateLimitGuard,
+    FileUploadGuard,
     VersionGuard,
     RequestResolver,
     ResponseResolver,
@@ -35,6 +36,8 @@ import {
     CookieResolver,
     HeaderResolver,
     SessionResolver,
+    UploadedFileResolver,
+    UploadedFilesResolver,
     HttpResultResolver,
     HttpTimeoutResolver,
     HttpRateLimitResolver,
@@ -115,6 +118,7 @@ export class HttpPlugin extends Plugin {
             [this.options.logErrors ?? false, LogErrorFilter],
             [true, HostGuard],
             [this.options.rateLimit ?? false, RateLimitGuard],
+            [this.options.fileUpload ?? false, FileUploadGuard],
             [this.options.version ?? false, VersionGuard]
         ];
 
@@ -151,6 +155,8 @@ export class HttpPlugin extends Plugin {
         ParameterGenerator.registerParameter(HttpParameter.Ip, await this.injector.get(IpResolver));
         ParameterGenerator.registerParameter(HttpParameter.Session, await this.injector.get(SessionResolver));
         ParameterGenerator.registerParameter(HttpParameter.Cookie, await this.injector.get(CookieResolver));
+        ParameterGenerator.registerParameter(HttpParameter.UploadedFile, await this.injector.get(UploadedFileResolver));
+        ParameterGenerator.registerParameter(HttpParameter.UploadedFiles, await this.injector.get(UploadedFilesResolver));
 
         if (this.options.version) {
             VersionProcessor.registerVersion(VersionType.Header, await this.injector.get(HeaderVersionResolver));
