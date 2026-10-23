@@ -45,6 +45,34 @@ describe('create command - CLI', () => {
         expect(packageJson.name).toBe(projectName);
     });
 
+    it.each([
+        ['http-security', 'src/authenticator.ts'],
+        ['scheduler', 'src/scheduler.ts'],
+        ['http-openapi', 'src/controller.ts']
+    ] as const)('creates a project from the %s template', async (template, exampleFile) => {
+        const projectName = `my-${template}-project`;
+
+        await execFileAsync(process.execPath, [CLI_PATH, 'create', projectName, '--template', template, '--no-install'], {
+            cwd: tempDirectory,
+            env: {
+                ...process.env
+            }
+        });
+
+        const projectPath = path.join(tempDirectory, projectName);
+
+        await expectFileToExist(path.join(projectPath, exampleFile));
+
+        const packageJson = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8'));
+
+        expect(packageJson.name).toBe(projectName);
+        expect(packageJson.scripts).toMatchObject({
+            build: 'tsc',
+            start: 'node dist/index.bootstrap.js',
+            dev: 'nodemon --exec ts-node src/index.bootstrap.ts'
+        });
+    });
+
     it('fails when the project already exists', async () => {
         const projectName = 'existing-project';
 

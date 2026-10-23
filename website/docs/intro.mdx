@@ -18,9 +18,25 @@ To scaffold a new AxiSpark.js project, you can use the AxiSpark CLI. This tool w
 
 ```bash
 npm install -g @axisparkjs/cli
-axispark new project-name
+axispark create project-name
 ```
 
-> The CLI will create a new project in the `project-name` directory. You can select some options during the setup process, like the template to use or to install dependencies.
+The CLI creates the project in the `project-name` directory. Choose a template interactively or pass its name with `--template`:
 
-> The templates offereds by the CLI are implemented in TypeScript and are designed to be simple and easy to understand. You can use them as a starting point for your own projects.
+| Template | Example contents |
+| --- | --- |
+| `default` | Basic application with a sample plugin. |
+| `http` | Express HTTP server with a `/api/example` controller. |
+| `http-security` | HTTP server with a demo authenticator, an admin authorization policy, and a protected route. The example credential is `Authorization: Demo admin`; adapt authentication to your identity provider. |
+| `scheduler` | Scheduler plugin with a job that logs every five seconds. |
+| `http-openapi` | HTTP server with a documented greeting response and an OpenAPI schema. The JSON document is available at `/api/openapi.json`. |
+
+For example, create the HTTP and Security starter, install its dependencies, and start it in development mode:
+
+```bash
+axispark create my-app --template http-security
+cd my-app
+npm run dev
+```
+
+Each template is implemented in TypeScript and includes `npm run dev`, `npm run build`, and `npm start` scripts.
