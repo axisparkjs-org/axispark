@@ -54,6 +54,14 @@ Http Plugin provides a set of decorators implemented through the `@axisparkjs/en
             <td><code>@Cookie(field: string)</code></td>
             <td>Extracts a specific field from the HTTP request cookies. If the cookie is not found or the session options are disabled, it will return undefined.</td>
         </tr>
+        <tr>
+            <td><code>@UploadedFile(field: string)</code></td>
+            <td>Extracts the first file uploaded in a <code>multipart/form-data</code> field. If the field has no file or the <code>fileUpload</code> option is disabled, it will return undefined. See <a href="./file-uploads">File uploads</a>.</td>
+        </tr>
+        <tr>
+            <td><code>@UploadedFiles(field?: string)</code></td>
+            <td>Extracts the files uploaded in a <code>multipart/form-data</code> field, or every uploaded file when no field is given. If the <code>fileUpload</code> option is disabled, it will return undefined. See <a href="./file-uploads">File uploads</a>.</td>
+        </tr>
     </tbody>
 </table>
 

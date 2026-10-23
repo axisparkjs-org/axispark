@@ -6,7 +6,7 @@ import { RouteDefinition } from '../routes/route-definition';
 import { RouteValidator } from '../routes/route-validator';
 import { HTTP_ADAPTER, HTTP_LOGGER, HTTP_OPTIONS } from '../di/tokens';
 import { HttpPluginOptions } from './http-plugin-options';
-import { HealthController, RateLimitGuard, VersionGuard } from '../implementations';
+import { FileUploadGuard, HealthController, RateLimitGuard, VersionGuard } from '../implementations';
 import { LogErrorFilter, LogHttpErrorFilter } from '../implementations/filters';
 import { LogHttpRequestInterceptor, LogHttpResponseInterceptor } from '../implementations';
 import { HttpRateLimitResolver, HttpResultResolver, HttpTimeoutResolver } from '../implementations';
@@ -305,7 +305,7 @@ describe('HttpPlugin', () => {
 
     describe('configureImplementations', () => {
         it('should keep all optional components when enabled', async () => {
-            await plugin.onRegister(context, { ...options, rateLimit: true });
+            await plugin.onRegister(context, { ...options, rateLimit: true, fileUpload: true });
 
             expect(ClassRegistry.remove).not.toHaveBeenCalled();
             expect(container.unbind).not.toHaveBeenCalled();
@@ -318,6 +318,7 @@ describe('HttpPlugin', () => {
             ['logHttpErrors', LogHttpErrorFilter],
             ['logErrors', LogErrorFilter],
             ['rateLimit', RateLimitGuard],
+            ['fileUpload', FileUploadGuard],
             ['version', VersionGuard]
         ])('should disable %s when it is not enabled', async (_option, target) => {
             await plugin.onRegister(context, optionsWithoutComponents);
@@ -471,7 +472,11 @@ describe('HttpPlugin', () => {
 
             expect(ParameterGenerator.registerParameter).toHaveBeenCalledWith(HttpParameter.Cookie, expect.anything());
 
-            expect(ParameterGenerator.registerParameter).toHaveBeenCalledTimes(9);
+            expect(ParameterGenerator.registerParameter).toHaveBeenCalledWith(HttpParameter.UploadedFile, expect.anything());
+
+            expect(ParameterGenerator.registerParameter).toHaveBeenCalledWith(HttpParameter.UploadedFiles, expect.anything());
+
+            expect(ParameterGenerator.registerParameter).toHaveBeenCalledTimes(11);
         });
 
         it('should register version resolvers when version is enabled', async () => {

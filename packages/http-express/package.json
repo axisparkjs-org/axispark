@@ -30,6 +30,7 @@
         "@axisparkjs/di": "1.2.0",
         "@axisparkjs/http": "1.2.0",
         "@axisparkjs/logger": "1.2.0",
+        "busboy": "^1.6.0",
         "compression": "^1.8.1",
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.6",
@@ -37,6 +38,7 @@
         "express-session": "^1.19.0"
     },
     "devDependencies": {
+        "@types/busboy": "^1.5.5",
         "@types/compression": "^1.8.1",
         "@types/cookie-parser": "^1.4.10",
         "@types/cors": "^2.8.19",

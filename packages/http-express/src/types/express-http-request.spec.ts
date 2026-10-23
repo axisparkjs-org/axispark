@@ -1,4 +1,6 @@
 import { Request } from 'express';
+import { PassThrough } from 'node:stream';
+import { BadRequestError, FileUploadDefinition, FileUploadLimitError } from '@axisparkjs/http';
 import { ExpressHttpRequest } from './express-http-request';
 
 describe('ExpressHttpRequest', () => {
@@ -101,5 +103,84 @@ describe('ExpressHttpRequest', () => {
 
         expect(httpRequest.getHeader('x-test')).toBeUndefined();
         expect(request.get).toHaveBeenCalledWith('x-test');
+    });
+
+    describe('parseMultipart', () => {
+        const boundary = 'axisparkboundary';
+        const definition = new FileUploadDefinition(8, 2, ['text/plain', 'application/octet-stream']);
+
+        interface Part {
+            name: string;
+            value: string;
+            filename?: string;
+            type?: string;
+        }
+        const multipartBody = (parts: Part[], closed = true) =>
+            parts
+                .map(({ name, value, filename, type }) => {
+                    const disposition = `Content-Disposition: form-data; name="${name}"${filename ? `; filename="${filename}"` : ''}`;
+                    return `--${boundary}\r\n${disposition}\r\n${type ? `Content-Type: ${type}\r\n` : ''}\r\n${value}\r\n`;
+                })
+                .join('') + (closed ? `--${boundary}--\r\n` : '');
+
+        const parse = (body: string, contentType = `multipart/form-data; boundary=${boundary}`, fileDefinition = definition) => {
+            const stream = Object.assign(new PassThrough(), { headers: { 'content-type': contentType }, body: undefined });
+            stream.end(body);
+            const multipartRequest = new ExpressHttpRequest(stream as unknown as Request);
+            return { multipartRequest, stream, promise: multipartRequest.parseMultipart(fileDefinition) };
+        };
+
+        it('should expose files and text fields', async () => {
+            const { multipartRequest, promise } = parse(
+                multipartBody([
+                    { name: 'name', value: 'Jane' },
+                    { name: 'tags', value: 'a' },
+                    { name: 'tags', value: 'b' },
+                    { name: 'avatar', value: 'hello', filename: 'avatar.txt', type: 'text/plain' },
+                    { name: 'raw', value: 'bin', type: 'application/octet-stream' }
+                ])
+            );
+
+            await expect(promise).resolves.toBeUndefined();
+            expect(multipartRequest.body).toEqual({ name: 'Jane', tags: ['a', 'b'] });
+            expect(multipartRequest.files).toEqual([
+                { fieldName: 'avatar', originalName: 'avatar.txt', mimeType: 'text/plain', size: 5, buffer: Buffer.from('hello') },
+                { fieldName: 'raw', originalName: '', mimeType: 'application/octet-stream', size: 3, buffer: Buffer.from('bin') }
+            ]);
+        });
+
+        it('should reject files bigger than the limit', async () => {
+            const { multipartRequest, promise } = parse(multipartBody([{ name: 'avatar', value: 'too large content', filename: 'a.txt', type: 'text/plain' }]));
+
+            await expect(promise).rejects.toEqual(new FileUploadLimitError('fileSize', 8));
+            expect(multipartRequest.files).toBeUndefined();
+        });
+
+        it('should reject requests with too many files', async () => {
+            const file = { name: 'documents', value: 'doc', filename: 'doc.txt', type: 'text/plain' };
+
+            await expect(parse(multipartBody([file, file, file])).promise).rejects.toEqual(new FileUploadLimitError('files', 2));
+        });
+
+        it('should reject files with a MIME type that is not allowed', async () => {
+            const file = { name: 'avatar', value: 'png', filename: 'a.png', type: 'image/png' };
+
+            await expect(parse(multipartBody([file, file])).promise).rejects.toEqual(new FileUploadLimitError('mimeType', 2));
+        });
+
+        it('should report zero allowed MIME types when the definition rejects without a list', async () => {
+            const rejecting = Object.assign(new FileUploadDefinition(8, 2), { isMimeTypeAllowed: () => false });
+            const body = multipartBody([{ name: 'avatar', value: 'png', filename: 'a.png', type: 'image/png' }]);
+
+            await expect(parse(body, undefined, rejecting).promise).rejects.toEqual(new FileUploadLimitError('mimeType', 0));
+        });
+
+        it('should reject multipart requests without a boundary', async () => {
+            await expect(parse('', 'multipart/form-data').promise).rejects.toBeInstanceOf(BadRequestError);
+        });
+
+        it('should reject malformed multipart bodies', async () => {
+            await expect(parse(multipartBody([{ name: 'name', value: 'Jane' }], false)).promise).rejects.toBeInstanceOf(BadRequestError);
+        });
     });
 });
