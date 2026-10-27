@@ -58,7 +58,7 @@ jobs:
           echo "Snapshot tag: $TAG"
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: ${{ inputs.environment == 'pro' && 'https://registry.npmjs.org' || 'https://npm.pkg.github.com' }}
@@ -192,7 +192,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 

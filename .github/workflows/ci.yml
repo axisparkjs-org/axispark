@@ -48,7 +48,7 @@ jobs:
           if echo "$CODE_FILES" | grep -qE "$SHARED|$E2E"; then echo "e2e=true" >> "$GITHUB_OUTPUT"; else echo "e2e=false" >> "$GITHUB_OUTPUT"; fi
           if echo "$FILES" | grep -qP "$SHARED|$DOCS"; then echo "docs=true" >> "$GITHUB_OUTPUT"; else echo "docs=false" >> "$GITHUB_OUTPUT"; fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
