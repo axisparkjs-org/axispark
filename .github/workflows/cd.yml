@@ -20,7 +20,10 @@ jobs:
 
     if: >
       startsWith(github.ref, 'refs/heads/release/') ||
-      startsWith(github.ref, 'refs/heads/feature/')
+      startsWith(github.ref, 'refs/heads/feature/') ||
+      startsWith(github.ref, 'refs/heads/fix/') ||
+      startsWith(github.ref, 'refs/heads/update/') ||
+      startsWith(github.ref, 'refs/heads/docs/')
 
     permissions:
       contents: write
@@ -39,8 +42,11 @@ jobs:
           BRANCH="${GITHUB_REF#refs/heads/}"
 
           # npm dist-tags cannot contain spaces or some special characters.
-          # Convert feature/foo-bar into foo-bar.
-          TAG="${BRANCH#feature/}"
+          # Convert feature/foo-bar, fix/foo-bar, update/foo-bar or docs/foo-bar into foo-bar.
+          TAG="$BRANCH"
+          for PREFIX in feature/ fix/ update/ docs/; do
+            TAG="${TAG#"$PREFIX"}"
+          done
 
           # Replace characters that are not valid/recommended in npm dist-tags.
           TAG=$(echo "$TAG" | sed 's#[^a-zA-Z0-9._-]#-#g')
