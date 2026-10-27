@@ -22,6 +22,9 @@
         "test:unit": "export NODE_ENV=test && jest --config jest.config.ts",
         "sonar": "sonar-scanner -Dsonar.projectKey=axisparkjs-cli"
     },
+    "engines": {
+        "node": ">= 24"
+    },
     "dependencies": {
         "chalk": "^4.1.2",
         "commander": "^14.0.3",
