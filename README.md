@@ -35,4 +35,4 @@ If you have any questions or need assistance, please contact me at pablogalvez31
 
 ## License
 
-AxiSpark is [MIT licensed](LICENSE).
+AxiSpark is [Apache 2.0 licensed](LICENSE).

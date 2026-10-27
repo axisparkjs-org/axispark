@@ -3,7 +3,7 @@
     "version": "0.0.1",
     "description": "AxiSpark.js - The Ultimate Node.js Framework",
     "author": "Pablo Gálvez Ortuño",
-    "license": "ISC",
+    "license": "Apache-2.0",
     "scripts": {
         "prettier:fix": "prettier --config .prettierrc.json '**/*.{ts,js,mjs,json,md,html,css,scss}' --write",
         "prettier": "turbo run prettier",
