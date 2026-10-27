@@ -32,3 +32,18 @@ describe('defaultStatusCode', () => {
         expect(defaultStatusCode('HEAD')).toBe(HttpStatusCode.Ok);
     });
 });
+
+describe('RFC 9110 status names', () => {
+    it.each([
+        [300, 'MultipleChoices', HttpStatusCode.MultipleChoices, HttpStatusCode.Ambiguous],
+        [413, 'ContentTooLarge', HttpStatusCode.ContentTooLarge, HttpStatusCode.PayloadTooLarge],
+        [416, 'RangeNotSatisfiable', HttpStatusCode.RangeNotSatisfiable, HttpStatusCode.RequestedRangeNotSatisfiable],
+        [418, 'Unused', HttpStatusCode.Unused, HttpStatusCode.IAmATeapot],
+        [421, 'MisdirectedRequest', HttpStatusCode.MisdirectedRequest, HttpStatusCode.Misdirected],
+        [422, 'UnprocessableContent', HttpStatusCode.UnprocessableContent, HttpStatusCode.UnprocessableEntity]
+    ])('uses %s as the canonical name', (status, canonicalName, canonicalValue, legacyValue) => {
+        expect(canonicalValue).toBe(status);
+        expect(legacyValue).toBe(status);
+        expect(HttpStatusCode[status as number]).toBe(canonicalName);
+    });
+});

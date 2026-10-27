@@ -31,6 +31,8 @@ export const MetadataKeys = {
     CONTROLLER: new MetadataKey('controller'),
     ROUTE: new MetadataKey('route'),
     HTTP_CODE: new MetadataKey('http-code'),
+    RATE_LIMIT: new MetadataKey('rate-limit'),
+    FILE_UPLOAD: new MetadataKey('file-upload'),
 
     /* Schedule */
     SCHEDULER: new MetadataKey('scheduler'),

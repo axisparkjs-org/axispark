@@ -1,6 +1,6 @@
 import { Controller, Get } from '@axisparkjs/http';
 
-@Controller({ prefix: 'versions' })
+@Controller({ path: 'versions' })
 export class VersionController {
     @Get({
         path: '/',

@@ -45,25 +45,52 @@ export class SocketIOWebSocketAdapter implements WebSocketAdapter {
         for (const [namespace, events] of eventByNamespace.entries()) {
             const nsp = this.io.of(namespace);
             let connectionEvent: ((socket: Socket) => Promise<void>) | undefined;
-            const connectionEventDefinition = events.find((event) => event.event === 'connection');
+            const connectionEventDefinition = events.find((event) => typeof event.event === 'string' && event.event === 'connection');
             if (connectionEventDefinition) {
                 connectionEvent = async (socket: Socket) => {
                     const context = this.createContext(socket);
                     await connectionEventDefinition.handler(context);
                 };
-                events.splice(events.indexOf(connectionEventDefinition), 1);
             }
+            const messageEvents = events.filter((event) => event !== connectionEventDefinition);
+            const regexEvents = messageEvents.filter((event): event is WebSocketEventDefinition & { event: RegExp } => typeof event.event !== 'string');
 
             nsp.on('connection', async (socket: Socket) => {
                 await connectionEvent?.(socket);
 
-                for (const event of events) {
-                    socket.on(event.event, async (data: unknown, ack?: (response?: unknown) => void) => {
-                        const context = this.createContext(socket, { event: event.event, data, ack });
+                for (const event of messageEvents) {
+                    const eventName = event.event;
+                    if (typeof eventName !== 'string') continue;
+                    socket.on(eventName, async (data: unknown, ack?: (response?: unknown) => void) => {
+                        const context = this.createContext(socket, { event: eventName, data, ack });
                         await event.handler(context);
                     });
                 }
+
+                if (regexEvents.length > 0) {
+                    socket.onAny(async (eventName: string, ...args: unknown[]) => {
+                        const data = args[0];
+                        const ack = typeof args[1] === 'function' ? (args[1] as (response?: unknown) => void) : undefined;
+
+                        for (const event of regexEvents) {
+                            if (this.matchesEventName(event.event, eventName)) {
+                                const context = this.createContext(socket, { event: eventName, data, ack });
+                                await event.handler(context);
+                            }
+                        }
+                    });
+                }
             });
+        }
+    }
+
+    private matchesEventName(pattern: RegExp, eventName: string): boolean {
+        const lastIndex = pattern.lastIndex;
+        pattern.lastIndex = 0;
+        try {
+            return pattern.test(eventName);
+        } finally {
+            pattern.lastIndex = lastIndex;
         }
     }
 

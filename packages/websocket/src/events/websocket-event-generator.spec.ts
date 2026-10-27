@@ -31,6 +31,21 @@ describe('WebSocketEventGenerator', () => {
             })
         );
     });
+
+    it('preserves regular expression event metadata in generated definitions', async () => {
+        class Controller {
+            handle() {}
+        }
+        const event = /^user:\w+$/;
+        Metadata.define(MetadataKeys.WEBSOCKET, { target: Controller, namespace: '/chat' }, Controller);
+        Metadata.define(MetadataKeys.WEBSOCKET_EVENT, [{ target: Controller, propertyKey: 'handle', event }], Controller);
+        jest.spyOn(ClassRegistry, 'getWithMetadata').mockReturnValue([Controller] as any);
+
+        const [definition] = await new WebSocketEventGenerator({ execute: jest.fn() } as any, { create: jest.fn() } as any).generate();
+
+        expect(definition.event).toBe(event);
+    });
+
     it('returns no definitions when no websocket classes are registered', async () => {
         jest.spyOn(ClassRegistry, 'getWithMetadata').mockReturnValue([] as any);
         expect(await new WebSocketEventGenerator({ execute: jest.fn() } as any, { create: jest.fn() } as any).generate()).toEqual([]);

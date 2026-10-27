@@ -1,6 +1,6 @@
 import { HttpContext, HttpStatusCode } from '../../types';
 import { BodyHttpResult, ErrorHttpResult, FileHttpResult, RedirectHttpResult, StreamHttpResult } from './http-result';
-import { BadRequestError } from '../errors';
+import { BadRequestError, RateLimitExceededError } from '../errors';
 
 const response = {
     status: jest.fn(),
@@ -120,6 +120,15 @@ describe('StreamHttpResult', () => {
 });
 
 describe('ErrorHttpResult', () => {
+    it('serializes rate limit errors using the established message body', async () => {
+        const error = new RateLimitExceededError('Too many requests');
+
+        await new ErrorHttpResult(error).process(context);
+
+        expect(response.status).toHaveBeenCalledWith(HttpStatusCode.TooManyRequests);
+        expect(response.json).toHaveBeenCalledWith({ message: 'Too many requests' });
+    });
+
     it('should serialize an HttpError', async () => {
         const error = new BadRequestError('Invalid request');
 

@@ -1,6 +1,6 @@
 import { ResultDefinition } from '@axisparkjs/engine';
 import { HttpStatusCode, HttpContext } from '../../types';
-import { HttpError } from '../errors';
+import { HttpError, RateLimitExceededError } from '../errors';
 
 /**
  * An abstract class for representing HTTP results.
@@ -117,6 +117,11 @@ export class ErrorHttpResult extends HttpResult<HttpError> {
 
     public async process(context: HttpContext): Promise<void> {
         context.response.status(this.rc);
+        if (this.value instanceof RateLimitExceededError) {
+            context.response.json({ message: this.value.response });
+            return;
+        }
+
         context.response.json({
             error: this.value.message,
             status: this.rc,

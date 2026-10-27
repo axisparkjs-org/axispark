@@ -3,11 +3,13 @@ import { HttpContext } from '../../types';
 import { BadRequestError } from '../errors';
 import { Guard } from '@axisparkjs/engine';
 import { Check } from '@axisparkjs/engine';
+import { ExecutionTransport } from '@axisparkjs/engine';
+import { StepPriority } from '@axisparkjs/engine';
 
 /**
  * A guard for validating versions.
  */
-@Guard()
+@Guard({ transport: ExecutionTransport.Http, priority: StepPriority.Critical })
 export class VersionGuard {
     /**
      * Checks if the requested version is accepted.

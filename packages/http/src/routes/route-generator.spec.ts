@@ -1,40 +1,16 @@
 import { Metadata, MetadataKeys } from '@axisparkjs/common';
 import { ClassRegistry } from '@axisparkjs/di';
-import { ExecutionTransport } from '@axisparkjs/engine';
 import { RouteGenerator } from './route-generator';
 import { RouteDefinition } from './route-definition';
 import { VersionType } from '../version';
 import { HttpPluginOptions } from '../plugin/http-plugin-options';
 
-jest.mock('@axisparkjs/common', () => ({
-    ...jest.requireActual('@axisparkjs/common'),
-    ClassRegistry: {
-        getWithMetadata: jest.fn()
-    },
-    Metadata: {
-        get: jest.fn(),
-        normalizeTarget: jest.fn((target) => target),
-        define: jest.fn()
-    }
-}));
-
 describe('RouteGenerator', () => {
-    const request = {} as any;
-    class TestController {}
+    const httpEngine = { execute: jest.fn() };
 
-    const httpEngine = {
-        execute: jest.fn(),
-        versionMapping: jest.fn()
-    };
-
-    const scopedContainerManager = {
-        create: jest.fn().mockReturnValue({})
-    };
-
-    const createGenerator = (options: Partial<HttpPluginOptions> = {}) => {
-        return new RouteGenerator(
+    const createGenerator = (options: Partial<HttpPluginOptions> = {}) =>
+        new RouteGenerator(
             httpEngine as any,
-            scopedContainerManager as any,
             {
                 adapter: class TestAdapter {},
                 port: 3000,
@@ -43,751 +19,204 @@ describe('RouteGenerator', () => {
                 ...options
             } as HttpPluginOptions
         );
-    };
 
-    const setupMetadata = (controllerMetadata: any, routesMetadata: any[]) => {
-        (ClassRegistry.getWithMetadata as jest.Mock).mockReturnValue([TestController]);
-
-        (Metadata.get as jest.Mock).mockReturnValueOnce(controllerMetadata).mockReturnValueOnce(routesMetadata);
+    const setupControllers = (controllers: { target: any; metadata: Record<string, unknown>; routes: Record<string, unknown>[] }[]) => {
+        (ClassRegistry as any).getWithMetadata = jest.fn().mockReturnValue(controllers.map(({ target }) => target));
+        jest.spyOn(Metadata, 'get').mockImplementation(((key: unknown, target: object) => {
+            const controller = controllers.find((item) => item.target === target);
+            if (!controller) return undefined;
+            return key === MetadataKeys.CONTROLLER ? controller.metadata : controller.routes;
+        }) as any);
     };
 
     beforeEach(() => {
         jest.clearAllMocks();
-        ClassRegistry.getWithMetadata = jest.fn().mockReturnValue([]);
-        (Metadata.get as jest.Mock).mockReset();
-        httpEngine.execute.mockReset();
-        httpEngine.versionMapping.mockReset();
-        scopedContainerManager.create.mockClear();
+        (ClassRegistry as any).getWithMetadata = jest.fn().mockReturnValue([]);
+        jest.restoreAllMocks();
     });
 
-    describe('generate', () => {
-        it('should return an empty array when there are no controllers', async () => {
-            const generator = createGenerator();
-
-            (ClassRegistry.getWithMetadata as jest.Mock).mockReturnValue([]);
-
-            const result = await generator.generate();
-
-            expect(result).toEqual([]);
-            expect(Metadata.get).not.toHaveBeenCalled();
-        });
-
-        it('should generate a route definition for each route', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/'
-                    },
-                    {
-                        target: TestController,
-                        propertyKey: 'create',
-                        method: 'POST',
-                        path: '/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator();
-
-            const result = await generator.generate();
-
-            expect(result).toHaveLength(2);
-            expect(result[0]).toBeInstanceOf(RouteDefinition);
-            expect(result[1]).toBeInstanceOf(RouteDefinition);
-        });
-
-        it('should use the controller prefix and route path', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: 'list'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                basePath: '/api'
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].path).toBe('/api/users/list');
-        });
-
-        it('should normalize slashes in the generated path', async () => {
-            setupMetadata(
-                {
-                    prefix: '/users/'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/list/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                basePath: '///api///'
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].path).toBe('/api/users/list');
-        });
-
-        it('should generate the root path correctly', async () => {
-            setupMetadata(
-                {
-                    prefix: ''
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator();
-
-            const result = await generator.generate();
-
-            expect(result[0].path).toBe('/');
-        });
-
-        it('should use undefined versions when versioning is disabled', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users',
-                    version: '1'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/',
-                        version: '2'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: false
-            });
-
-            const result = await generator.generate();
-
-            expect(result).toHaveLength(1);
-            expect(result[0].versions).toBeUndefined();
-        });
-
-        it('should use the route version when versioning is enabled', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users',
-                    version: '1'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/',
-                        version: '2'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result).toHaveLength(1);
-            expect(result[0].versions).toEqual(['2']);
-        });
-
-        it('should prefer the route version over the controller version', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users',
-                    version: '1'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/',
-                        version: '2'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].versions).toEqual(['2']);
-        });
-
-        it('should use the controller version when route version is not defined', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users',
-                    version: '1'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].versions).toEqual(['1']);
-        });
-
-        it('should support multiple route versions', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/',
-                        version: ['1', '2']
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].versions).toEqual(['1', '2']);
-        });
-
-        it('should support multiple controller versions', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users',
-                    version: ['1', '2']
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].versions).toEqual(['1', '2']);
-        });
-
-        it('should use the URI default version when no route or controller version exists', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Uri,
-                    defaultVersion: '1'
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].versions).toEqual(['1']);
-        });
-
-        it('should use default as the version when no version is configured', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].versions).toEqual(['default']);
-        });
-
-        it('should use default as the version when URI versioning has no defaultVersion', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Uri
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].versions).toEqual(['default']);
-        });
-
-        it('should add the version parameter to the path for URI versioning', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                basePath: '/api',
-                version: true,
-                versionOptions: {
-                    type: VersionType.Uri,
-                    defaultVersion: '1'
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].path).toBe('/api/v:version/users');
-        });
-
-        it('should not add the version parameter to the path for header versioning', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                basePath: '/api',
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result[0].path).toBe('/api/users');
-        });
+    it('returns no definitions when no controllers are registered', async () => {
+        expect(await createGenerator().generate()).toEqual([]);
+        expect(jest.spyOn(Metadata, 'get')).not.toHaveBeenCalled();
     });
 
-    describe('version route grouping', () => {
-        it('should group routes with the same HTTP method and path', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'v1',
-                        method: 'GET',
-                        path: '/',
-                        version: '1'
-                    },
-                    {
-                        target: TestController,
-                        propertyKey: 'v2',
-                        method: 'GET',
-                        path: '/',
-                        version: '2'
-                    }
-                ]
-            );
+    it('builds a route from the controller path and route path', async () => {
+        class UsersController {}
+        setupControllers([
+            {
+                target: UsersController,
+                metadata: { path: '/users/' },
+                routes: [{ target: UsersController, propertyKey: 'list', method: 'GET', path: '/list/' }]
+            }
+        ]);
 
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
+        const [route] = await createGenerator({ basePath: '///api///' }).generate();
 
-            const result = await generator.generate();
-
-            expect(result).toHaveLength(1);
-            expect(result[0].versions).toEqual(['1', '2']);
-        });
-
-        it('should not group routes with different HTTP methods', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'get',
-                        method: 'GET',
-                        path: '/',
-                        version: '1'
-                    },
-                    {
-                        target: TestController,
-                        propertyKey: 'post',
-                        method: 'POST',
-                        path: '/',
-                        version: '2'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result).toHaveLength(2);
-            expect(result[0].httpMethod).toBe('GET');
-            expect(result[1].httpMethod).toBe('POST');
-        });
-
-        it('should not group routes with different paths', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'index',
-                        method: 'GET',
-                        path: '/users',
-                        version: '1'
-                    },
-                    {
-                        target: TestController,
-                        propertyKey: 'detail',
-                        method: 'GET',
-                        path: '/users/:id',
-                        version: '2'
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result).toHaveLength(2);
-        });
-
-        it('should merge all versions from routes in the same group', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'v1',
-                        method: 'GET',
-                        path: '/',
-                        version: ['1', '2']
-                    },
-                    {
-                        target: TestController,
-                        propertyKey: 'v3',
-                        method: 'GET',
-                        path: '/',
-                        version: ['3', '4']
-                    }
-                ]
-            );
-
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
-
-            const result = await generator.generate();
-
-            expect(result).toHaveLength(1);
-            expect(result[0].versions).toEqual(['1', '2', '3', '4']);
-        });
+        expect(route.path).toBe('/api/users/list');
+        expect(route.target).toBe(UsersController);
+        expect(route.propertyKey).toBe('list');
     });
 
-    describe('route handler', () => {
-        it('should execute the original route through httpEngine when versioning is disabled', async () => {
-            const routeMetadata = {
-                target: TestController,
-                propertyKey: 'index',
-                method: 'GET',
-                path: '/'
-            };
+    it('builds the root path when controller and route paths are empty', async () => {
+        class RootController {}
+        setupControllers([
+            { target: RootController, metadata: { path: '' }, routes: [{ target: RootController, propertyKey: 'index', method: 'GET', path: '/' }] }
+        ]);
 
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [routeMetadata]
-            );
+        const [route] = await createGenerator().generate();
 
-            const generator = createGenerator({
-                version: false
-            });
-
-            httpEngine.execute.mockResolvedValue(undefined);
-
-            const result = await generator.generate();
-
-            const context = {
-                request: request,
-                response: {},
-                session: {}
-            };
-
-            await result[0].handler(context as any);
-
-            expect(httpEngine.execute).toHaveBeenCalledTimes(1);
-
-            const generatedContext = httpEngine.execute.mock.calls[0][0];
-
-            expect(generatedContext).toEqual(
-                expect.objectContaining({
-                    request: context.request,
-                    response: context.response,
-                    session: context.session,
-                    target: TestController,
-                    propertyKey: 'index',
-                    transport: ExecutionTransport.Http,
-                    version: undefined,
-                    error: undefined
-                })
-            );
-
-            expect(scopedContainerManager.create).toHaveBeenCalledTimes(1);
-        });
+        expect(route.path).toBe('/');
     });
 
-    describe('version route handler', () => {
-        it('should use versionMapping for grouped routes', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                [
-                    {
-                        target: TestController,
-                        propertyKey: 'v1',
-                        method: 'GET',
-                        path: '/',
-                        version: '1'
-                    },
-                    {
-                        target: TestController,
-                        propertyKey: 'v2',
-                        method: 'GET',
-                        path: '/',
-                        version: '2'
-                    }
+    it('uses the global host wildcard when a controller has no host restriction', async () => {
+        class PublicController {}
+        setupControllers([
+            { target: PublicController, metadata: { path: 'public' }, routes: [{ target: PublicController, propertyKey: 'index', method: 'GET', path: '/' }] }
+        ]);
+
+        const [route] = await createGenerator().generate();
+
+        expect(route.hosts).toEqual(['*']);
+    });
+
+    it('copies an explicit host pattern to the generated route', async () => {
+        class AdminController {}
+        setupControllers([
+            {
+                target: AdminController,
+                metadata: { path: 'admin', host: ['admin.example.com', '*.admin.example.com'] },
+                routes: [{ target: AdminController, propertyKey: 'index', method: 'GET', path: '/' }]
+            }
+        ]);
+
+        const [route] = await createGenerator().generate();
+
+        expect(route.hosts).toEqual(['admin.example.com', '*.admin.example.com']);
+    });
+
+    it('uses no route versions when versioning is disabled', async () => {
+        class VersionController {}
+        setupControllers([
+            {
+                target: VersionController,
+                metadata: { path: 'versions', version: '1' },
+                routes: [{ target: VersionController, propertyKey: 'index', method: 'GET', path: '/', version: '2' }]
+            }
+        ]);
+
+        const [route] = await createGenerator({ version: false }).generate();
+
+        expect(route.versions).toEqual([]);
+    });
+
+    it('prefers a method version over its controller version', async () => {
+        class VersionController {}
+        setupControllers([
+            {
+                target: VersionController,
+                metadata: { path: 'versions', version: '1' },
+                routes: [{ target: VersionController, propertyKey: 'index', method: 'GET', path: '/', version: '2' }]
+            }
+        ]);
+
+        const [route] = await createGenerator({ version: true }).generate();
+
+        expect(route.versions).toEqual(['2']);
+    });
+
+    it('uses the controller version, then a wildcard default when no version is specified', async () => {
+        class VersionController {}
+        setupControllers([
+            {
+                target: VersionController,
+                metadata: { path: 'versions', version: ['1', '2'] },
+                routes: [{ target: VersionController, propertyKey: 'index', method: 'GET', path: '/' }]
+            }
+        ]);
+
+        const [controllerVersionRoute] = await createGenerator({ version: true }).generate();
+        expect(controllerVersionRoute.versions).toEqual(['1', '2']);
+
+        setupControllers([
+            {
+                target: VersionController,
+                metadata: { path: 'versions' },
+                routes: [{ target: VersionController, propertyKey: 'index', method: 'GET', path: '/' }]
+            }
+        ]);
+        const [wildcardRoute] = await createGenerator({ version: true }).generate();
+        expect(wildcardRoute.versions).toEqual(['*']);
+    });
+
+    it('adds a version parameter to the path for URI versioning', async () => {
+        class VersionController {}
+        setupControllers([
+            { target: VersionController, metadata: { path: 'users' }, routes: [{ target: VersionController, propertyKey: 'index', method: 'GET', path: '/' }] }
+        ]);
+
+        const [route] = await createGenerator({
+            basePath: '/api',
+            version: true,
+            versionOptions: { type: VersionType.Uri }
+        }).generate();
+
+        expect(route.path).toBe('/api/v:version/users');
+    });
+
+    it('groups same-method and same-path routes as candidates for framework dispatch', async () => {
+        class AdminController {}
+        class ApiController {}
+        setupControllers([
+            {
+                target: AdminController,
+                metadata: { path: 'users', host: 'admin.example.com' },
+                routes: [{ target: AdminController, propertyKey: 'adminIndex', method: 'GET', path: '/', version: '1' }]
+            },
+            {
+                target: ApiController,
+                metadata: { path: 'users', host: 'api.example.com' },
+                routes: [{ target: ApiController, propertyKey: 'apiIndex', method: 'GET', path: '/', version: '2' }]
+            }
+        ]);
+
+        const [dispatchRoute] = await createGenerator({ version: true }).generate();
+        const context = { request: {}, response: {}, session: undefined } as any;
+
+        expect(dispatchRoute).toBeInstanceOf(RouteDefinition);
+        expect(dispatchRoute.path).toBe('/users');
+        await dispatchRoute.handler(context);
+
+        expect(httpEngine.execute).toHaveBeenCalledTimes(1);
+        const [receivedContext, candidates] = httpEngine.execute.mock.calls[0];
+        expect(receivedContext).toBe(context);
+        expect(candidates).toHaveLength(2);
+        expect(candidates.map((candidate: RouteDefinition) => [candidate.target, candidate.propertyKey, candidate.hosts, candidate.versions])).toEqual([
+            [AdminController, 'adminIndex', ['admin.example.com'], ['1']],
+            [ApiController, 'apiIndex', ['api.example.com'], ['2']]
+        ]);
+    });
+
+    it('keeps routes with different methods or paths in separate dispatch definitions', async () => {
+        class UsersController {}
+        setupControllers([
+            {
+                target: UsersController,
+                metadata: { path: 'users' },
+                routes: [
+                    { target: UsersController, propertyKey: 'list', method: 'GET', path: '/' },
+                    { target: UsersController, propertyKey: 'create', method: 'POST', path: '/' },
+                    { target: UsersController, propertyKey: 'detail', method: 'GET', path: '/:id' }
                 ]
-            );
+            }
+        ]);
 
-            const generator = createGenerator({
-                version: true,
-                versionOptions: {
-                    type: VersionType.Header
-                } as any
-            });
+        const routes = await createGenerator().generate();
 
-            httpEngine.versionMapping.mockResolvedValue(undefined);
-
-            const result = await generator.generate();
-
-            expect(result).toHaveLength(1);
-
-            const context = {
-                request,
-                response: {},
-                session: {}
-            };
-
-            await result[0].handler(context as any);
-
-            expect(httpEngine.versionMapping).toHaveBeenCalledTimes(1);
-
-            const [routes, generatedContext] = httpEngine.versionMapping.mock.calls[0];
-
-            expect(routes).toHaveLength(2);
-            expect(generatedContext).toBe(context);
-        });
-    });
-
-    describe('metadata', () => {
-        it('should retrieve controllers using controller metadata', async () => {
-            const generator = createGenerator();
-
-            await generator.generate();
-
-            expect(ClassRegistry.getWithMetadata).toHaveBeenCalledWith(MetadataKeys.CONTROLLER);
-        });
-
-        it('should retrieve controller metadata using the controller', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                []
-            );
-
-            const generator = createGenerator();
-
-            await generator.generate();
-
-            expect(Metadata.get).toHaveBeenNthCalledWith(1, MetadataKeys.CONTROLLER, TestController);
-        });
-
-        it('should retrieve route metadata using the controller', async () => {
-            setupMetadata(
-                {
-                    prefix: 'users'
-                },
-                []
-            );
-
-            const generator = createGenerator();
-
-            await generator.generate();
-
-            expect(Metadata.get).toHaveBeenNthCalledWith(2, MetadataKeys.ROUTE, TestController);
-        });
-
-        it('should use an empty route metadata array when route metadata is undefined', async () => {
-            (ClassRegistry.getWithMetadata as jest.Mock).mockReturnValue([TestController]);
-
-            (Metadata.get as jest.Mock)
-                .mockReturnValueOnce({
-                    prefix: 'users'
-                })
-                .mockReturnValueOnce(undefined);
-
-            const generator = createGenerator();
-
-            const result = await generator.generate();
-
-            expect(result).toEqual([]);
-        });
+        expect(routes).toHaveLength(3);
+        expect(routes.map(({ httpMethod, path }) => [httpMethod, path])).toEqual([
+            ['GET', '/users'],
+            ['POST', '/users'],
+            ['GET', '/users/:id']
+        ]);
     });
 });

@@ -12,4 +12,17 @@ describe('WebSocketEvent', () => {
         expect(Metadata.get(MetadataKeys.WEBSOCKET_EVENT, Controller)).toHaveLength(2);
         expect(Metadata.get(MetadataKeys.WEBSOCKET_EVENT, Controller, 'handle')).toMatchObject({ event: 'message:again' });
     });
+
+    it('stores regular expression event metadata', () => {
+        class Controller {
+            handle() {}
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(Controller.prototype, 'handle') as PropertyDescriptor;
+        const event = /^user:\w+$/i;
+
+        WebSocketEvent(event)(Controller.prototype, 'handle', descriptor);
+
+        expect(Metadata.get(MetadataKeys.WEBSOCKET_EVENT, Controller)).toMatchObject([{ event }]);
+        expect(Metadata.get(MetadataKeys.WEBSOCKET_EVENT, Controller, 'handle')).toMatchObject({ event });
+    });
 });

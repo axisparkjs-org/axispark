@@ -4,6 +4,7 @@ import session from '@fastify/session';
 import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
+import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 
 import { HttpMethod, RouteDefinition } from '@axisparkjs/http';
@@ -36,8 +37,8 @@ jest.mock('fastify', () => {
     );
 });
 
-const route = (target: any, path: string, handler: jest.Mock, propertyKey: string): RouteDefinition =>
-    new RouteDefinition(target, propertyKey, HttpMethod.Get, path, ['v1', 'v2'], handler);
+const route = (target: any, path: string, handler: jest.Mock, propertyKey: string, hosts: string[] = ['*']): RouteDefinition =>
+    new RouteDefinition(target, propertyKey, HttpMethod.Get, path, ['v1', 'v2'], hosts, handler);
 
 jest.mock('@fastify/static', () => jest.fn());
 jest.mock('@fastify/cookie', () => jest.fn());
@@ -45,6 +46,7 @@ jest.mock('@fastify/session', () => jest.fn());
 jest.mock('@fastify/compress', () => jest.fn());
 jest.mock('@fastify/cors', () => jest.fn());
 jest.mock('@fastify/formbody', () => jest.fn());
+jest.mock('@fastify/multipart', () => jest.fn());
 
 describe('FastifyHttpAdapter', () => {
     const app = (fastify as any).__app;
@@ -68,6 +70,8 @@ describe('FastifyHttpAdapter', () => {
         healthChecks: false,
         timeout: false,
         timeoutOptions: undefined,
+        rateLimit: false,
+        rateLimitOptions: undefined,
         version: false,
         versionOptions: undefined,
         logErrors: false,
@@ -93,7 +97,8 @@ describe('FastifyHttpAdapter', () => {
                     session: true,
                     compression: true,
                     cors: true,
-                    urlEncoded: true
+                    urlEncoded: true,
+                    fileUpload: true
                 },
                 axisparkConfig as any
             );
@@ -114,6 +119,7 @@ describe('FastifyHttpAdapter', () => {
             expect(app.register).toHaveBeenCalledWith(compress, {});
             expect(app.register).toHaveBeenCalledWith(cors, {});
             expect(app.register).toHaveBeenCalledWith(formbody, {});
+            expect(app.register).toHaveBeenCalledWith(multipart);
         });
 
         it('should register all enabled plugins and use the default options', async () => {
@@ -224,6 +230,18 @@ describe('FastifyHttpAdapter', () => {
                 response: expect.any(FastifyHttpResponse),
                 session: expect.any(FastifyHttpSession)
             });
+        });
+
+        it('should delegate host-based dispatch to the framework route handler', async () => {
+            const adapter = new FastifyHttpAdapter(baseConfig, axisparkConfig as any);
+            const handler = jest.fn();
+            adapter.registerRoutes([route(class AdminController {}, '/users', handler, 'index', ['admin.example.com'])]);
+
+            const callback = app.route.mock.calls[0][0].handler;
+            await callback({ headers: { host: 'ADMIN.EXAMPLE.COM:3000' } }, {});
+
+            expect(handler).toHaveBeenCalledTimes(1);
+            expect(handler.mock.calls[0][0].request.headers.host).toBe('ADMIN.EXAMPLE.COM:3000');
         });
     });
 

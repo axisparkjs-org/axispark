@@ -272,8 +272,20 @@ describe('create command', () => {
                             value: 'default'
                         },
                         {
-                            title: 'Http',
+                            title: 'HTTP',
                             value: 'http'
+                        },
+                        {
+                            title: 'HTTP + Security',
+                            value: 'http-security'
+                        },
+                        {
+                            title: 'Scheduler',
+                            value: 'scheduler'
+                        },
+                        {
+                            title: 'HTTP + OpenAPI',
+                            value: 'http-openapi'
                         }
                     ],
                     initial: 0
@@ -302,6 +314,16 @@ describe('create command', () => {
     });
 
     describe('project creation', () => {
+        it.each(['http-security', 'scheduler', 'http-openapi'])('downloads the %s template selected with --template', async (template) => {
+            mockedPrompts.mockResolvedValueOnce({
+                install: false
+            } as any);
+
+            await runCommand('my-project', { template });
+
+            expect(mockedDownloadTemplate).toHaveBeenCalledWith(template, 'my-project');
+        });
+
         it('downloads the selected template', async () => {
             mockedPrompts.mockResolvedValueOnce({
                 install: false

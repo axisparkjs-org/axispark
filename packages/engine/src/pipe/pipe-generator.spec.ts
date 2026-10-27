@@ -116,14 +116,14 @@ describe('PipeGenerator', () => {
             expect(result[0].steps).toEqual([
                 {
                     pipeStep: ClassPipeStep,
-                    PipeStepConfig: undefined
+                    pipeStepConfig: undefined
                 }
             ]);
 
             expect(result[1].steps).toEqual([
                 {
                     pipeStep: ClassPipeStep,
-                    PipeStepConfig: undefined
+                    pipeStepConfig: undefined
                 }
             ]);
         });
@@ -160,7 +160,7 @@ describe('PipeGenerator', () => {
             expect(result[0].steps).toEqual([
                 {
                     pipeStep: MethodPipeStep,
-                    PipeStepConfig: undefined
+                    pipeStepConfig: undefined
                 }
             ]);
         });
@@ -231,7 +231,7 @@ describe('PipeGenerator', () => {
             expect(result[0].steps).toEqual([
                 {
                     pipeStep: ParameterPipeStep,
-                    PipeStepConfig: undefined
+                    pipeStepConfig: undefined
                 }
             ]);
 
@@ -284,15 +284,15 @@ describe('PipeGenerator', () => {
             expect(result[0].steps).toEqual([
                 {
                     pipeStep: ClassPipeStep,
-                    PipeStepConfig: undefined
+                    pipeStepConfig: undefined
                 },
                 {
                     pipeStep: MethodPipeStep,
-                    PipeStepConfig: undefined
+                    pipeStepConfig: undefined
                 },
                 {
                     pipeStep: ParameterPipeStep,
-                    PipeStepConfig: undefined
+                    pipeStepConfig: undefined
                 }
             ]);
         });
@@ -353,7 +353,7 @@ describe('PipeGenerator', () => {
             expect(result[0].steps).toEqual([
                 {
                     pipeStep: ClassPipeStep,
-                    PipeStepConfig: undefined
+                    pipeStepConfig: undefined
                 }
             ]);
         });
@@ -390,7 +390,7 @@ describe('PipeGenerator', () => {
             expect(result[0].steps).toEqual([
                 {
                     pipeStep: ClassPipeStep,
-                    PipeStepConfig: config
+                    pipeStepConfig: config
                 }
             ]);
         });

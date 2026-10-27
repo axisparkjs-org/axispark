@@ -1,0 +1,63 @@
+---
+sidebar_position: 6
+---
+
+# Rate limiting
+
+The HTTP plugin can limit requests in memory with a sliding time window. It is disabled by default. Enable it in the plugin options to apply the configured defaults to every endpoint:
+
+```ts
+HttpPluginOptionsFactory.create({
+    rateLimit: true,
+    rateLimitOptions: {
+        ttl: 60_000,
+        limit: 100,
+        message: 'Too many requests. Please try again later.'
+    }
+});
+```
+
+`ttl` is the window duration in milliseconds, and `limit` is the maximum number of requests from one IP address to one endpoint during that window. If `rateLimitOptions` is omitted, the defaults are 60 seconds and 100 requests. A message callback receives the milliseconds remaining until the oldest request expires.
+
+Use `@RateLimit()` on a controller or handler to override those defaults. Partial handler options use the global defaults for values they omit:
+
+```ts
+import { Controller, Get } from '@axisparkjs/http';
+import { RateLimit } from '@axisparkjs/engine';
+
+@RateLimit({ ttl: 60_000, limit: 20 })
+@Controller('auth')
+export class AuthController {
+    @Get('login')
+    @RateLimit({ limit: 5 })
+    login() {
+        return { message: 'Login endpoint' };
+    }
+}
+```
+
+Use `@NoRateLimit()` to exclude a controller or handler. A handler decorator takes precedence over the controller decorator, so it can also opt back in to rate limiting:
+
+```ts
+import { Controller, Get } from '@axisparkjs/http';
+import { NoRateLimit, RateLimit } from '@axisparkjs/engine';
+
+@NoRateLimit()
+@Controller('health')
+export class HealthController {
+    @Get()
+    check() {
+        return { status: 'ok' };
+    }
+
+    @Get('sensitive')
+    @RateLimit({ limit: 5 })
+    sensitive() {
+        return { status: 'limited' };
+    }
+}
+```
+
+Requests over the limit receive `429 Too Many Requests`, a JSON body containing `message`, and a `Retry-After` header in seconds. The default message is `Too many requests. Please try again later.` Decorators have no effect while `rateLimit` is `false`.
+
+The in-memory store is local to the application process. It does not share limits across multiple server instances.

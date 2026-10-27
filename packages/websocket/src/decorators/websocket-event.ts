@@ -3,10 +3,10 @@ import { WebSocketEventMetadata } from '../metadata';
 
 /**
  * A decorator for defining a WebSocket event.
- * @param event The name of the WebSocket event.
+ * @param event The exact name or regular expression for the WebSocket event.
  * @returns A method decorator.
  */
-export function WebSocketEvent(event: string): MethodDecorator {
+export function WebSocketEvent(event: string | RegExp): MethodDecorator {
     return (target, propertyKey) => {
         const routes = Metadata.get<WebSocketEventMetadata[]>(MetadataKeys.WEBSOCKET_EVENT, target) ?? [];
 

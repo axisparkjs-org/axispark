@@ -21,7 +21,7 @@ export class UserController {
 
 This controller will handle requests to the `/users` route. You can define methods within the controller to handle specific HTTP methods (GET, POST, PUT, DELETE, etc.) and routes.
 
-> If versioning is enabled, controller decorator allows to define 1 or more versions for the controller. For example, `@Controller({ prefix: 'users', version: '1' })`. See more info in the [Versioning](/axispark/docs/http-plugin/versioning) section.
+> If versioning is enabled, controller decorator allows to define 1 or more versions for the controller. For example, `@Controller({ path: 'users', version: '1' })`. See more info in the [Versioning](/axispark/docs/http-plugin/versioning) section.
 
 ## Routing
 
@@ -54,6 +54,7 @@ export class TodoController {
 ```
 
 This controller will generate the following routes:
+
 - `GET /todos` - Get all todos
 - `GET /todos/:index` - Get a specific todo by index
 - `POST /todos` - Add a new todo
@@ -61,3 +62,41 @@ This controller will generate the following routes:
 - `DELETE /todos/:index` - Remove a specific todo by index
 
 > As well as the `@Controller` decorator, the route decorators also accept an object with a `version` property to define the version of the route. For example, `@Get({ path: ':index', version: '1' })`. See more info in the [Versioning](/axispark/docs/http-plugin/versioning) section.
+
+## Host-based routing
+
+You can restrict a controller to a hostname with the `host` option. The controller's routes are considered only when the request's `Host` header matches. Host matching ignores letter case and ports. Omitting `host` or setting it to `'*'` matches every host.
+
+```ts title="admin-controller.ts"
+@Controller({ host: 'admin.example.com', path: 'users' })
+export class AdminUsersController {
+    @Get()
+    index() {
+        return { surface: 'admin' };
+    }
+}
+```
+
+You can register the same path for another host:
+
+```ts title="api-controller.ts"
+@Controller({ host: 'api.example.com', path: 'users' })
+export class ApiUsersController {
+    @Get()
+    index() {
+        return { surface: 'api' };
+    }
+}
+```
+
+Host patterns also accept `*` or a named label such as `:tenant`:
+
+```ts
+@Controller({ host: '*.example.com', path: 'users' })
+export class SubdomainUsersController {}
+
+@Controller({ host: ':tenant.example.net', path: 'users' })
+export class TenantUsersController {}
+```
+
+Each wildcard or named label matches one subdomain label. If more than one host pattern matches, the most specific pattern is selected. Routes without a `host` option remain unrestricted and can serve as a fallback.

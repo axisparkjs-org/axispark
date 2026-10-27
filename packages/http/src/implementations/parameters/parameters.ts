@@ -3,6 +3,7 @@ import { HttpParameter } from '../../types/http-parameter';
 import { HttpContext } from '../../types/http-context';
 import { HttpRequest } from '../../types/http-request';
 import { HttpResponse } from '../../types/http-response';
+import { UploadedFile as UploadedFileType } from '../../types/uploaded-file';
 import { Injectable } from '@axisparkjs/di';
 
 /**
@@ -41,6 +42,18 @@ export const Session = () => Parameter(HttpParameter.Session);
  * A parameter for injecting the HTTP request cookie.
  */
 export const Cookie = (field: string) => Parameter(HttpParameter.Cookie, field);
+/**
+ * A parameter for injecting the first file uploaded in the given form field. Requires the `fileUpload` option.
+ */
+export const UploadedFile = (field: string) => Parameter(HttpParameter.UploadedFile, field);
+/**
+ * A file received in a `multipart/form-data` request. Shares its name with the `@UploadedFile()` decorator so both can be imported together.
+ */
+export type UploadedFile = UploadedFileType;
+/**
+ * A parameter for injecting the files uploaded in the given form field, or all uploaded files when no field is given. Requires the `fileUpload` option.
+ */
+export const UploadedFiles = (field?: string) => Parameter(HttpParameter.UploadedFiles, field);
 
 @Injectable()
 export class RequestResolver implements ParameterResolver<HttpRequest> {
@@ -94,5 +107,20 @@ export class SessionResolver implements ParameterResolver<any> {
 export class CookieResolver implements ParameterResolver<string | undefined> {
     resolve(httpContext: HttpContext, parameter: ParameterDefinition) {
         return httpContext.request.cookies[parameter.field as string];
+    }
+}
+@Injectable()
+export class UploadedFileResolver implements ParameterResolver<UploadedFileType | undefined> {
+    resolve(httpContext: HttpContext, parameter: ParameterDefinition) {
+        return httpContext.request.files?.find((file) => file.fieldName === parameter.field);
+    }
+}
+@Injectable()
+export class UploadedFilesResolver implements ParameterResolver<UploadedFileType[] | undefined> {
+    resolve(httpContext: HttpContext, parameter: ParameterDefinition) {
+        const files = httpContext.request.files;
+        if (!files) return undefined;
+        if (parameter.field === undefined) return [...files];
+        return files.filter((file) => file.fieldName === parameter.field);
     }
 }

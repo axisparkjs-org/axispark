@@ -1,9 +1,11 @@
 import { Executable } from '@axisparkjs/common';
 import { HttpContext } from '../types';
-import { Injectable } from '@axisparkjs/di';
+import { Injectable, ScopedContainerManager } from '@axisparkjs/di';
 import { ExecutionEngine } from '@axisparkjs/engine';
-import { VersionGenerator, VersionProcessor, VersionDefinition } from '../version';
+import { VersionProcessor, VersionMatcher, VersionDefinition } from '../version';
 import { RouteDefinition } from '../routes';
+import { HostDefinition, HostMatcher, HostProcessor } from '../host';
+import { ExecutionTransport } from '@axisparkjs/engine';
 
 /**
  * A class for handling HTTP engine operations.
@@ -12,39 +14,42 @@ import { RouteDefinition } from '../routes';
 export class HttpEngine implements Executable {
     constructor(
         private readonly executionEngine: ExecutionEngine,
-        private readonly versionGenerator: VersionGenerator,
-        private readonly versionProcessor: VersionProcessor
+        private readonly hostProcessor: HostProcessor,
+        private readonly versionProcessor: VersionProcessor,
+        private readonly hostMatcher: HostMatcher,
+        private readonly versionMatcher: VersionMatcher,
+        private readonly scopedContainerManager: ScopedContainerManager
     ) {}
 
     /**
      * Executes the HTTP engine with the provided context.
      * @param context The HTTP context for execution.
+     * @param routes The routes to map which will be executed.
      */
-    public async execute(context: HttpContext): Promise<void> {
-        const versionDefinition = this.versionGenerator.generate(context);
+    public async execute(context: Pick<HttpContext, 'request' | 'response' | 'session'>, routes: RouteDefinition[]): Promise<void> {
+        const hostDefinition = new HostDefinition();
+        const versionDefinition = new VersionDefinition();
+
+        this.hostProcessor.process(hostDefinition, context);
         this.versionProcessor.process(versionDefinition, context);
-        context.version = versionDefinition;
 
-        await this.executionEngine.execute(context);
-    }
+        const hostRoutes = this.hostMatcher.match(routes, hostDefinition);
+        const versionRoute = this.versionMatcher.match(hostRoutes, versionDefinition);
 
-    /**
-     * Maps the provided routes based on the versioning information in the context.
-     * @param routes The array of route definitions to map.
-     * @param context The HTTP context containing request, response, and session information.
-     */
-    public async versionMapping(routes: RouteDefinition[], context: Pick<HttpContext, 'request' | 'response' | 'session'>): Promise<void> {
-        const tempDefinition = new VersionDefinition([]);
-        this.versionProcessor.process(tempDefinition, { ...context });
+        hostDefinition.setAcceptedHosts(versionRoute.hosts);
+        versionDefinition.setAcceptedVersions(versionRoute.versions);
 
-        let finalRoute = routes.find((route) => {
-            if (!route.versions || route.versions.length === 0) return false;
-            return route.versions.includes(tempDefinition.version || '');
-        });
+        const filledContext: HttpContext = {
+            ...context,
+            scopedContainer: this.scopedContainerManager.create(),
+            transport: ExecutionTransport.Http,
+            target: versionRoute.target,
+            propertyKey: versionRoute.propertyKey,
+            host: hostDefinition,
+            version: versionDefinition,
+            error: undefined
+        };
 
-        if (!finalRoute) finalRoute = routes.find((route) => route.versions?.includes('default'));
-        if (!finalRoute) finalRoute = routes[0];
-
-        await finalRoute.handler(context);
+        await this.executionEngine.execute(filledContext);
     }
 }

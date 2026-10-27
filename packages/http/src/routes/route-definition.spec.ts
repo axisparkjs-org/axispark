@@ -8,11 +8,10 @@ describe('RouteDefinition', () => {
     }
 
     const handler = jest.fn() as unknown as RouteHandler;
+    const route = (path: string, method = HttpMethod.Get, propertyKey: string | symbol = 'test') =>
+        new RouteDefinition(TestController, propertyKey, method, path, [], ['*'], handler);
 
-    describe('findRouteConflicts', () => {
-        const route = (path: string, method = HttpMethod.Get, propertyKey = 'test') =>
-            new RouteDefinition(TestController, propertyKey, method, path, undefined, handler);
-
+    describe('compare', () => {
         it('finds duplicate paths after normalizing parameters and slashes', () => {
             expect(
                 route('/users/:id/')
@@ -56,60 +55,68 @@ describe('RouteDefinition', () => {
         });
     });
 
-    it('should create a route definition with all provided values', () => {
-        const route = new RouteDefinition(TestController, 'test', HttpMethod.Get, '/users', [], handler);
+    describe('compare with hosts and versions', () => {
+        const scoped = (path: string, versions: string[], hosts: string[]) =>
+            new RouteDefinition(TestController, 'test', HttpMethod.Get, path, versions, hosts, handler);
 
-        expect(route.target).toBe(TestController);
-        expect(route.propertyKey).toBe('test');
-        expect(route.httpMethod).toBe(HttpMethod.Get);
-        expect(route.path).toBe('/users');
-        expect(route.versions).toEqual([]);
-        expect(route.handler).toBe(handler);
+        it('ignores same-path routes with disjoint hosts', () => {
+            expect(scoped('/users', [], ['a.example.com']).compare(scoped('/users', [], ['b.example.com']))).toEqual([]);
+        });
+
+        it('ignores same-path routes with disjoint versions', () => {
+            expect(scoped('/users', ['1'], ['*']).compare(scoped('/users', ['2'], ['*']))).toEqual([]);
+        });
+
+        it('reports same-path routes with overlapping hosts and versions', () => {
+            expect(
+                scoped('/users', ['1', '2'], ['*.example.com'])
+                    .compare(scoped('/users', ['2'], ['a.example.com']))
+                    .map(({ type }) => type)
+            ).toEqual(['duplicate']);
+        });
     });
 
-    it('should support symbol property keys', () => {
+    it('lists itself as its only candidate by default', () => {
+        const single = route('/users');
+
+        expect(single.candidates).toEqual([single]);
+    });
+
+    it('lists the grouped routes as candidates when provided', () => {
+        const first = route('/users');
+        const second = route('/users');
+
+        expect(new RouteDefinition(TestController, 'test', HttpMethod.Get, '/users', [], ['*'], handler, [first, second]).candidates).toEqual([first, second]);
+    });
+
+    it('stores all route definition values', () => {
         const propertyKey = Symbol('test');
+        const routeDefinition = new RouteDefinition(TestController, propertyKey, HttpMethod.Post, '/users', ['1', '2'], ['admin.example.com'], handler);
 
-        const route = new RouteDefinition(TestController, propertyKey, HttpMethod.Post, '/users', undefined, handler);
+        expect(routeDefinition.target).toBe(TestController);
+        expect(routeDefinition.propertyKey).toBe(propertyKey);
+        expect(routeDefinition.httpMethod).toBe(HttpMethod.Post);
+        expect(routeDefinition.path).toBe('/users');
+        expect(routeDefinition.versions).toEqual(['1', '2']);
+        expect(routeDefinition.hosts).toEqual(['admin.example.com']);
+        expect(routeDefinition.handler).toBe(handler);
+    });
 
-        expect(route.target).toBe(TestController);
-        expect(route.propertyKey).toBe(propertyKey);
-        expect(route.httpMethod).toBe(HttpMethod.Post);
-        expect(route.path).toBe('/users');
-        expect(route.versions).toBeUndefined();
-        expect(route.handler).toBe(handler);
+    it('preserves exact handler, target, and path references', () => {
+        const target = class AnotherController {};
+        const routeHandler = jest.fn() as unknown as RouteHandler;
+        const path = '/users/:id';
+        const routeDefinition = new RouteDefinition(target, 'test', HttpMethod.Get, path, [], ['*'], routeHandler);
+
+        expect(routeDefinition.target).toBe(target);
+        expect(routeDefinition.handler).toBe(routeHandler);
+        expect(routeDefinition.path).toBe(path);
     });
 
     it.each([HttpMethod.Delete, HttpMethod.Get, HttpMethod.Head, HttpMethod.Options, HttpMethod.Patch, HttpMethod.Post, HttpMethod.Put])(
-        'should store the %s HTTP method',
+        'stores the %s HTTP method',
         (httpMethod) => {
-            const route = new RouteDefinition(TestController, 'test', httpMethod, '/users', [], handler);
-
-            expect(route.httpMethod).toBe(httpMethod);
+            expect(route('/users', httpMethod).httpMethod).toBe(httpMethod);
         }
     );
-
-    it('should preserve the exact handler reference', () => {
-        const routeHandler = jest.fn() as unknown as RouteHandler;
-
-        const route = new RouteDefinition(TestController, 'test', HttpMethod.Get, '/users', [], routeHandler);
-
-        expect(route.handler).toBe(routeHandler);
-    });
-
-    it('should preserve the exact target reference', () => {
-        const target = class AnotherController {};
-
-        const route = new RouteDefinition(target, 'test', HttpMethod.Get, '/users', [], handler);
-
-        expect(route.target).toBe(target);
-    });
-
-    it('should preserve the exact path', () => {
-        const path = '/users/:id';
-
-        const route = new RouteDefinition(TestController, 'test', HttpMethod.Get, path, [], handler);
-
-        expect(route.path).toBe(path);
-    });
 });

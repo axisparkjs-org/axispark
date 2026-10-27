@@ -1,5 +1,5 @@
 import { Parameter } from '@axisparkjs/engine';
-import { Body, Header, Ip, Path, Query, Request, Response, Session, Cookie } from './parameters';
+import { Body, Header, Ip, Path, Query, Request, Response, Session, Cookie, UploadedFile, UploadedFiles } from './parameters';
 import {
     RequestResolver,
     ResponseResolver,
@@ -9,7 +9,9 @@ import {
     HeaderResolver,
     IpResolver,
     SessionResolver,
-    CookieResolver
+    CookieResolver,
+    UploadedFileResolver,
+    UploadedFilesResolver
 } from './parameters';
 
 jest.mock('@axisparkjs/engine', () => {
@@ -21,7 +23,7 @@ jest.mock('@axisparkjs/engine', () => {
     };
 });
 
-it.each([Body, Header, Ip, Path, Query, Request, Response, Session, Cookie])('Parameter %p should be defined', (parameter) => {
+it.each([Body, Header, Ip, Path, Query, Request, Response, Session, Cookie, UploadedFile, UploadedFiles])('Parameter %p should be defined', (parameter) => {
     parameter('test');
 
     expect(parameter).toBeDefined();
@@ -150,6 +152,56 @@ describe('ParameterResolvers', () => {
             httpContext.request.cookies = { sessionId: 'abc123' };
 
             expect(resolver.resolve(httpContext, { field: 'missing' } as any)).toBeUndefined();
+        });
+    });
+
+    describe('UploadedFileResolver', () => {
+        const avatar = { fieldName: 'avatar', originalName: 'a.png', mimeType: 'image/png', size: 1, buffer: Buffer.from('a') };
+        const other = { ...avatar, fieldName: 'other' };
+
+        it('should return the first file of the field', () => {
+            httpContext.request.files = [other, avatar, { ...avatar, originalName: 'b.png' }];
+
+            expect(new UploadedFileResolver().resolve(httpContext, { field: 'avatar' } as any)).toBe(avatar);
+        });
+
+        it('should return undefined when the field has no files', () => {
+            httpContext.request.files = [other];
+
+            expect(new UploadedFileResolver().resolve(httpContext, { field: 'avatar' } as any)).toBeUndefined();
+        });
+
+        it('should return undefined when the request was not parsed', () => {
+            httpContext.request.files = undefined;
+
+            expect(new UploadedFileResolver().resolve(httpContext, { field: 'avatar' } as any)).toBeUndefined();
+        });
+    });
+
+    describe('UploadedFilesResolver', () => {
+        const first = { fieldName: 'documents', originalName: '1.pdf', mimeType: 'application/pdf', size: 1, buffer: Buffer.from('1') };
+        const second = { ...first, originalName: '2.pdf' };
+        const other = { ...first, fieldName: 'other' };
+
+        it('should return the files of the field', () => {
+            httpContext.request.files = [first, other, second];
+
+            expect(new UploadedFilesResolver().resolve(httpContext, { field: 'documents' } as any)).toEqual([first, second]);
+        });
+
+        it('should return all files when no field is given', () => {
+            httpContext.request.files = [first, other];
+
+            const files = new UploadedFilesResolver().resolve(httpContext, { field: undefined } as any);
+
+            expect(files).toEqual([first, other]);
+            expect(files).not.toBe(httpContext.request.files);
+        });
+
+        it('should return undefined when the request was not parsed', () => {
+            httpContext.request.files = undefined;
+
+            expect(new UploadedFilesResolver().resolve(httpContext, { field: 'documents' } as any)).toBeUndefined();
         });
     });
 });

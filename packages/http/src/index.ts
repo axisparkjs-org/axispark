@@ -2,6 +2,8 @@ export * from './adapter';
 export * from './decorators';
 export * from './di';
 export * from './engine';
+export * from './file-upload';
+export * from './host';
 export * from './implementations';
 export * from './plugin';
 export * from './routes';

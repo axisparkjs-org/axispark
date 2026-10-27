@@ -1,0 +1,146 @@
+---
+sidebar_position: 1
+---
+
+# Domain-Driven Design
+
+The `@axisparkjs/ddd` package provides small TypeScript building blocks for expressing domain concepts. Its base classes help define value objects, identifiers, entities, aggregate roots, domain events, and domain-specific exceptions. They do not persist objects or publish events; applications decide how to store aggregates and dispatch events.
+
+## Install and import
+
+```bash
+npm install @axisparkjs/ddd
+```
+
+Import the building blocks from the package root:
+
+```ts
+import { AggregateRoot, DomainEvent, DomainException, Entity, Identifier, ValueObject } from '@axisparkjs/ddd';
+```
+
+For the generated API reference, see [`@axisparkjs/ddd`](../../api/@axisparkjs/ddd/).
+
+## Value objects
+
+A value object is compared by the value it wraps rather than by object identity. Extend `ValueObject<T>`, validate values in `validate`, and provide a `toString` representation:
+
+```ts
+import { ValueObject } from '@axisparkjs/ddd';
+
+export class EmailAddress extends ValueObject<string> {
+    protected validate(value: string): void {
+        if (!value.includes('@')) throw new Error('Email address must contain @');
+    }
+
+    public toString(): string {
+        return this.value;
+    }
+}
+
+const first = new EmailAddress('ada@example.com');
+const second = new EmailAddress('ada@example.com');
+first.equals(second); // true
+```
+
+The base constructor calls `validate` before storing the value. `equals` compares the wrapped values by their JSON serialization.
+
+## Identifiers and entities
+
+Use `Identifier<T>` to give an identifier its own domain type. It inherits value-object validation and equality, and implements `toString()` by converting its value to a string:
+
+```ts
+import { Identifier } from '@axisparkjs/ddd';
+
+export class CustomerId extends Identifier<string> {
+    protected validate(value: string): void {
+        if (value.trim().length === 0) throw new Error('Customer ID cannot be empty');
+    }
+}
+```
+
+Extend `Entity<TIdentifier>` for domain objects with identity. Its `equals` method returns true only when both entities have the same concrete class and equal identifiers.
+
+```ts
+import { Entity } from '@axisparkjs/ddd';
+import { CustomerId } from './customer-id';
+
+export class Customer extends Entity<CustomerId> {
+    constructor(
+        id: CustomerId,
+        public name: string
+    ) {
+        super(id);
+    }
+}
+
+const customer = new Customer(new CustomerId('customer-42'), 'Ada');
+customer.id.toString(); // 'customer-42'
+```
+
+## Aggregate roots and domain events
+
+An aggregate root is an entity that protects an aggregate's behavior and records events raised while that behavior runs. Extend `AggregateRoot<TIdentifier>` and add events with `addDomainEvent`:
+
+```ts
+import { AggregateRoot, DomainEvent } from '@axisparkjs/ddd';
+import { CustomerId } from './customer-id';
+
+export class CustomerRenamed extends DomainEvent {
+    constructor(
+        public readonly customerId: CustomerId,
+        public readonly name: string
+    ) {
+        super();
+    }
+}
+
+export class Customer extends AggregateRoot<CustomerId> {
+    constructor(
+        id: CustomerId,
+        public name: string
+    ) {
+        super(id);
+    }
+
+    public rename(name: string): void {
+        this.name = name;
+        this.addDomainEvent(new CustomerRenamed(this.id, name));
+    }
+}
+
+const customer = new Customer(new CustomerId('customer-42'), 'Ada');
+customer.rename('Ada Lovelace');
+
+const events = customer.pullDomainEvents(); // returns pending events and clears the queue
+events[0].occurredOn; // Date recorded when the event was created
+```
+
+`pullDomainEvents()` returns a copy of the pending event list and empties the aggregate's queue. Call `clearDomainEvents()` to discard pending events. `HasDomainEvents` describes the pull method for objects that expose domain events. The package does not dispatch the returned events; for example, an application can collect them after saving an aggregate and pass them to its own publisher.
+
+## Domain exceptions
+
+Extend `DomainException` for errors that represent invalid domain operations or state. The base class sets the error name to the subclass name:
+
+```ts
+import { DomainException } from '@axisparkjs/ddd';
+
+export class CustomerNameRequired extends DomainException {
+    constructor() {
+        super('Customer name is required');
+    }
+}
+
+throw new CustomerNameRequired();
+```
+
+## Public API
+
+| Export                                | Role                                                               |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| `ValueObject<T>`                      | Validated value with `value`, `equals`, and abstract `toString()`. |
+| `Identifier<T = string>`              | Value-object base for domain-specific identifiers.                 |
+| `Entity<T extends Identifier>`        | Base class with an identifier and identity-based equality.         |
+| `AggregateRoot<T extends Identifier>` | Entity that collects and exposes domain events.                    |
+| `DomainEvent`                         | Base class with an `occurredOn` timestamp.                         |
+| `HasDomainEvents`                     | Interface with `pullDomainEvents()`.                               |
+| `DomainException`                     | Base class for domain errors.                                      |
