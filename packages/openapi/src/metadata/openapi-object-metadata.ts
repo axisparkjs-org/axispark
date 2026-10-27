@@ -49,8 +49,4 @@ export interface ArrayApiObjectMetadata extends BaseOpenApiObjectMetadata {
 }
 
 export type OpenApiObjectMetadata =
-    | StringApiObjectMetadata
-    | NumberApiObjectMetadata
-    | BooleanApiObjectMetadata
-    | ClassApiObjectMetadata
-    | ArrayApiObjectMetadata;
+    StringApiObjectMetadata | NumberApiObjectMetadata | BooleanApiObjectMetadata | ClassApiObjectMetadata | ArrayApiObjectMetadata;
