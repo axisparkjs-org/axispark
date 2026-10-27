@@ -271,7 +271,7 @@ describe('StepTarget decorators', () => {
 
             (Metadata.normalizeTarget as jest.Mock).mockReturnValue(normalizedTarget);
 
-            // Aplicamos el decorador manualmente para controlar el target.
+            // Apply the decorator manually to control the target.
             Middleware()(NormalizedTarget);
 
             expect(Metadata.normalizeTarget).toHaveBeenCalledWith(NormalizedTarget);

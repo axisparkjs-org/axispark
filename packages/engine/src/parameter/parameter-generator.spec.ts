@@ -11,7 +11,7 @@ describe('ParameterGenerator', () => {
     beforeEach(() => {
         generator = new ParameterGenerator();
 
-        // Limpiar el Map estático entre tests.
+        // Clear the static Map between tests.
         (ParameterGenerator as any).resolvers.clear();
 
         jest.restoreAllMocks();

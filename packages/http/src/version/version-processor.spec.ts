@@ -36,8 +36,8 @@ describe('VersionProcessor', () => {
     };
 
     beforeEach(() => {
-        // VersionProcessor.resolvers es static, por lo que limpiamos
-        // el estado entre tests.
+        // VersionProcessor.resolvers is static, so the state is cleared
+        // between tests.
         (VersionProcessor as any).resolvers.clear();
     });
 

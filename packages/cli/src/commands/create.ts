@@ -14,7 +14,7 @@ export const createCommand = new Command('create')
     .option('-i, --install', 'install dependencies after creating the project')
     .option('--no-install', 'do not install dependencies after creating the project')
     .action(async (name: string, options: Record<string, any>) => {
-        // 1. Preguntar nombre si no lo proporcionamos
+        // 1. Ask for the project name if it was not provided
         if (!name) {
             const response = await prompts({
                 type: 'text',
@@ -27,13 +27,13 @@ export const createCommand = new Command('create')
         validateProjectName(name as string);
         const projectPath = path.resolve(process.cwd(), name as string);
 
-        // 2. Comprobar que no exista
+        // 2. Check that the directory does not exist
         if (await directoryExists(projectPath)) {
             console.log(chalk.red(`✗ Directory "${name}" already exists.`));
             process.exit(1);
         }
 
-        // 3. Copiar template
+        // 3. Copy the template
         const spinner = ora('Creating project...').start();
         if (!options.template) {
             const response = await prompts({
@@ -61,7 +61,7 @@ export const createCommand = new Command('create')
             throw error;
         }
 
-        // 4. Preguntar si queremos instalar
+        // 4. Ask whether to install dependencies
         if (options.install === undefined) {
             const response = await prompts({
                 type: 'confirm',
@@ -83,7 +83,7 @@ export const createCommand = new Command('create')
             }
         }
 
-        // 5. Resultado
+        // 5. Show the result
         console.log();
         console.log(chalk.green('✓ Project ready!'));
         console.log();

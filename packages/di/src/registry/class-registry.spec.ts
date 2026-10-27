@@ -9,7 +9,7 @@ describe('ClassRegistry', () => {
     beforeEach(() => {
         jest.restoreAllMocks();
 
-        // Limpiar el registro entre tests
+        // Clear the registry between tests
         ClassRegistry.getAll().forEach((cls) => ClassRegistry.remove(cls));
     });
 
