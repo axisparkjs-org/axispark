@@ -6,29 +6,17 @@ We welcome contributions to AxiSpark.js! Whether you're fixing bugs, adding new 
 
 If you encounter a bug, please submit an issue on our GitHub repository. Provide as much detail as possible, including steps to reproduce the bug, expected behavior, and any relevant screenshots or error messages. Here is the link to our [GitHub Issues](https://github.com/axisparkjs/axispark/issues) page.
 
-Please, when opening a new issue, follow the issue template provided. This will help us understand the problem better and address it more efficiently.
-
-```
-Title: [Bug] Brief description of the bug
-
-Description: A detailed description of the bug, including steps to reproduce, expected behavior, and actual behavior.
-
-Labels: Please add Bug label and any other relevant labels.
-```
+Please, when opening a new issue, choose the **Fix** template from the [new issue page](https://github.com/axisparkjs/axispark/issues/new/choose). The template sets the `[Fix]` title prefix and the `bug` label, and asks for the information we need to understand and address the problem.
 
 ## Missing a Feature?
 
 You can also submit a feature request on our GitHub repository. Please describe the feature you would like to see, how it would benefit users, and any relevant use cases. Here is the link to our [GitHub Issues](https://github.com/axisparkjs/axispark/issues) page.
 
-Please, when opening a new feature request, follow the feature request template provided. This will help us understand the feature better and prioritize it accordingly.
+Please, when opening a new feature request, choose the **Feature** template from the [new issue page](https://github.com/axisparkjs/axispark/issues/new/choose). This will help us understand the feature better and prioritize it accordingly.
 
-```
-Title: [Feature] Brief description of the feature
+## Improving Existing Code or Documentation?
 
-Description: A detailed description of the feature, including its purpose, benefits, and potential use cases.
-
-Labels: Please add Feature label and any other relevant labels.
-```
+Use the **Update** template for improvements to existing code, tooling or configuration, and the **Docs** template for documentation changes. Both are available on the [new issue page](https://github.com/axisparkjs/axispark/issues/new/choose).
 
 ## Submitting a Pull Request for a Bug or Feature
 
@@ -41,7 +29,16 @@ You need to set up your development environment to contribute code. First, you n
 
 ### Branching
 
-For each bug or feature, create a new branch from the `main` branch. Use a descriptive name for your branch, always starting with `feature/` with a brief description of the issue or feature. For example, if you are fixing a bug related to the login functionality, you might name your branch `feature/login-bug-fix`.
+For each issue, create a new branch from the `main` branch. Start the branch name with the prefix that matches the issue type, followed by a brief description:
+
+| Issue type | Branch prefix | Example |
+| --- | --- | --- |
+| `[Feature]` | `feature/` | `feature/http-file-upload` |
+| `[Fix]` | `fix/` | `fix/login-validation` |
+| `[Update]` | `update/` | `update/translate-cli-comments` |
+| `[Docs]` | `docs/` | `docs/cli-page` |
+
+`release/` branches are reserved for maintainers to prepare releases.
 
 Make sure to regularly pull the latest changes from the `main` branch to keep your branch up to date.
 
@@ -58,27 +55,35 @@ You would run `npm run cd:changeset` and select the type of change you are makin
 
 When committing your changes, please use clear and descriptive commit messages. Follow this specification for consistency:
 
-The commit message should start with the type of change (e.g., `fix`, `feat`, `docs`, `refactor`, etc.) followed by a `'(#issue-number): '` and a brief description of the change. Here are some examples:
-- `fix(#123): Corrected the login validation logic`
-- `feat(#456): Added new user profile feature`
+The commit message should start with the type of change (e.g., `fix`, `feat`, `update`, `docs`, `refactor`, etc.) followed by ` (#issue-number): ` and a brief description of the change. Here are some examples:
+- `fix (#123): Correct the login validation logic`
+- `feat (#456): Add new user profile feature`
 
 ### Pull Request Guidelines
 
-When you are ready to submit your changes, create a pull request (PR) from your branch to the `main` branch of the original repository. Please provide a clear and concise description of your changes, including the issue number if applicable. Use the following template for your pull request:
-
-```
-Title: [Type] Brief description of the change
-Description: A detailed description of the changes made, including any relevant context or references to issues.
-- List of changes made
-- Any additional information or context that reviewers should be aware of
-- Include any relevant screenshots or code snippets if applicable
-Labels: Please add the appropriate labels (e.g., Bug, Feature, Documentation) to your pull request.
-```
+When you are ready to submit your changes, create a pull request (PR) from your branch to the `main` branch of the original repository. The description is prefilled with the [pull request template](.github/pull_request_template.md): link the issue, list the changes and complete the checklist (changeset, tests and documentation).
 
 Once your pull request is submitted, it will pass CI pipeline and be reviewed by the maintainers. Please be responsive to any feedback or requests for changes. We appreciate your contributions and look forward to collaborating with you!
 
 ### Need to test your package before submitting a pull request?
 
-There is a pipeline that will build an snapshot of your feature branch and publish it to GitHub Packages. You can use this snapshot to test your changes before submitting a pull request. To do this, follow these steps:
+There is a pipeline that builds a snapshot of your branch and publishes it to GitHub Packages. You can use this snapshot to test your changes in another project before submitting a pull request. To do this, follow these steps:
+
+1. Make sure your branch contains a changeset (`npm run cd:changeset`). Without a changeset, no snapshot version is generated.
+2. Push your branch to the repository. Snapshots can be published from `feature/`, `fix/`, `update/` and `docs/` branches.
+3. Open the [CD workflow](https://github.com/axisparkjs/axispark/actions/workflows/cd.yml), click **Run workflow**, select your branch and the `snapshot` environment.
+4. When the workflow finishes, the **Show snapshot information** step prints the npm tag of the snapshot. The tag is the branch name without its prefix, with invalid characters replaced by `-`. For example, `fix/login-validation` is published with the `login-validation` tag.
+5. In the project where you want to test the snapshot, configure the GitHub Packages registry for the `@axisparkjs` scope in its `.npmrc` file. You need a GitHub [personal access token](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-to-github-packages) with the `read:packages` scope:
+
+    ```
+    @axisparkjs:registry=https://npm.pkg.github.com
+    //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+    ```
+
+6. Install the snapshot of each package you need using its tag:
+
+    ```bash
+    GITHUB_TOKEN=<your-token> npm install @axisparkjs/<package>@<tag>
+    ```
 
 If you don't have permission to run the pipeline, please contact the maintainers to request access.
