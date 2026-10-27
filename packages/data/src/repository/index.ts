@@ -4,4 +4,4 @@ export * from './sql-query-engine';
 export * from './mongo-query-engine';
 export * from './query-method-parser';
 export * from './repository-definition';
-export * from './repostiory-generator';
+export * from './repository-generator';

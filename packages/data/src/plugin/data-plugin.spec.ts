@@ -2,7 +2,7 @@ import { PluginNotConfiguredError } from '@axisparkjs/core';
 import { DATA_LOGGER, DATA_OPTIONS } from '../di';
 import { DataSourceConnectionManager } from '../connections';
 import { RepositoryDefinition } from '../repository/repository-definition';
-import { RepositoryGenerator } from '../repository/repostiory-generator';
+import { RepositoryGenerator } from '../repository/repository-generator';
 import { DataPlugin } from './data-plugin';
 
 describe('DataPlugin', () => {
