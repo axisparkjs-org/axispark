@@ -1,0 +1,91 @@
+---
+sidebar_position: 6
+---
+
+# CLI
+
+The AxiSpark CLI scaffolds new AxiSpark.js projects from a set of ready-to-run templates. It creates the project folder, aligns the `@axisparkjs/*` dependencies with the CLI version, and optionally installs the dependencies for you.
+
+## Installation
+
+Install the CLI globally with npm:
+
+```bash
+npm install -g @axisparkjs/cli
+```
+
+The CLI requires [Node.js](https://nodejs.org/) version 24 or higher. Once installed, the `axispark` command is available in your terminal:
+
+```bash
+axispark --help
+```
+
+## create
+
+Creates a new project in a directory with the given name, relative to the current working directory.
+
+```bash
+axispark create [name] [options]
+```
+
+| Argument / Option | Description |
+| --- | --- |
+| `[name]` | Project name and directory to create. If omitted, the CLI asks for it. Only letters, numbers, `-` and `_` are allowed. |
+| `-t, --template <template>` | Template to use. If omitted, the CLI shows a list of the available templates. |
+| `-i, --install` | Install dependencies with `npm install` after creating the project. |
+| `--no-install` | Do not install dependencies after creating the project. |
+
+When neither `--install` nor `--no-install` is passed, the CLI asks whether to install the dependencies. The command fails if the target directory already exists.
+
+The following command creates an HTTP project in the `my-app` directory and installs its dependencies without asking any question:
+
+```bash
+axispark create my-app --template http --install
+```
+
+## Templates
+
+Templates are downloaded from the `templates/` folder of the AxiSpark.js repository, so the command needs network access.
+
+| Template | Includes |
+| --- | --- |
+| `default` | Basic application with a sample plugin. |
+| `http` | Express HTTP server with a `/api/example` controller. |
+| `http-security` | HTTP server with a demo authenticator, an admin authorization policy, and a protected route. The example credential is `Authorization: Demo admin`; adapt authentication to your identity provider. |
+| `scheduler` | Scheduler plugin with a job that logs every five seconds. |
+| `http-openapi` | HTTP server with a documented greeting response and an OpenAPI schema. The JSON document is available at `/api/openapi.json`. |
+
+## Generated Project
+
+Every template is implemented in TypeScript and shares the same base structure:
+
+```
+my-app/
+├── src/
+│   ├── app.ts                # Application definition and registered plugins
+│   ├── index.bootstrap.ts    # Entry point that initializes, runs and destroys the app
+│   └── ...                   # Template specific files (plugins, controllers, jobs...)
+├── package.json
+└── tsconfig.json
+```
+
+The `package.json` includes the following scripts:
+
+| Script | Description |
+| --- | --- |
+| `npm run dev` | Runs `src/index.bootstrap.ts` with `ts-node` and restarts it on changes with `nodemon`. |
+| `npm run build` | Compiles the project with `tsc` into the `dist` directory. |
+| `npm start` | Runs the compiled application from `dist/index.bootstrap.js`. |
+
+## Next Steps
+
+After creating the project, move into its directory and start it in development mode:
+
+```bash
+cd my-app
+npm run dev
+```
+
+> If you created the project with `--no-install`, run `npm install` before starting it.
+
+Continue with [First Steps](./first-steps) to understand the generated files.

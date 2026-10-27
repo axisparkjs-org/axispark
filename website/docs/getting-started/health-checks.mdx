@@ -1,0 +1,144 @@
+---
+sidebar_position: 7
+---
+
+# Health Checks
+
+AxiSpark.js includes a health engine that reports the status of the application and each registered plugin. The status is calculated from the plugin lifecycle, so it does not need any extra configuration.
+
+## HealthEngine
+
+`HealthEngine` is created by the application context and bound in the dependency injection container. You can inject it in any injectable class:
+
+```ts title="status-service.ts"
+import { HealthEngine, HealthStatus } from '@axisparkjs/core';
+import { Injectable } from '@axisparkjs/di';
+
+@Injectable()
+export class StatusService {
+    constructor(private readonly healthEngine: HealthEngine) {}
+
+    public isHealthy(): boolean {
+        return this.healthEngine.checkApp().status === HealthStatus.Healthy;
+    }
+}
+```
+
+It exposes two methods:
+
+| Method | Returns |
+| --- | --- |
+| `checkAll()` | An array of `HealthData`. The first item is the application status, followed by one item per registered plugin. |
+| `checkApp()` | Only the application `HealthData`, the first item of `checkAll()`. |
+
+## HealthData
+
+Each check is returned as a `HealthData` object:
+
+```ts
+interface HealthData {
+    /** Application name or plugin class name. */
+    component: string;
+    /** HealthStatus.Unknown ('unknown'), HealthStatus.Healthy ('healthy') or HealthStatus.Unhealthy ('unhealthy'). */
+    status: HealthStatus;
+    /** ISO 8601 date when the check was calculated. */
+    timestamp: string;
+    /** Additional information about the component. */
+    details?: Record<string, any>;
+}
+```
+
+- For a plugin, `details` contains the plugin name (`plugin`) and, when the plugin failed, the error message (`error`).
+- For the application, `details.plugins` contains the `component` and `status` of every plugin.
+
+## Plugin Status
+
+The status of each plugin is mapped from its lifecycle state:
+
+| Plugin lifecycle | `HealthStatus` |
+| --- | --- |
+| `Started` | `Healthy` |
+| `Error` | `Unhealthy` |
+| `Created`, `Registered`, `Stopped` | `Unknown` |
+
+A plugin enters the `Error` state when one of its lifecycle methods (`onRegister`, `onStart` or `onStop`) throws an error.
+
+## Application Status
+
+The application status is calculated from the plugin statuses:
+
+- `Healthy` when every plugin is `Healthy`.
+- `Unhealthy` when at least one plugin is `Unhealthy`.
+- `Unknown` otherwise, for example while the plugins are still registering or after they are stopped.
+
+## HTTP Endpoints
+
+The [Http Plugin](../http-plugin/installation) can expose the health engine through HTTP. Enable the `healthChecks` option:
+
+```ts title="app.ts"
+import { HttpPlugin } from '@axisparkjs/http';
+import { HttpPluginOptionsFactory } from '@axisparkjs/http-express';
+
+app.use(
+    HttpPlugin,
+    HttpPluginOptionsFactory.create({
+        basePath: '/api',
+        healthChecks: true
+    })
+);
+```
+
+The following endpoints are registered under the plugin `basePath`:
+
+| Endpoint | Status code | Response |
+| --- | --- | --- |
+| `GET /health` | `200` when every check is healthy, `503` otherwise. | Application status and every check returned by `checkAll()`. |
+| `GET /health/liveness` | Always `200`. | Application status. |
+| `GET /health/readiness` | `200` when every check is healthy, `503` otherwise. | `healthy` status, or an error listing the components that are not healthy. |
+
+### Example Responses
+
+`GET /api/health` when the application is healthy:
+
+```json
+{
+    "status": "healthy",
+    "timestamp": "2026-01-01T10:00:00.000Z",
+    "checks": [
+        {
+            "component": "My App",
+            "timestamp": "2026-01-01T10:00:00.000Z",
+            "status": "healthy",
+            "details": {
+                "plugins": [{ "component": "HttpPlugin", "status": "healthy" }]
+            }
+        },
+        {
+            "component": "HttpPlugin",
+            "timestamp": "2026-01-01T10:00:00.000Z",
+            "status": "healthy",
+            "details": { "plugin": "HttpPlugin" }
+        }
+    ]
+}
+```
+
+`GET /api/health/liveness`:
+
+```json
+{
+    "status": "healthy",
+    "timestamp": "2026-01-01T10:00:00.000Z"
+}
+```
+
+`GET /api/health/readiness` when a plugin failed:
+
+```json
+{
+    "error": "Some components are not healthy: My App, BadPlugin",
+    "status": 503
+}
+```
+
+> Use `/health/liveness` to check that the process is running and `/health/readiness` to decide whether the application can receive traffic.
