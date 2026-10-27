@@ -80,7 +80,7 @@ export class DataPlugin extends Plugin {
 
     /** Closes every TypeORM data source created by this plugin. */
     async onStop(): Promise<void> {
-        await this.dataSourceConnectionManager.destroyConnections();
+        await this.dataSourceConnectionManager?.destroyConnections();
         await this.logger.info(`Plugin stopped`);
     }
 }
