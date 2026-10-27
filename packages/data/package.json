@@ -29,6 +29,6 @@
         "@axisparkjs/core": "1.3.0",
         "@axisparkjs/di": "1.3.0",
         "@axisparkjs/logger": "1.3.0",
-        "typeorm": "^1.1.1"
+        "typeorm": "^1.1.2"
     }
 }

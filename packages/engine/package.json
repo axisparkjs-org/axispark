@@ -28,6 +28,6 @@
         "@axisparkjs/common": "1.3.0",
         "@axisparkjs/di": "1.3.0",
         "@axisparkjs/logger": "1.3.0",
-        "class-validator": "^0.14.4"
+        "class-validator": "^0.15.1"
     }
 }
