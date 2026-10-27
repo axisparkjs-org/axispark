@@ -22,6 +22,6 @@
         "sonar": "sonar-scanner -Dsonar.projectKey=axisparkjs-ddd"
     },
     "engines": {
-        "node": ">= 20"
+        "node": ">= 24"
     }
 }

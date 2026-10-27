@@ -22,7 +22,7 @@
         "sonar": "sonar-scanner -Dsonar.projectKey=axisparkjs-common"
     },
     "engines": {
-        "node": ">= 20"
+        "node": ">= 24"
     },
     "dependencies": {
         "reflect-metadata": "^0.2.0"
