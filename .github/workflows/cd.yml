@@ -77,7 +77,7 @@ jobs:
       # ------------------------------------------------------------
 
       - name: Exit prerelease mode
-        if: inputs.environment == 'pro'
+        if: inputs.environment == 'pro' && hashFiles('.changeset/pre.json') != ''
         run: npx changeset pre exit
 
       # ------------------------------------------------------------
@@ -142,7 +142,8 @@ jobs:
             exit 0
           fi
 
-          VERSION=$(node -p "require('./package.json').version")
+          # The root package is private and never versioned, read the version from the fixed group.
+          VERSION=$(node -p "require('./packages/core/package.json').version")
 
           git commit -m "chore: release ${VERSION}"
           git push
