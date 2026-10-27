@@ -7,8 +7,6 @@ export class AdminPolicy extends AuthorizationPolicy {
     async authorize(context: SecurityContext<Principal>): Promise<AuthorizationDecision> {
         const authorized = context.data?.role === 'admin';
 
-        return authorized
-            ? { policy: AdminPolicy, authorized: true }
-            : { policy: AdminPolicy, authorized: false, reason: 'An administrator role is required' };
+        return authorized ? { policy: AdminPolicy, authorized: true } : { policy: AdminPolicy, authorized: false, reason: 'An administrator role is required' };
     }
 }
