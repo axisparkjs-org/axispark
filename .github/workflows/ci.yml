@@ -13,8 +13,40 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      # Turborepo compares against the pull request base to calculate the affected packages.
+      TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
+      TURBO_SCM_HEAD: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Push event, running the full pipeline"
+            echo "full=true" >> "$GITHUB_OUTPUT"
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+            echo "docs=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          FILES=$(git diff --name-only "$TURBO_SCM_BASE" "$TURBO_SCM_HEAD")
+          echo "Changed files:"
+          echo "$FILES"
+
+          # Changes in the shared configuration affect every step.
+          SHARED='^(package\.json|package-lock\.json|turbo\.json|tsconfig[^/]*\.json|\.github/workflows/ci\.yml)$'
+          E2E='^(packages|samples|e2e)/|^jest[^/]*\.(js|ts)$'
+          DOCS='^website/|^typedoc\.json$|^packages/[^/]+/src/.*(?<!\.spec)\.ts$'
+
+          echo "full=false" >> "$GITHUB_OUTPUT"
+          # Markdown files do not affect the e2e tests.
+          CODE_FILES=$(echo "$FILES" | grep -vE '\.md$' || true)
+          if echo "$CODE_FILES" | grep -qE "$SHARED|$E2E"; then echo "e2e=true" >> "$GITHUB_OUTPUT"; else echo "e2e=false" >> "$GITHUB_OUTPUT"; fi
+          if echo "$FILES" | grep -qP "$SHARED|$DOCS"; then echo "docs=true" >> "$GITHUB_OUTPUT"; else echo "docs=false" >> "$GITHUB_OUTPUT"; fi
 
       - uses: actions/setup-node@v4
         with:
@@ -25,33 +57,40 @@ jobs:
         run: npm ci
 
       - name: Install docs dependencies
+        if: steps.changes.outputs.docs == 'true'
         run: npm run docs:ci
 
       - name: Run prettier checks
-        run: npm run ci:prettier
+        run: npm run ${{ steps.changes.outputs.full == 'true' && 'prettier' || 'ci:prettier' }}
 
       - name: Run linting
-        run: npm run ci:lint
+        run: npm run ${{ steps.changes.outputs.full == 'true' && 'lint' || 'ci:lint' }}
 
       - name: Run unit tests
-        run: npm run ci:test:unit
+        run: npm run ${{ steps.changes.outputs.full == 'true' && 'test:unit' || 'ci:test:unit' }}
 
+      # The API documentation is generated from the built packages, so every package is built when the docs change.
       - name: Build the project
-        run: npm run ci:build
+        run: npm run ${{ (steps.changes.outputs.full == 'true' || steps.changes.outputs.docs == 'true') && 'build' || 'ci:build' }}
 
       - name: Start services for e2e tests
+        if: steps.changes.outputs.e2e == 'true'
         run: npm run test:docker:up
 
       - name: Run e2e tests
+        if: steps.changes.outputs.e2e == 'true'
         run: npm run ci:test:e2e
 
       - name: Generate API documentation
+        if: steps.changes.outputs.docs == 'true'
         run: npm run docs:api-generate
 
       - name: Build documentation
+        if: steps.changes.outputs.docs == 'true'
         run: npm run docs:build
 
       - name: Set up JDK 21
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -60,7 +99,7 @@ jobs:
       - name: Run SonarQube analysis
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: >
-            npm run ci:sonar -- -- 
+            npm run sonar -- -- 
             -Dsonar.host.url=https://sonarcloud.io 
             -Dsonar.token=${{ secrets.SONAR_TOKEN }} 
             -Dsonar.organization=axisparkjs 

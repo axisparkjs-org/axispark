@@ -10,6 +10,7 @@
         "lint": "turbo run lint",
         "build": "turbo run build",
         "test:unit": "turbo run test:unit",
+        "sonar": "turbo run sonar",
         "test:e2e": "export NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules && jest --config jest.e2e.config.ts",
         "test:docker:up": "docker compose -f e2e/docker-compose.yml up -d --wait",
         "test:docker:down": "docker compose -f e2e/docker-compose.yml down",
