@@ -138,4 +138,13 @@ describe('KafkaPlugin', () => {
         expect(connectionManager.destroyConnections).toHaveBeenCalledTimes(1);
         expect(logger.info).toHaveBeenCalledWith('Plugin stopped');
     });
+
+    it('stops without throwing when registration did not complete', async () => {
+        await expect(plugin.onRegister(appContext())).rejects.toBeInstanceOf(PluginNotConfiguredError);
+
+        await expect(plugin.onStop()).resolves.toBeUndefined();
+
+        expect(connectionManager.destroyConnections).not.toHaveBeenCalled();
+        expect(logger.info).toHaveBeenCalledWith('Plugin stopped');
+    });
 });

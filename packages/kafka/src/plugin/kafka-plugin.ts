@@ -82,7 +82,7 @@ export class KafkaPlugin extends Plugin {
     }
 
     async onStop(): Promise<void> {
-        await this.connectionManager.destroyConnections();
+        await this.connectionManager?.destroyConnections();
         await this.logger.info(`Plugin stopped`);
     }
 }
