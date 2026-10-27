@@ -12,7 +12,7 @@ export function Pipe(
     ...steps: (ClassType<PipeStep> | { pipeStep: ClassType<PipeStep>; PipeStepConfig: PipeStepConfig })[]
 ): ClassDecorator & MethodDecorator & ParameterDecorator {
     return (...args: any[]) => {
-        // Clase
+        // Class
         if (args.length === 1) {
             const [target] = args;
 
@@ -31,7 +31,7 @@ export function Pipe(
         const [target, propertyKey, third] = args;
         const pipes = Metadata.get<PipeMetadata[]>(MetadataKeys.PIPE, target, propertyKey) ?? [];
 
-        // Parámetro
+        // Parameter
         if (typeof third === 'number') {
             pipes.push({
                 target: Metadata.normalizeTarget(target),
@@ -46,7 +46,7 @@ export function Pipe(
             return;
         }
 
-        // Método
+        // Method
         pipes.push({
             target: Metadata.normalizeTarget(target),
             propertyKey,
