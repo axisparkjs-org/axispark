@@ -31,6 +31,6 @@
         "@axisparkjs/engine": "1.3.0",
         "@axisparkjs/http": "1.3.0",
         "@axisparkjs/logger": "1.3.0",
-        "yaml": "^2.9.0"
+        "yaml": "^2.9.1"
     }
 }
