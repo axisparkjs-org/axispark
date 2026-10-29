@@ -1,16 +1,14 @@
 name: CodeQL
 
 on:
+  pull_request:
+    branches:
+      - feature/**
+      - release/**
+      - main
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - release/**
-      - main
-  schedule:
-    # Weekly analysis to catch vulnerabilities found by new CodeQL queries.
-    - cron: '23 4 * * 1'
 
 concurrency:
   group: codeql-${{ github.ref }}
