@@ -1,0 +1,39 @@
+name: CodeQL
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - release/**
+      - main
+  schedule:
+    # Weekly analysis to catch vulnerabilities found by new CodeQL queries.
+    - cron: '23 4 * * 1'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    uses: axisparkjs/.github/.github/workflows/codeql.yml@main
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
+    with:
+      # Build output, generated files, tests and examples that are not part of the published packages.
+      # `templates/` is analyzed because its code is copied into the projects created by the CLI.
+      paths-ignore: |
+        **/lib/**
+        **/coverage/**
+        website/**
+        samples/**
+        e2e/**
+        **/*.spec.ts
