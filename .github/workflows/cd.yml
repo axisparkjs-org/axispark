@@ -202,7 +202,7 @@ jobs:
             exit 1
           fi
 
-          gh api repos/axisparkjs/website/dispatches \
+          gh api repos/axisparkjs-org/website/dispatches \
             --method POST \
             -f event_type=axispark-release \
             -f "client_payload[ref]=$REF"
