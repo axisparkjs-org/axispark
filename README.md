@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://axisparkjs.github.io/axispark/" target="_blank"><img src="https://axisparkjs.github.io/axispark/img/icon.svg" width="120" alt="AxiSpark.js Logo" /></a>
+  <a href="https://axisparkjs.com/" target="_blank"><img src="https://axisparkjs.com/img/icon.svg" width="120" alt="AxiSpark.js Logo" /></a>
 </p>
 
 <p align="center" style="font-size: 40px; margin-bottom: 0; font-weight: bold;">
@@ -22,7 +22,7 @@ AxiSpark.js focuses on simplicity, clarity, and scalability, giving developers t
 
 ## Getting Started
 
-To get started with AxiSpark.js, checkout the [official documentation](https://axisparkjs.github.io/axispark/docs/intro).
+To get started with AxiSpark.js, checkout the [official documentation](https://axisparkjs.com/docs/intro).
 
 ## Support
 

@@ -2,7 +2,7 @@
 
 WebSocket plugin of AxiSpark.js. It defines event handlers independently of the WebSocket server, which is provided by an adapter package.
 
-The complete guide is in the [WebSocket Plugin documentation](https://axisparkjs.github.io/axispark/docs/category/websocket-plugin).
+The complete guide is in the [WebSocket Plugin documentation](https://axisparkjs.com/docs/category/websocket-plugin).
 
 ## What the package does
 

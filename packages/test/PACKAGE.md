@@ -2,7 +2,7 @@
 
 Testing utilities for AxiSpark.js applications.
 
-The complete guide is in the [Testing documentation](https://axisparkjs.github.io/axispark/docs/getting-started/testing).
+The complete guide is in the [Testing documentation](https://axisparkjs.com/docs/getting-started/testing).
 
 ## What the package does
 

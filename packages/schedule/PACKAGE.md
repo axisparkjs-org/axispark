@@ -2,7 +2,7 @@
 
 Job scheduling for AxiSpark.js with cron expressions, intervals, timeouts and dates.
 
-The complete guide is in the [Schedule Plugin documentation](https://axisparkjs.github.io/axispark/docs/category/schedule-plugin).
+The complete guide is in the [Schedule Plugin documentation](https://axisparkjs.com/docs/category/schedule-plugin).
 
 ## What the package does
 

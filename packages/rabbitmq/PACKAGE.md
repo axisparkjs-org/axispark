@@ -2,7 +2,7 @@
 
 [RabbitMQ](https://www.rabbitmq.com/) connections for AxiSpark.js, based on `amqp-connection-manager`.
 
-The complete guide is in the [RabbitMQ documentation](https://axisparkjs.github.io/axispark/docs/connections/rabbitmq).
+The complete guide is in the [RabbitMQ documentation](https://axisparkjs.com/docs/connections/rabbitmq).
 
 ## What the package does
 

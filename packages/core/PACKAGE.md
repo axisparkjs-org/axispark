@@ -2,7 +2,7 @@
 
 Application bootstrap, plugin system and health engine of AxiSpark.js. Every AxiSpark.js application starts with this package.
 
-The complete guide is in the [Getting Started documentation](https://axisparkjs.github.io/axispark/docs/category/getting-started).
+The complete guide is in the [Getting Started documentation](https://axisparkjs.com/docs/category/getting-started).
 
 ## What the package does
 

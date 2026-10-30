@@ -2,7 +2,7 @@
 
 TypeORM integration for AxiSpark.js. It creates named data sources and generates repositories with derived query methods.
 
-The complete guide is in the [Data Plugin documentation](https://axisparkjs.github.io/axispark/docs/category/data-plugin).
+The complete guide is in the [Data Plugin documentation](https://axisparkjs.com/docs/category/data-plugin).
 
 ## What the package does
 

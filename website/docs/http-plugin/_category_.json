@@ -1,8 +1,0 @@
-{
-    "label": "Http Plugin",
-    "position": 3,
-    "link": {
-        "type": "generated-index",
-        "description": "The Http Plugin is a powerful tool that allows your application to serve an Http server and handle incoming requests. This section provides comprehensive documentation on how to use the Http Plugin, including setup instructions, configuration options, and examples of common use cases."
-    }
-}

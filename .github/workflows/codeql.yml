@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   codeql:
-    uses: axisparkjs/.github/.github/workflows/codeql.yml@main
+    uses: axisparkjs-org/.github/.github/workflows/codeql.yml@main
     permissions:
       actions: read
       contents: read
@@ -31,7 +31,6 @@ jobs:
       paths-ignore: |
         **/lib/**
         **/coverage/**
-        website/**
         samples/**
         e2e/**
         **/*.spec.ts

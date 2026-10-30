@@ -2,7 +2,7 @@
 
 TypeScript building blocks to express domain concepts following Domain-Driven Design.
 
-The complete guide is in the [Domain-Driven Design documentation](https://axisparkjs.github.io/axispark/docs/category/domain-driven-design).
+The complete guide is in the [Domain-Driven Design documentation](https://axisparkjs.com/docs/category/domain-driven-design).
 
 ## What the package does
 

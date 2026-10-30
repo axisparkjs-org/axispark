@@ -8,7 +8,7 @@ You need [Node.js](https://nodejs.org/) version 24 or higher. Follow these steps
 
 - Fork the repository on GitHub.
 - Clone your forked repository to your local machine.
-- Install the necessary dependencies using `npm ci`. If you are modifying docs, you need to install web dependencies using `npm run docs:ci`.
+- Install the necessary dependencies using `npm ci`. The documentation lives in the [website repository](https://github.com/axisparkjs/website), where its guides are written and the API reference is generated from the TSDoc comments of this repository.
 
 ## Versioning
 

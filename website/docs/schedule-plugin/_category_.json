@@ -1,8 +1,0 @@
-{
-    "label": "Schedule Plugin",
-    "position": 7,
-    "link": {
-        "type": "generated-index",
-        "description": "The Schedule Plugin is a powerful tool that allows developers to easily integrate scheduling functionality into their applications. It provides a set of features and utilities that simplify the process of working with schedules, making it easier to create, manage, and consume scheduled tasks."
-    }
-}

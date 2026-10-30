@@ -2,7 +2,7 @@
 
 Generates an [OpenAPI](https://www.openapis.org/) document from the controllers of the AxiSpark.js HTTP plugin.
 
-The complete guide is in the [OpenApi Plugin documentation](https://axisparkjs.github.io/axispark/docs/category/openapi-plugin).
+The complete guide is in the [OpenApi Plugin documentation](https://axisparkjs.com/docs/category/openapi-plugin).
 
 ## What the package does
 

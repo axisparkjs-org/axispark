@@ -2,7 +2,7 @@
 
 Dependency injection container of AxiSpark.js.
 
-The complete guide is in the [Dependency Injection documentation](https://axisparkjs.github.io/axispark/docs/getting-started/dependency-injection).
+The complete guide is in the [Dependency Injection documentation](https://axisparkjs.com/docs/getting-started/dependency-injection).
 
 ## What the package does
 

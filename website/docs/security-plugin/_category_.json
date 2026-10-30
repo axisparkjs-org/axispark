@@ -1,8 +1,0 @@
-{
-    "label": "Security Plugin",
-    "position": 7,
-    "link": {
-        "type": "generated-index",
-        "description": "Build transport-neutral authentication and authorization with your own authenticators, policies, and identity model."
-    }
-}

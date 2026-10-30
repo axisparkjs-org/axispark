@@ -2,7 +2,7 @@
 
 [KafkaJS](https://kafka.js.org/) connections for AxiSpark.js.
 
-The complete guide is in the [Kafka documentation](https://axisparkjs.github.io/axispark/docs/connections/kafka).
+The complete guide is in the [Kafka documentation](https://axisparkjs.com/docs/connections/kafka).
 
 ## What the package does
 

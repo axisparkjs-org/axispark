@@ -2,7 +2,7 @@
 
 Transport-neutral authentication and authorization primitives for AxiSpark. The package provides the execution pipeline, dependency-injection integration, security context, and error types. Your application supplies the credential authenticators and authorization policies, so the package does not dictate token formats, user or role models, sessions, persistence, or policy language.
 
-The complete guide is in the [Security Plugin documentation](https://axisparkjs.github.io/axispark/docs/category/security-plugin).
+The complete guide is in the [Security Plugin documentation](https://axisparkjs.com/docs/category/security-plugin).
 
 ## What the package does
 

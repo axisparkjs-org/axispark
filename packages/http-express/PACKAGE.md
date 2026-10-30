@@ -2,7 +2,7 @@
 
 [Express](https://expressjs.com/) adapter for the AxiSpark.js HTTP plugin.
 
-The complete guide is in the [Http Plugin documentation](https://axisparkjs.github.io/axispark/docs/category/http-plugin).
+The complete guide is in the [Http Plugin documentation](https://axisparkjs.com/docs/category/http-plugin).
 
 ## What the package does
 

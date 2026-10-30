@@ -4,7 +4,7 @@ Shared types and metadata utilities used by every AxiSpark.js package.
 
 Most applications do not use this package directly: it is installed as a dependency of the other packages. Use it when you build your own plugins, decorators or adapters.
 
-The complete reference is in the [API documentation](https://axisparkjs.github.io/axispark/api/@axisparkjs/common/).
+The complete reference is in the [API documentation](https://axisparkjs.com/api/@axisparkjs/common/).
 
 ## What the package does
 

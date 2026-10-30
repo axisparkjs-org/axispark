@@ -2,7 +2,7 @@
 
 Logger of AxiSpark.js with pluggable transports and formatters.
 
-The complete guide is in the [Logging documentation](https://axisparkjs.github.io/axispark/docs/getting-started/logging).
+The complete guide is in the [Logging documentation](https://axisparkjs.com/docs/getting-started/logging).
 
 ## What the package does
 

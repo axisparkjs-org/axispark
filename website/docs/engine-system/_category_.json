@@ -1,8 +1,0 @@
-{
-    "label": "Engine System",
-    "position": 3,
-    "link": {
-        "type": "generated-index",
-        "description": "AxiSpark.js has a built-in engine system that allows you to create and manage request from any transport. The engine system is designed to be flexible and extensible, allowing you to include new transports and protocols as needed. The engine system is also designed to be easy to use, allowing you to create and manage request with minimal code."
-    }
-}

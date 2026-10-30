@@ -2,7 +2,7 @@
 
 Transport-neutral execution engine of AxiSpark.js. HTTP, WebSocket and other transports run every request through the same pipeline.
 
-The complete guide is in the [Engine System documentation](https://axisparkjs.github.io/axispark/docs/category/engine-system).
+The complete guide is in the [Engine System documentation](https://axisparkjs.com/docs/category/engine-system).
 
 ## What the package does
 

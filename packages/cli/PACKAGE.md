@@ -2,7 +2,7 @@
 
 Command-line interface to scaffold new AxiSpark.js projects from ready-to-run TypeScript templates.
 
-The complete guide is in the [CLI documentation](https://axisparkjs.github.io/axispark/docs/getting-started/cli).
+The complete guide is in the [CLI documentation](https://axisparkjs.com/docs/getting-started/cli).
 
 ## What the package does
 

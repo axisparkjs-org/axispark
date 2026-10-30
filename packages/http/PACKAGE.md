@@ -2,7 +2,7 @@
 
 HTTP plugin of AxiSpark.js. It defines controllers, routes, parameters and responses independently of the HTTP server, which is provided by an adapter package.
 
-The complete guide is in the [Http Plugin documentation](https://axisparkjs.github.io/axispark/docs/category/http-plugin).
+The complete guide is in the [Http Plugin documentation](https://axisparkjs.com/docs/category/http-plugin).
 
 ## What the package does
 
