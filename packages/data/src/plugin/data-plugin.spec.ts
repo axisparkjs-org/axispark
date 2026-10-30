@@ -2,7 +2,7 @@ import { PluginNotConfiguredError } from '@axisparkjs/core';
 import { DATA_LOGGER, DATA_OPTIONS } from '../di';
 import { DataSourceConnectionManager } from '../connections';
 import { RepositoryDefinition } from '../repository/repository-definition';
-import { RepositoryGenerator } from '../repository/repostiory-generator';
+import { RepositoryGenerator } from '../repository/repository-generator';
 import { DataPlugin } from './data-plugin';
 
 describe('DataPlugin', () => {
@@ -103,5 +103,15 @@ describe('DataPlugin', () => {
 
         await expect(plugin.onRegister({ container: { bind: jest.fn() } } as any, { dataSources: [] } as any)).rejects.toBe(failure);
         expect(repositoryGenerator.generate).not.toHaveBeenCalled();
+    });
+
+    it('stops without throwing when registration did not complete', async () => {
+        const rootLogger = { child: jest.fn().mockReturnValue(childLogger), info: jest.fn().mockResolvedValue(undefined) };
+        const plugin = new DataPlugin(rootLogger as any, {} as any);
+
+        await expect(plugin.onRegister({ container: { bind: jest.fn() } } as any)).rejects.toBeInstanceOf(PluginNotConfiguredError);
+
+        await expect(plugin.onStop()).resolves.toBeUndefined();
+        expect(rootLogger.info).toHaveBeenCalledWith('Plugin stopped');
     });
 });

@@ -55,8 +55,8 @@ describe('RabbitMQConnectionManager', () => {
 
         connectHandler();
         connectFailedHandler({ err: connectError });
-        disconnectHandler();
-        disconnectHandler(disconnectError);
+        disconnectHandler({ err: undefined });
+        disconnectHandler({ err: disconnectError });
 
         expect(logger.info).toHaveBeenCalledWith("Connection 'PRIMARY' established");
         expect(logger.error).toHaveBeenCalledWith("Connection 'PRIMARY' encountered an error", connectError);

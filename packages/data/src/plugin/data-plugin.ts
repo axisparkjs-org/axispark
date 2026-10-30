@@ -5,7 +5,7 @@ import { DATA_LOGGER, DATA_OPTIONS } from '../di';
 import { PluginNotConfiguredError } from '@axisparkjs/core';
 import { Injectable, InjectionToken, Injector } from '@axisparkjs/di';
 import { DataSourceConnectionManager } from '../connections';
-import { RepositoryGenerator } from '../repository/repostiory-generator';
+import { RepositoryGenerator } from '../repository/repository-generator';
 
 /**
  * A plugin for integrating Data persistence into the application.
@@ -80,7 +80,7 @@ export class DataPlugin extends Plugin {
 
     /** Closes every TypeORM data source created by this plugin. */
     async onStop(): Promise<void> {
-        await this.dataSourceConnectionManager.destroyConnections();
+        await this.dataSourceConnectionManager?.destroyConnections();
         await this.logger.info(`Plugin stopped`);
     }
 }

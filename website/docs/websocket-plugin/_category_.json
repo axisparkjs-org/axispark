@@ -1,8 +1,0 @@
-{
-    "label": "WebSocket Plugin",
-    "position": 8,
-    "link": {
-        "type": "generated-index",
-        "description": "The WebSocket Plugin adds event-based WebSocket handling to AxiSpark.js through configurable adapters. This section covers installation, namespaces, events, connection management, and acknowledgments."
-    }
-}

@@ -1,8 +1,0 @@
-{
-    "label": "Connections",
-    "position": 5,
-    "link": {
-        "type": "generated-index",
-        "description": "Connect your AxiSpark.js application to messaging systems, caches, and other external services. This section documents the available connection plugins."
-    }
-}

@@ -48,7 +48,7 @@ describe('PipeDefinition', () => {
 
     it('should preserve the pipe step configuration', () => {
         const config = {
-            // Añade aquí las propiedades reales de PipeStepConfig
+            // Add the real PipeStepConfig properties here
         } as PipeStepConfig;
 
         const steps = [

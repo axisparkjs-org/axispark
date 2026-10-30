@@ -18,6 +18,7 @@
         "@axisparkjs/openapi",
         "@axisparkjs/rabbitmq",
         "@axisparkjs/schedule",
+        "@axisparkjs/security",
         "@axisparkjs/test",
         "@axisparkjs/websocket",
         "@axisparkjs/websocket-socketio"
@@ -25,6 +26,5 @@
     "linked": [],
     "access": "public",
     "baseBranch": "main",
-    "updateInternalDependencies": "patch",
-    "ignore": []
+    "updateInternalDependencies": "patch"
 }

@@ -3,7 +3,7 @@ import { Metadata } from '@axisparkjs/common';
 import { ClassRegistry } from '@axisparkjs/di';
 import { BaseRepository } from './base-repository';
 import { RepositoryMetadata } from '../metadata/repository-metadata';
-import { RepositoryGenerator } from './repostiory-generator';
+import { RepositoryGenerator } from './repository-generator';
 import { RepositoryDefinition } from './repository-definition';
 
 interface TestEntity extends ObjectLiteral {

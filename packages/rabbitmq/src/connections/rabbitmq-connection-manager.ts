@@ -26,7 +26,7 @@ export class RabbitMQConnectionManager {
             const connection = await this.createConnection(url, options);
             connection.on('connect', () => this.logger.info(`Connection '${name}' established`));
             connection.on('connectFailed', ({ err }) => this.logger.error(`Connection '${name}' encountered an error`, err));
-            connection.on('disconnect', (err: Error | undefined) =>
+            connection.on('disconnect', ({ err }) =>
                 err ? this.logger.error(`Connection '${name}' disconnected with error`, err) : this.logger.info(`Connection '${name}' finished`)
             );
             this.connections.set(name, connection);

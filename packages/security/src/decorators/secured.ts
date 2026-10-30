@@ -35,11 +35,11 @@ export function Secured(data: Pick<SecuredMetadata, 'policies'>): ClassDecorator
             ...data
         };
 
-        // Método
+        // Method
         if (descriptor) {
             Metadata.define(MetadataKeys.SECURED, metadata, target, propertyKey as string | symbol);
         }
-        // Clase
+        // Class
         else {
             Metadata.define(MetadataKeys.SECURED, metadata, target);
         }

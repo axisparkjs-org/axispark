@@ -14,11 +14,11 @@ export function Use(...targets: ClassType[]): ClassDecorator & MethodDecorator {
             targets
         };
 
-        // Método
+        // Method
         if (descriptor) {
             Metadata.define(MetadataKeys.USE, metadata, target, propertyKey as string | symbol);
         }
-        // Clase
+        // Class
         else {
             Metadata.define(MetadataKeys.USE, metadata, target);
         }

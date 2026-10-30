@@ -1,8 +1,0 @@
-{
-    "label": "Domain-Driven Design",
-    "position": 4,
-    "link": {
-        "type": "generated-index",
-        "description": "Model domain values, entities, aggregate roots, domain events, and domain-specific errors with the @axisparkjs/ddd package."
-    }
-}

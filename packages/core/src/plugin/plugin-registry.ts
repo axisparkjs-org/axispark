@@ -75,7 +75,7 @@ export class PluginRegistry implements Lifecycle {
                     throw new PluginDependencyNotIncludedError(dependencyType.name);
                 }
 
-                // Si SÍ está registrada, se respeta el orden aunque sea opcional.
+                // If the dependency is registered, the order is respected even when it is optional.
                 (graph.get(dependencyType) as PluginType[]).push(plugin.type);
                 inDegree.set(plugin.type, (inDegree.get(plugin.type) || 0) + 1);
             }

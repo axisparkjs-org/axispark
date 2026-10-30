@@ -5,16 +5,7 @@ import { ObjectLiteral, Repository } from 'typeorm';
 export type QueryOperation = 'findMany' | 'findOne' | 'count' | 'exists';
 /** Recognized suffix for a derived predicate. */
 export type PredicateOperatorName =
-    | 'Equal'
-    | 'IsNull'
-    | 'IsNotNull'
-    | 'GreaterThanEqual'
-    | 'LessThanEqual'
-    | 'GreaterThan'
-    | 'LessThan'
-    | 'Between'
-    | 'In'
-    | 'Like';
+    'Equal' | 'IsNull' | 'IsNotNull' | 'GreaterThanEqual' | 'LessThanEqual' | 'GreaterThan' | 'LessThan' | 'Between' | 'In' | 'Like';
 
 export interface ParsedPredicate {
     /** TypeORM metadata path of the entity property. */

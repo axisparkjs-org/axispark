@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://axisparkjs.github.io/axispark/" target="_blank"><img src="https://axisparkjs.github.io/axispark/img/icon.svg" width="120" alt="AxiSpark.js Logo" /></a>
+  <a href="https://axisparkjs.com/" target="_blank"><img src="https://axisparkjs.com/img/icon.svg" width="120" alt="AxiSpark.js Logo" /></a>
 </p>
 
 <p align="center" style="font-size: 40px; margin-bottom: 0; font-weight: bold;">
@@ -22,17 +22,18 @@ AxiSpark.js focuses on simplicity, clarity, and scalability, giving developers t
 
 ## Getting Started
 
-To get started with AxiSpark.js, checkout the [official documentation](https://axisparkjs.github.io/axispark/docs/intro).
+To get started with AxiSpark.js, checkout the [official documentation](https://axisparkjs.com/docs/intro).
 
 ## Support
-AxiSpark.js is an open-source project and we welcome contributions from the community. If you encounter any issues or have questions, please reach out to us via our [GitHub repository](https://github.com/axisparkjs/axispark/issues).
 
-### Contributors 
-Contributors are welcome! If you would like to contribute to AxiSpark.js, please read our [contributing guidelines](https://github.com/axisparkjs/axispark/blob/main/CONTRIBUTING.md) for more information.
+AxiSpark.js is an open-source project and we welcome contributions from the community. If you encounter any issues or have questions, check our [support guide](https://github.com/axisparkjs/.github/blob/main/SUPPORT.md) or open an issue in our [GitHub repository](https://github.com/axisparkjs/axispark/issues/new/choose).
 
-### Contact
-If you have any questions or need assistance, please contact me at pablogalvez31@gmail.com 
+To report a security vulnerability, follow our [Security Policy](https://github.com/axisparkjs/.github/blob/main/SECURITY.md). Please do not open public issues for security problems.
+
+### Contributors
+
+Contributors are welcome! If you would like to contribute to AxiSpark.js, please read our [contributing guidelines](https://github.com/axisparkjs/.github/blob/main/CONTRIBUTING.md), the [development guide](https://github.com/axisparkjs/axispark/blob/main/DEVELOPMENT.md) and our [Code of Conduct](https://github.com/axisparkjs/.github/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
-AxiSpark is [MIT licensed](LICENSE).
+AxiSpark is [Apache 2.0 licensed](LICENSE).
