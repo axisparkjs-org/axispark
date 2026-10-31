@@ -18,6 +18,7 @@ export const MetadataKeys = {
 
     /* Core */
     PLUGIN: new MetadataKey('plugin'),
+    HEALTH_CHECK: new MetadataKey('health-check'),
 
     /* Engine */
     PARAMETER: new MetadataKey('parameter'),

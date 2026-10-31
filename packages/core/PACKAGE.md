@@ -9,7 +9,7 @@ The complete guide is in the [Getting Started documentation](https://axisparkjs.
 - Creates the application with `AxiSparkFactory.create()` and manages its lifecycle (`init`, `run`, `destroy`).
 - Registers plugins with `app.use()` and runs their `onRegister`, `onStart` and `onStop` hooks in dependency order.
 - Scans the application `basePath` to discover decorated classes such as controllers, jobs or repositories.
-- Reports the application and plugin status through the `HealthEngine`.
+- Reports the application, plugin and `@HealthCheck` status through the `HealthEngine`.
 
 ## Install and register
 

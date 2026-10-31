@@ -65,6 +65,11 @@ jobs:
       - name: Build the project
         run: npm run ${{ steps.changes.outputs.full == 'true' && 'build' || 'ci:build' }}
 
+        # Run build for cli if not already built by the main build step
+      - name: Build CLI package if not already built
+        if: steps.changes.outputs.full == 'false'
+        run: npm run build --workspace=@axisparkjs/cli
+
       - name: Start services for e2e tests
         if: steps.changes.outputs.e2e == 'true'
         run: npm run test:docker:up

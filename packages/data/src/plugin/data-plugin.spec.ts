@@ -1,4 +1,5 @@
-import { PluginNotConfiguredError } from '@axisparkjs/core';
+import { HealthEngine, PluginNotConfiguredError } from '@axisparkjs/core';
+import { DataSourceHealthIndicator } from '../health';
 import { DATA_LOGGER, DATA_OPTIONS } from '../di';
 import { DataSourceConnectionManager } from '../connections';
 import { RepositoryDefinition } from '../repository/repository-definition';
@@ -6,6 +7,9 @@ import { RepositoryGenerator } from '../repository/repository-generator';
 import { DataPlugin } from './data-plugin';
 
 describe('DataPlugin', () => {
+    const healthEngine = {
+        register: jest.fn()
+    };
     const childLogger = {
         info: jest.fn().mockResolvedValue(undefined)
     };
@@ -38,7 +42,9 @@ describe('DataPlugin', () => {
             generate: jest.fn().mockResolvedValue([definition])
         };
         const injector = {
-            get: jest.fn(async (token: unknown) => (token === DataSourceConnectionManager ? connectionManager : repositoryGenerator))
+            get: jest.fn(async (token: unknown) =>
+                token === DataSourceConnectionManager ? connectionManager : token === HealthEngine ? healthEngine : repositoryGenerator
+            )
         };
         const container = { bind: jest.fn() };
         const plugin = new DataPlugin(logger as any, injector as any);
@@ -59,6 +65,8 @@ describe('DataPlugin', () => {
             token: expect.objectContaining({ description: 'DATA_REPOSITORY_USERREPOSITORY' }),
             useValue: implementation
         });
+        expect(injector.get).toHaveBeenNthCalledWith(3, HealthEngine);
+        expect(healthEngine.register).toHaveBeenCalledWith(expect.any(DataSourceHealthIndicator), { name: 'data:primary' });
         expect(childLogger.info).toHaveBeenCalledWith('Repositories registered: UserRepository');
         expect(childLogger.info).toHaveBeenCalledWith('Plugin registered');
 
@@ -78,7 +86,9 @@ describe('DataPlugin', () => {
         };
         const repositoryGenerator = { generate: jest.fn().mockResolvedValue([]) };
         const injector = {
-            get: jest.fn(async (token: unknown) => (token === DataSourceConnectionManager ? connectionManager : repositoryGenerator))
+            get: jest.fn(async (token: unknown) =>
+                token === DataSourceConnectionManager ? connectionManager : token === HealthEngine ? healthEngine : repositoryGenerator
+            )
         };
         const plugin = new DataPlugin(logger as any, injector as any);
 
@@ -86,6 +96,24 @@ describe('DataPlugin', () => {
 
         expect(childLogger.info).toHaveBeenCalledWith('Repositories registered: ');
         await plugin.onStop();
+    });
+
+    it('does not register health checks when they are disabled', async () => {
+        const connectionManager = {
+            createConnections: jest.fn().mockResolvedValue(undefined),
+            getAllConnections: jest.fn(() => new Map([['primary', {}]])),
+            destroyConnections: jest.fn().mockResolvedValue(undefined)
+        };
+        const repositoryGenerator = { generate: jest.fn().mockResolvedValue([]) };
+        const injector = {
+            get: jest.fn(async (token: unknown) => (token === DataSourceConnectionManager ? connectionManager : repositoryGenerator))
+        };
+        const plugin = new DataPlugin(logger as any, injector as any);
+
+        await plugin.onRegister({ container: { bind: jest.fn() } } as any, { dataSources: [], healthChecks: false } as any);
+
+        expect(injector.get).not.toHaveBeenCalledWith(HealthEngine);
+        expect(healthEngine.register).not.toHaveBeenCalled();
     });
 
     it('propagates connection initialization failures without generating repositories', async () => {
@@ -97,7 +125,9 @@ describe('DataPlugin', () => {
         };
         const repositoryGenerator = { generate: jest.fn() };
         const injector = {
-            get: jest.fn(async (token: unknown) => (token === DataSourceConnectionManager ? connectionManager : repositoryGenerator))
+            get: jest.fn(async (token: unknown) =>
+                token === DataSourceConnectionManager ? connectionManager : token === HealthEngine ? healthEngine : repositoryGenerator
+            )
         };
         const plugin = new DataPlugin(logger as any, injector as any);
 

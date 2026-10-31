@@ -51,7 +51,26 @@ describe.each([
             expect.objectContaining({
                 status: 'healthy',
                 timestamp: expect.any(String),
-                checks: expect.any(Array)
+                checks: expect.arrayContaining([
+                    expect.objectContaining({
+                        component: 'Test',
+                        status: 'healthy'
+                    }),
+                    expect.objectContaining({
+                        component: 'HttpPlugin',
+                        status: 'healthy'
+                    }),
+                    expect.objectContaining({
+                        component: 'uptime',
+                        status: 'healthy',
+                        details: { uptime: expect.any(Number), critical: true }
+                    }),
+                    expect.objectContaining({
+                        component: 'recommendations-api',
+                        status: 'unhealthy',
+                        details: { error: 'Recommendations API is not reachable', critical: false }
+                    })
+                ])
             })
         );
     });
