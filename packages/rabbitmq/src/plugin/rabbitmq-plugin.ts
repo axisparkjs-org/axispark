@@ -1,10 +1,11 @@
-import { AxiSparkContext, Plugin } from '@axisparkjs/core';
+import { AxiSparkContext, HealthEngine, Plugin } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
 import { RabbitMQPluginOptions } from './rabbitmq-plugin-options';
 import { RABBITMQ_LOGGER, RABBITMQ_OPTIONS } from '../di';
 import { PluginNotConfiguredError } from '@axisparkjs/core';
 import { Injectable, InjectionToken, Injector } from '@axisparkjs/di';
 import { RabbitMQConnectionManager } from '../connections';
+import { RabbitMQHealthIndicator } from '../health';
 
 /**
  * A plugin for integrating RabbitMQ into the application.
@@ -30,6 +31,7 @@ export class RabbitMQPlugin extends Plugin {
 
         this.registerContainerBindings();
         await this.startConnectionManager();
+        await this.registerHealthChecks();
 
         await this.logger.info(`Plugin registered`);
     }
@@ -41,6 +43,15 @@ export class RabbitMQPlugin extends Plugin {
 
         for (const [name, connection] of connections.entries()) {
             this.context.container.bind({ token: new InjectionToken(`RABBITMQ_CONNECTION_${name}`), useValue: connection });
+        }
+    }
+
+    private async registerHealthChecks(): Promise<void> {
+        if (this.options.healthChecks === false) return;
+
+        const healthEngine = await this.injector.get(HealthEngine);
+        for (const [name, connection] of this.connectionManager.getAllConnections().entries()) {
+            healthEngine.register(new RabbitMQHealthIndicator(connection), { name: `rabbitmq:${name}` });
         }
     }
 

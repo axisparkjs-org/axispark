@@ -1,10 +1,11 @@
-import { AxiSparkContext, PluginNotConfiguredError } from '@axisparkjs/core';
+import { AxiSparkContext, HealthEngine, PluginNotConfiguredError } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
 import { InjectableScopes, Injector, InjectionToken } from '@axisparkjs/di';
 import { KafkaConnectionManager } from '../connections';
 import { KAFKA_LOGGER, KAFKA_OPTIONS } from '../di';
 import { KafkaPlugin } from './kafka-plugin';
 import { KafkaPluginOptions } from './kafka-plugin-options';
+import { KafkaHealthIndicator } from '../health';
 
 describe('KafkaPlugin', () => {
     let plugin: KafkaPlugin;
@@ -19,6 +20,7 @@ describe('KafkaPlugin', () => {
         createConsumer: jest.Mock;
     };
     let injector: { get: jest.Mock };
+    let healthEngine: { register: jest.Mock };
     let context: { container: { bind: jest.Mock } };
 
     const options = (connections: any[] = []): KafkaPluginOptions =>
@@ -42,8 +44,9 @@ describe('KafkaPlugin', () => {
             createConsumer: jest.fn().mockResolvedValue(undefined)
         };
         injector = {
-            get: jest.fn().mockImplementation((token) => Promise.resolve(token === KafkaConnectionManager ? connectionManager : undefined))
+            get: jest.fn().mockImplementation((token) => Promise.resolve(token === KafkaConnectionManager ? connectionManager : healthEngine))
         };
+        healthEngine = { register: jest.fn() };
         context = { container: { bind: jest.fn() } };
         plugin = new KafkaPlugin(logger as unknown as Logger, injector as unknown as Injector);
     });
@@ -94,7 +97,19 @@ describe('KafkaPlugin', () => {
             token: new InjectionToken('KAFKA_CONSUMER_PRIMARY'),
             useValue: primaryConsumer
         });
+        expect(injector.get).toHaveBeenCalledWith(HealthEngine);
+        expect(healthEngine.register).toHaveBeenCalledWith(expect.any(KafkaHealthIndicator), { name: 'kafka:PRIMARY' });
+        expect(healthEngine.register).toHaveBeenCalledWith(expect.any(KafkaHealthIndicator), { name: 'kafka:REPORTS' });
         expect(logger.info).toHaveBeenCalledWith('Plugin registered');
+    });
+
+    it('does not register health checks when they are disabled', async () => {
+        connectionManager.getAllConnections.mockReturnValue(new Map([['PRIMARY', {}]]));
+
+        await plugin.onRegister(appContext(), { ...options([{ name: 'PRIMARY', config: { brokers: ['localhost:9092'] } }]), healthChecks: false });
+
+        expect(injector.get).not.toHaveBeenCalledWith(HealthEngine);
+        expect(healthEngine.register).not.toHaveBeenCalled();
     });
 
     it('binds singleton factories for clients configured for lazy initialization', async () => {

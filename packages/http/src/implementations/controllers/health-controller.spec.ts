@@ -40,7 +40,7 @@ describe('HealthController', () => {
                 }
             ];
 
-            healthEngine.checkAll.mockReturnValue(checks);
+            healthEngine.checkAll.mockResolvedValue(checks);
 
             const result = await controller.getHealth(response);
 
@@ -57,11 +57,11 @@ describe('HealthController', () => {
             expect(result).toBeInstanceOf(HandledResult);
         });
 
-        it('should return 503 when any check is not healthy', async () => {
+        it('should return 503 when the application is not healthy', async () => {
             const checks = [
                 {
                     component: 'app',
-                    status: HealthStatus.Healthy,
+                    status: HealthStatus.Unhealthy,
                     timestamp: new Date().toISOString()
                 },
                 {
@@ -71,14 +71,14 @@ describe('HealthController', () => {
                 }
             ];
 
-            healthEngine.checkAll.mockReturnValue(checks);
+            healthEngine.checkAll.mockResolvedValue(checks);
 
             await controller.getHealth(response);
 
             expect(response.status).toHaveBeenCalledWith(503);
 
             expect(response.json).toHaveBeenCalledWith({
-                status: HealthStatus.Healthy,
+                status: HealthStatus.Unhealthy,
                 timestamp: expect.any(String),
                 checks
             });
@@ -87,7 +87,7 @@ describe('HealthController', () => {
 
     describe('getLiveness', () => {
         it('should return app health', async () => {
-            healthEngine.checkApp.mockReturnValue({
+            healthEngine.checkApp.mockResolvedValue({
                 component: 'app',
                 status: HealthStatus.Healthy,
                 timestamp: new Date().toISOString()
@@ -106,7 +106,7 @@ describe('HealthController', () => {
 
     describe('getReadiness', () => {
         it('should return healthy when all checks are healthy', async () => {
-            healthEngine.checkAll.mockReturnValue([
+            healthEngine.checkAll.mockResolvedValue([
                 {
                     component: 'app',
                     status: HealthStatus.Healthy,
@@ -127,11 +127,34 @@ describe('HealthController', () => {
             });
         });
 
-        it('should throw ServiceUnavailableError when some components are not healthy', async () => {
-            healthEngine.checkAll.mockReturnValue([
+        it('should return healthy when only non critical checks are not healthy', async () => {
+            healthEngine.checkAll.mockResolvedValue([
                 {
                     component: 'app',
                     status: HealthStatus.Healthy,
+                    timestamp: new Date().toISOString()
+                },
+                {
+                    component: 'cache',
+                    status: HealthStatus.Unhealthy,
+                    timestamp: new Date().toISOString(),
+                    details: { critical: false }
+                }
+            ]);
+
+            const result = await controller.getReadiness();
+
+            expect(result).toEqual({
+                status: HealthStatus.Healthy,
+                timestamp: expect.any(String)
+            });
+        });
+
+        it('should throw ServiceUnavailableError when some components are not healthy', async () => {
+            healthEngine.checkAll.mockResolvedValue([
+                {
+                    component: 'app',
+                    status: HealthStatus.Unhealthy,
                     timestamp: new Date().toISOString()
                 },
                 {
@@ -143,10 +166,16 @@ describe('HealthController', () => {
                     component: 'redis',
                     status: HealthStatus.Unknown,
                     timestamp: new Date().toISOString()
+                },
+                {
+                    component: 'cache',
+                    status: HealthStatus.Unhealthy,
+                    timestamp: new Date().toISOString(),
+                    details: { critical: false }
                 }
             ]);
 
-            await expect(controller.getReadiness()).rejects.toThrow(new ServiceUnavailableError('Some components are not healthy: db, redis'));
+            await expect(controller.getReadiness()).rejects.toThrow(new ServiceUnavailableError('Some components are not healthy: app, db, redis'));
         });
     });
 });
