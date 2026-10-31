@@ -71,6 +71,11 @@ describe.each([
                         component: 'HttpPlugin',
                         status: 'healthy',
                         details: expect.any(Object)
+                    }),
+                    expect.objectContaining({
+                        component: 'payments-api',
+                        status: 'unhealthy',
+                        details: { error: 'Health check timed out after 100ms', critical: true }
                     })
                 ])
             })
@@ -100,7 +105,7 @@ describe.each([
         expect(data).toEqual(
             expect.objectContaining({
                 status: 503,
-                error: expect.stringContaining('Some components are not healthy')
+                error: 'Some components are not healthy: Test, BadPlugin, payments-api'
             })
         );
     });

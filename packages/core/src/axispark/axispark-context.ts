@@ -59,7 +59,7 @@ export class AxiSparkContext {
             useValue: scopedContainerManager
         });
 
-        const healthEngine = new HealthEngine(this.config, this.plugins);
+        const healthEngine = new HealthEngine(this.config, this.plugins, this.container);
         this.container.bind({
             token: HealthEngine,
             useValue: healthEngine

@@ -1,5 +1,5 @@
 import { AxiSparkTestFactory } from '@axisparkjs/test';
-import { AxiSparkCore } from '@axisparkjs/core';
+import { AxiSparkCore, HealthEngine } from '@axisparkjs/core';
 import { KafkaPlugin } from '@axisparkjs/kafka';
 import { app } from '@axisparkjs/samples/kafka-connected/src/app';
 import { Logger } from '@axisparkjs/logger';
@@ -64,6 +64,38 @@ describe('Kafka Connected App', () => {
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Connection 1 compared to Manager: true'));
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Consumer 1 compared to Manager: true'));
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Producer 1 compared to Manager: true'));
+    });
+
+    it('should report the broken connection as unhealthy', async () => {
+        const healthEngine = await axiSparkCore.get(HealthEngine);
+
+        const checks = await healthEngine.checkAll();
+
+        expect(checks[0].status).toBe('unhealthy');
+        expect(checks).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    component: 'kafka:1',
+                    status: 'healthy',
+                    details: expect.objectContaining({ critical: true })
+                }),
+                expect.objectContaining({
+                    component: 'kafka:2',
+                    status: 'healthy',
+                    details: expect.objectContaining({ critical: true })
+                }),
+                expect.objectContaining({
+                    component: 'kafka:3',
+                    status: 'healthy',
+                    details: expect.objectContaining({ critical: true })
+                }),
+                expect.objectContaining({
+                    component: 'kafka:4',
+                    status: 'unhealthy',
+                    details: expect.objectContaining({ critical: true, error: expect.any(String) })
+                })
+            ])
+        );
     });
 
     afterAll(async () => {

@@ -1,4 +1,4 @@
-import { AxiSparkCore } from '@axisparkjs/core';
+import { AxiSparkCore, HealthEngine } from '@axisparkjs/core';
 import { DataPlugin } from '@axisparkjs/data';
 import { HttpPlugin } from '@axisparkjs/http';
 import { AxiSparkTestFactory } from '@axisparkjs/test';
@@ -126,6 +126,28 @@ describe.each([
             'alice@example.com'
         ]);
         expect((await responseJson<{ email: string }[]>(secondPageResponse)).map((customer) => customer.email)).toEqual(['bob@example.com']);
+    });
+
+    it('should report the connections as healthy', async () => {
+        const healthEngine = await axiSparkCore.get(HealthEngine);
+
+        const checks = await healthEngine.checkAll();
+
+        expect(checks[0].status).toBe('healthy');
+        expect(checks).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    component: 'data:PRIMARY',
+                    status: 'healthy',
+                    details: expect.objectContaining({ critical: true })
+                }),
+                expect.objectContaining({
+                    component: 'data:REPORTING',
+                    status: 'healthy',
+                    details: expect.objectContaining({ critical: true })
+                })
+            ])
+        );
     });
 
     afterAll(async () => {

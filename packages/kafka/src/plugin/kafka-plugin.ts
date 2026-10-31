@@ -1,10 +1,11 @@
-import { AxiSparkContext, Plugin } from '@axisparkjs/core';
+import { AxiSparkContext, HealthEngine, Plugin } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
 import { KafkaPluginOptions } from './kafka-plugin-options';
 import { KAFKA_LOGGER, KAFKA_OPTIONS } from '../di';
 import { PluginNotConfiguredError } from '@axisparkjs/core';
 import { Injectable, InjectableScopes, InjectionToken, Injector } from '@axisparkjs/di';
 import { KafkaConnectionManager } from '../connections';
+import { KafkaHealthIndicator } from '../health';
 
 /**
  * A plugin for integrating Kafka into the application.
@@ -30,6 +31,7 @@ export class KafkaPlugin extends Plugin {
 
         this.registerContainerBindings();
         await this.startConnectionManager();
+        await this.registerHealthChecks();
 
         await this.logger.info(`Plugin registered`);
     }
@@ -69,6 +71,15 @@ export class KafkaPlugin extends Plugin {
                     scope: InjectableScopes.Singleton
                 });
             }
+        }
+    }
+
+    private async registerHealthChecks(): Promise<void> {
+        if (this.options.healthChecks === false) return;
+
+        const healthEngine = await this.injector.get(HealthEngine);
+        for (const [name, connection] of this.connectionManager.getAllConnections().entries()) {
+            healthEngine.register(new KafkaHealthIndicator(connection), { name: `kafka:${name}` });
         }
     }
 
