@@ -1,4 +1,4 @@
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export async function directoryExists(directory: string): Promise<boolean> {
@@ -8,6 +8,11 @@ export async function directoryExists(directory: string): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+/** Removes a directory and its content. Does nothing when the directory does not exist. */
+export async function removeDirectory(directory: string): Promise<void> {
+    await rm(directory, { recursive: true, force: true });
 }
 
 export async function updatePackageJson(projectPath: string, projectName: string): Promise<void> {

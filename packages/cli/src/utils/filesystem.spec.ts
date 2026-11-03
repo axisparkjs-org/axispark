@@ -1,11 +1,12 @@
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, rm, writeFile } from 'node:fs/promises';
 
-import { directoryExists, updatePackageJson } from './filesystem';
+import { directoryExists, removeDirectory, updatePackageJson } from './filesystem';
 
 jest.mock('node:fs/promises', () => ({
     access: jest.fn(),
     cp: jest.fn(),
     readFile: jest.fn(),
+    rm: jest.fn(),
     writeFile: jest.fn()
 }));
 
@@ -51,6 +52,22 @@ describe('filesystem utils', () => {
             const result = await directoryExists('/projects/my-project');
 
             expect(result).toBe(false);
+        });
+    });
+
+    describe('removeDirectory', () => {
+        it('removes the directory recursively and ignores missing directories', async () => {
+            (rm as jest.MockedFunction<typeof rm>).mockResolvedValue(undefined);
+
+            await removeDirectory('/projects/my-project');
+
+            expect(rm).toHaveBeenCalledWith('/projects/my-project', { recursive: true, force: true });
+        });
+
+        it('propagates errors when the directory cannot be removed', async () => {
+            (rm as jest.MockedFunction<typeof rm>).mockRejectedValue(new Error('EBUSY'));
+
+            await expect(removeDirectory('/projects/my-project')).rejects.toThrow('EBUSY');
         });
     });
 

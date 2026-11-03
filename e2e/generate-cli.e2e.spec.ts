@@ -81,20 +81,36 @@ describe('create command - CLI', () => {
         await import('node:fs/promises').then(({ mkdir }) => mkdir(projectPath));
 
         await expect(
-            execFileAsync(process.execPath, [CLI_PATH, 'create', projectName, '--template', 'basic'], {
+            execFileAsync(process.execPath, [CLI_PATH, 'create', projectName, '--template', 'default'], {
                 cwd: tempDirectory,
                 env: {
                     ...process.env
                 }
             })
         ).rejects.toMatchObject({
-            code: 1
+            code: 1,
+            stdout: expect.stringContaining('Directory "existing-project" already exists.')
         });
+        await expectFileToExist(projectPath);
+    });
+
+    it('fails with an unknown template before creating the project directory', async () => {
+        const projectName = 'unknown-template-project';
+
+        await expect(
+            execFileAsync(process.execPath, [CLI_PATH, 'create', projectName, '--template', 'htpp', '--no-install'], {
+                cwd: tempDirectory,
+                env: {
+                    ...process.env
+                }
+            })
+        ).rejects.toThrow('Unknown template "htpp". Available templates: default, http, http-security, scheduler, http-openapi.');
+        await expect(access(path.join(tempDirectory, projectName))).rejects.toThrow();
     });
 
     it('fails with an invalid project name', async () => {
         await expect(
-            execFileAsync(process.execPath, [CLI_PATH, 'create', 'my project', '--template', 'basic'], {
+            execFileAsync(process.execPath, [CLI_PATH, 'create', 'my project', '--template', 'default'], {
                 cwd: tempDirectory,
                 env: {
                     ...process.env
