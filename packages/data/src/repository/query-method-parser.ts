@@ -49,20 +49,14 @@ export class QueryMethodParser {
 
         const [, prefix, methodBody] = methodMatch;
         const operation: QueryOperation = prefix === 'findOneBy' ? 'findOne' : prefix === 'findBy' ? 'findMany' : prefix === 'countBy' ? 'count' : 'exists';
-        const orderByIndex = methodBody.indexOf('OrderBy');
-        const predicateText = orderByIndex < 0 ? methodBody : methodBody.slice(0, orderByIndex);
-        const orderText = orderByIndex < 0 ? '' : methodBody.slice(orderByIndex + 'OrderBy'.length);
+        const columns = repository.metadata.columns
+            .map((column) => {
+                const propertyPath = column.propertyPath ?? column.propertyName;
+                return { propertyPath, tag: this.toPropertyTag(propertyPath) };
+            })
+            .sort((a, b) => b.tag.length - a.tag.length);
 
-        if (orderByIndex >= 0 && methodBody.indexOf('OrderBy', orderByIndex + 1) >= 0) {
-            throw new Error(`Only one OrderBy clause is allowed in '${methodName}'.`);
-        }
-        if (orderByIndex >= 0 && !orderText) throw new Error(`OrderBy in '${methodName}' must be followed by at least one property.`);
-
-        return {
-            operation,
-            predicateGroups: this.parsePredicates(repository, predicateText, methodName),
-            order: orderText ? this.parseOrder(repository, orderText, methodName) : []
-        };
+        return { operation, ...this.parsePredicates({ body: methodBody, methodName, columns }, 0, 'By') };
     }
 
     /** Removes and validates a final page request argument, when present. */
@@ -87,48 +81,119 @@ export class QueryMethodParser {
             .join('');
     }
 
-    private parsePredicates<T extends ObjectLiteral>(repository: Repository<T>, predicateText: string, methodName: string): ParsedPredicate[][] {
-        if (!predicateText) throw new Error(`A derived query must include at least one property after 'By' in '${methodName}'.`);
+    /**
+     * Reads the predicates that start at `position`, from left to right. Property names are matched against the entity
+     * columns (longest first) before `And`, `Or` and `OrderBy` are read as keywords, so a property such as `originCountry`
+     * or `orderId` is never split. When a match cannot be continued, the next shorter match is tried.
+     */
+    private parsePredicates(context: ParseContext, position: number, previousKeyword: 'By' | 'And' | 'Or'): Pick<ParsedMethod, 'predicateGroups' | 'order'> {
+        const { body } = context;
+        let firstError: Error | undefined;
 
-        return predicateText.split('Or').map((orGroup) => {
-            if (!orGroup) throw new Error(`Empty OR clause in derived query '${methodName}'.`);
-            return orGroup.split('And').map((segment) => {
-                if (!segment) throw new Error(`Empty AND clause in derived query '${methodName}'.`);
+        for (const { predicate, end } of this.matchPredicates(context, position)) {
+            if (end === body.length) return { predicateGroups: [[predicate]], order: [] };
 
-                const matches = repository.metadata.columns.flatMap((column) => {
-                    const propertyPath = column.propertyPath ?? column.propertyName;
-                    const propertyTag = this.toPropertyTag(propertyPath);
-                    if (!segment.startsWith(propertyTag)) return [];
+            for (const keyword of ['OrderBy', 'And', 'Or'] as const) {
+                if (!body.startsWith(keyword, end)) continue;
+                try {
+                    const next = end + keyword.length;
+                    if (keyword === 'OrderBy') return { predicateGroups: [[predicate]], order: this.parseOrder(context, next, 'OrderBy') };
 
-                    const suffix = segment.slice(propertyTag.length);
-                    const operator = suffix ? OPERATORS.find((candidate) => candidate.suffix === suffix) : undefined;
-                    if (suffix && !operator) return [];
-                    return [{ propertyPath, operator: operator?.suffix ?? 'Equal', arity: operator?.arity ?? 1 }];
-                });
+                    const rest = this.parsePredicates(context, next, keyword);
+                    if (keyword === 'And') rest.predicateGroups[0].unshift(predicate);
+                    else rest.predicateGroups.unshift([predicate]);
+                    return rest;
+                } catch (error) {
+                    firstError ??= error as Error;
+                }
+            }
+        }
 
-                if (matches.length === 0) throw new Error(`Cannot parse '${segment}' in derived query '${methodName}'.`);
-                return matches.sort((a, b) => b.propertyPath.length - a.propertyPath.length)[0];
-            });
-        });
+        if (firstError) throw firstError;
+        throw this.predicateError(context, position, previousKeyword);
     }
 
-    private parseOrder<T extends ObjectLiteral>(repository: Repository<T>, orderText: string, methodName: string): ParsedMethod['order'] {
-        return orderText.split('And').map((segment) => {
-            if (!segment) throw new Error(`Empty order field in derived query '${methodName}'.`);
-
-            const matches = repository.metadata.columns.flatMap((column) => {
-                const propertyPath = column.propertyPath ?? column.propertyName;
-                const propertyTag = this.toPropertyTag(propertyPath);
-                if (!segment.startsWith(propertyTag)) return [];
-                const directionText = segment.slice(propertyTag.length);
-                if (directionText && directionText !== 'Asc' && directionText !== 'Desc') return [];
-                return [{ propertyPath, direction: directionText === 'Desc' ? ('DESC' as const) : ('ASC' as const) }];
+    /** Lists the property and operator combinations that start at `position`, longest property first. */
+    private matchPredicates({ body, columns }: ParseContext, position: number): { predicate: ParsedPredicate; end: number }[] {
+        return columns
+            .filter(({ tag }) => body.startsWith(tag, position))
+            .flatMap(({ propertyPath, tag }) => {
+                const operatorPosition = position + tag.length;
+                const operators = OPERATORS.filter(({ suffix }) => body.startsWith(suffix, operatorPosition)).map(({ suffix, arity }) => ({
+                    predicate: { propertyPath, operator: suffix, arity },
+                    end: operatorPosition + suffix.length
+                }));
+                return [...operators, { predicate: { propertyPath, operator: 'Equal' as const, arity: 1 }, end: operatorPosition }];
             });
-
-            if (matches.length === 0) throw new Error(`Cannot parse order field '${segment}' in derived query '${methodName}'.`);
-            return matches.sort((a, b) => b.propertyPath.length - a.propertyPath.length)[0];
-        });
     }
+
+    private predicateError({ body, methodName }: ParseContext, position: number, previousKeyword: 'By' | 'And' | 'Or'): Error {
+        const text = body.slice(position);
+
+        if (/^And(?=[A-Z]|$)/.test(text)) return new Error(`Empty AND clause in derived query '${methodName}'.`);
+        if (!text || text.startsWith('OrderBy')) {
+            if (previousKeyword === 'By') return new Error(`A derived query must include at least one property after 'By' in '${methodName}'.`);
+            return new Error(`Empty ${previousKeyword === 'Or' ? 'OR' : 'AND'} clause in derived query '${methodName}'.`);
+        }
+        if (/^Or(?=[A-Z]|$)/.test(text)) return new Error(`Empty OR clause in derived query '${methodName}'.`);
+
+        return new Error(`Cannot parse '${this.segmentAt(text, /(?:And|Or)(?=[A-Z]|$)/)}' in derived query '${methodName}'.`);
+    }
+
+    /** Reads the order fields that start at `position`, with the same longest-match strategy as the predicates. */
+    private parseOrder(context: ParseContext, position: number, previousKeyword: 'OrderBy' | 'And'): ParsedMethod['order'] {
+        const { body, methodName, columns } = context;
+        let firstError: Error | undefined;
+
+        if (position === body.length) {
+            if (previousKeyword === 'OrderBy') throw new Error(`OrderBy in '${methodName}' must be followed by at least one property.`);
+            throw new Error(`Empty order field in derived query '${methodName}'.`);
+        }
+
+        for (const { propertyPath, tag } of columns.filter(({ tag }) => body.startsWith(tag, position))) {
+            const directionPosition = position + tag.length;
+            for (const direction of ['Desc', 'Asc', ''] as const) {
+                if (!body.startsWith(direction, directionPosition)) continue;
+
+                const field = { propertyPath, direction: direction === 'Desc' ? ('DESC' as const) : ('ASC' as const) };
+                const end = directionPosition + direction.length;
+                if (end === body.length) return [field];
+                if (body.startsWith('OrderBy', end)) {
+                    firstError ??= new Error(`Only one OrderBy clause is allowed in '${methodName}'.`);
+                    continue;
+                }
+                if (!body.startsWith('And', end)) continue;
+
+                try {
+                    return [field, ...this.parseOrder(context, end + 'And'.length, 'And')];
+                } catch (error) {
+                    firstError ??= error as Error;
+                }
+            }
+        }
+
+        if (firstError) throw firstError;
+
+        const text = body.slice(position);
+        if (text.startsWith('OrderBy')) throw new Error(`Only one OrderBy clause is allowed in '${methodName}'.`);
+        if (/^And(?=[A-Z]|$)/.test(text)) throw new Error(`Empty order field in derived query '${methodName}'.`);
+        throw new Error(`Cannot parse order field '${this.segmentAt(text, /And(?=[A-Z]|$)/)}' in derived query '${methodName}'.`);
+    }
+
+    /** Returns the text before the next keyword, used to point at the part of the method name that cannot be parsed. */
+    private segmentAt(text: string, keyword: RegExp): string {
+        const match = keyword.exec(text.slice(1));
+        return match ? text.slice(0, match.index + 1) : text;
+    }
+}
+
+interface ParseContext {
+    /** Method name without its prefix, such as `StatusAndAgeGreaterThan`. */
+    body: string;
+    /** Full method name, used in error messages. */
+    methodName: string;
+    /** Entity properties with their method name tags, longest tag first. */
+    columns: { propertyPath: string; tag: string }[];
 }
 
 export interface PageRequest {
