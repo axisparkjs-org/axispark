@@ -5,3 +5,4 @@ export * from './health';
 export * from './metadata';
 export * from './plugin';
 export * from './repository';
+export * from './transactions';
