@@ -44,6 +44,8 @@ const config = {
         '^@axisparkjs/security/(.*)$': '<rootDir>../../packages/security/src/$1',
         '^@axisparkjs/logger$': '<rootDir>../../packages/logger/src',
         '^@axisparkjs/logger/(.*)$': '<rootDir>../../packages/logger/src/$1',
+        '^@axisparkjs/mcp$': '<rootDir>../../packages/mcp/src',
+        '^@axisparkjs/mcp/(.*)$': '<rootDir>../../packages/mcp/src/$1',
         '^@axisparkjs/openapi$': '<rootDir>../../packages/openapi/src',
         '^@axisparkjs/openapi/(.*)$': '<rootDir>../../packages/openapi/src/$1',
         '^@axisparkjs/rabbitmq$': '<rootDir>../../packages/rabbitmq/src',
