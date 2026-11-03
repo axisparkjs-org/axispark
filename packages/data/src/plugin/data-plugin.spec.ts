@@ -4,6 +4,7 @@ import { DATA_LOGGER, DATA_OPTIONS } from '../di';
 import { DataSourceConnectionManager } from '../connections';
 import { RepositoryDefinition } from '../repository/repository-definition';
 import { RepositoryGenerator } from '../repository/repository-generator';
+import { TransactionManager } from '../transactions/transaction-manager';
 import { DataPlugin } from './data-plugin';
 
 describe('DataPlugin', () => {
@@ -41,9 +42,16 @@ describe('DataPlugin', () => {
         const repositoryGenerator = {
             generate: jest.fn().mockResolvedValue([definition])
         };
+        const transactionManager = {};
         const injector = {
             get: jest.fn(async (token: unknown) =>
-                token === DataSourceConnectionManager ? connectionManager : token === HealthEngine ? healthEngine : repositoryGenerator
+                token === DataSourceConnectionManager
+                    ? connectionManager
+                    : token === HealthEngine
+                      ? healthEngine
+                      : token === TransactionManager
+                        ? transactionManager
+                        : repositoryGenerator
             )
         };
         const container = { bind: jest.fn() };
@@ -65,7 +73,9 @@ describe('DataPlugin', () => {
             token: expect.objectContaining({ description: 'DATA_REPOSITORY_USERREPOSITORY' }),
             useValue: implementation
         });
-        expect(injector.get).toHaveBeenNthCalledWith(3, HealthEngine);
+        expect(injector.get).toHaveBeenNthCalledWith(3, TransactionManager);
+        expect(TransactionManager.getActive()).toBe(transactionManager);
+        expect(injector.get).toHaveBeenNthCalledWith(4, HealthEngine);
         expect(healthEngine.register).toHaveBeenCalledWith(expect.any(DataSourceHealthIndicator), { name: 'data:primary' });
         expect(childLogger.info).toHaveBeenCalledWith('Repositories registered: UserRepository');
         expect(childLogger.info).toHaveBeenCalledWith('Plugin registered');
@@ -74,6 +84,7 @@ describe('DataPlugin', () => {
         await plugin.onStop();
 
         expect(connectionManager.destroyConnections).toHaveBeenCalledTimes(1);
+        expect(() => TransactionManager.getActive()).toThrow('No TransactionManager is available');
         expect(childLogger.info).toHaveBeenCalledWith('Plugin started');
         expect(childLogger.info).toHaveBeenCalledWith('Plugin stopped');
     });

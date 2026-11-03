@@ -1,17 +1,40 @@
-import { DataSource, FindManyOptions, ObjectLiteral, RemoveOptions, Repository } from 'typeorm';
+import { DataSource, EntityManager, FindManyOptions, ObjectLiteral, RemoveOptions, Repository } from 'typeorm';
+import { TransactionContext } from '../transactions/transaction-context';
 
 /**
  * Shared TypeORM-backed repository operations. Extend this class from a class
  * decorated with `@Repository({ entity })` to add application-specific methods
  * and declare generated query methods.
+ *
+ * Inside a transaction opened with `@Transactional` or `TransactionManager`,
+ * every operation runs on the transaction of the repository's data source.
  */
 export abstract class BaseRepository<T extends ObjectLiteral> {
+    private readonly defaultEntityRepository: Repository<T>;
+
     protected constructor(
-        /** TypeORM repository selected for the decorated entity. */
-        protected readonly entityRepository: Repository<T>,
+        entityRepository: Repository<T>,
         /** Data source that owns the decorated entity. */
         protected readonly dataSource: DataSource
-    ) {}
+    ) {
+        this.defaultEntityRepository = entityRepository;
+    }
+
+    /**
+     * TypeORM repository selected for the decorated entity. Inside a transaction
+     * of the repository's data source, it is bound to that transaction.
+     */
+    protected get entityRepository(): Repository<T> {
+        return TransactionContext.resolveRepository<T, Repository<T>>(this.defaultEntityRepository, this.dataSource);
+    }
+
+    /**
+     * Entity manager of the repository's data source. Inside a transaction of
+     * that data source, it is the transactional entity manager.
+     */
+    protected get entityManager(): EntityManager {
+        return TransactionContext.getEntityManager(this.dataSource) ?? this.dataSource.manager;
+    }
 
     /** Saves one entity using the configured TypeORM repository. */
     async save(entity: T): Promise<T>;
