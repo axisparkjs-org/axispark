@@ -7,14 +7,14 @@ import { LogLevel } from '../log-level';
  */
 export class XmlFormatter implements LogFormatter {
     format(entry: LogEntry): string {
-        const metadata = entry.metadata ? `<metadata><![CDATA[${JSON.stringify(entry.metadata)}]]></metadata>` : '';
+        const metadata = entry.metadata ? `<metadata>${this.cdata(JSON.stringify(entry.metadata))}</metadata>` : '';
 
         const error = entry.error
             ? `
     <error>
         <name>${this.escape(entry.error.name)}</name>
         <message>${this.escape(entry.error.message)}</message>
-        <stack><![CDATA[${entry.error.stack}]]></stack>
+        <stack>${this.cdata(entry.error.stack ?? '')}</stack>
     </error>`
             : '';
 
@@ -28,6 +28,11 @@ export class XmlFormatter implements LogFormatter {
     ${metadata}
     ${error}
 </log>`;
+    }
+
+    /** Wraps a value in a CDATA section, splitting any `]]>` so it cannot close the section early. */
+    private cdata(value: string): string {
+        return `<![CDATA[${value.replaceAll(']]>', ']]]]><![CDATA[>')}]]>`;
     }
 
     private escape(value: string): string {
