@@ -18,6 +18,7 @@ export const MetadataKeys = {
 
     /* Core */
     PLUGIN: new MetadataKey('plugin'),
+    HEALTH_CHECK: new MetadataKey('health-check'),
 
     /* Engine */
     PARAMETER: new MetadataKey('parameter'),
@@ -46,6 +47,12 @@ export const MetadataKeys = {
     /* WebSockets */
     WEBSOCKET: new MetadataKey('websocket'),
     WEBSOCKET_EVENT: new MetadataKey('websocket-event'),
+
+    /* Mcp */
+    MCP_SERVER: new MetadataKey('mcp-server'),
+    MCP_TOOL: new MetadataKey('mcp-tool'),
+    MCP_RESOURCE: new MetadataKey('mcp-resource'),
+    MCP_PROMPT: new MetadataKey('mcp-prompt'),
 
     /* Data */
     REPOSITORY: new MetadataKey('repository'),

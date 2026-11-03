@@ -19,7 +19,7 @@ export class HealthController {
      */
     @Get()
     public async getHealth(@Response() response: HttpResponse) {
-        const checks = this.healthEngine.checkAll();
+        const checks = await this.healthEngine.checkAll();
         const appHealth = checks[0];
         const data = {
             status: appHealth.status,
@@ -27,7 +27,7 @@ export class HealthController {
             checks
         };
 
-        response.status(checks.every((check) => check.status === HealthStatus.Healthy) ? 200 : 503).json(data);
+        response.status(appHealth.status === HealthStatus.Healthy ? 200 : 503).json(data);
 
         return new HandledResult();
     }
@@ -39,7 +39,7 @@ export class HealthController {
     @Get('/liveness')
     @HttpCode(200)
     public async getLiveness() {
-        const appHealth = this.healthEngine.checkApp();
+        const appHealth = await this.healthEngine.checkApp();
         return { status: appHealth.status, timestamp: new Date().toISOString() };
     }
 
@@ -50,10 +50,10 @@ export class HealthController {
     @Get('/readiness')
     @HttpCode(200)
     public async getReadiness() {
-        const cheks = this.healthEngine.checkAll();
-        const notHealthy = cheks.filter((check) => check.status !== HealthStatus.Healthy);
-        if (notHealthy.length > 0)
-            throw new ServiceUnavailableError(`Some components are not healthy: ${notHealthy.map((check) => check.component).join(', ')}`);
-        return { status: HealthStatus.Healthy, timestamp: new Date().toISOString() };
+        const checks = await this.healthEngine.checkAll();
+        if (checks[0].status === HealthStatus.Healthy) return { status: HealthStatus.Healthy, timestamp: new Date().toISOString() };
+
+        const notHealthy = checks.filter((check) => check.status !== HealthStatus.Healthy && check.details?.critical !== false);
+        throw new ServiceUnavailableError(`Some components are not healthy: ${notHealthy.map((check) => check.component).join(', ')}`);
     }
 }

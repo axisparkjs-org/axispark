@@ -84,4 +84,32 @@ describe('XmlFormatter', () => {
 
         expect(entry).toEqual(original);
     });
+
+    it('should keep the metadata and the stack inside their CDATA sections', () => {
+        const error = new Error('Boom');
+        error.stack = 'Error: Boom ]]> at line';
+
+        const entry: LogEntry = {
+            timestamp: new Date('2025-01-01T10:00:00.000Z'),
+            level: LogLevel.Error,
+            message: 'Failure',
+            scopes: [],
+            metadata: { payload: 'a]]>b' },
+            error
+        };
+
+        const result = formatter.format(entry);
+
+        expect(result).toContain('<metadata><![CDATA[{"payload":"a]]]]><![CDATA[>b"}]]></metadata>');
+        expect(result).toContain('<stack><![CDATA[Error: Boom ]]]]><![CDATA[> at line]]></stack>');
+    });
+
+    it('should write an empty stack when the error has none', () => {
+        const error = new Error('Boom');
+        delete error.stack;
+
+        const result = formatter.format({ timestamp: new Date(), level: LogLevel.Error, message: 'Failure', scopes: [], error });
+
+        expect(result).toContain('<stack><![CDATA[]]></stack>');
+    });
 });

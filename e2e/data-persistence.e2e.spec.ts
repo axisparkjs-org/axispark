@@ -1,4 +1,4 @@
-import { AxiSparkCore } from '@axisparkjs/core';
+import { AxiSparkCore, HealthEngine } from '@axisparkjs/core';
 import { DataPlugin } from '@axisparkjs/data';
 import { HttpPlugin } from '@axisparkjs/http';
 import { AxiSparkTestFactory } from '@axisparkjs/test';
@@ -31,10 +31,11 @@ const seedCustomers = async () => {
 };
 
 describe.each([
-    { name: 'PostgreSQL', app: appPg },
-    { name: 'MySQL', app: appMySQL },
-    { name: 'MongoDB', app: appMongoDB }
-])('Data Persistence App ($name)', ({ app }) => {
+    { name: 'PostgreSQL', app: appPg, transactional: true },
+    { name: 'MySQL', app: appMySQL, transactional: true },
+    // MongoDB data sources run transactional methods without a transaction.
+    { name: 'MongoDB', app: appMongoDB, transactional: false }
+])('Data Persistence App ($name)', ({ app, transactional }) => {
     let axiSparkCore: AxiSparkCore;
 
     beforeAll(async () => {
@@ -126,6 +127,60 @@ describe.each([
             'alice@example.com'
         ]);
         expect((await responseJson<{ email: string }[]>(secondPageResponse)).map((customer) => customer.email)).toEqual(['bob@example.com']);
+    });
+
+    describe.each([
+        { mode: '@Transactional', path: '/customers/register' },
+        { mode: 'TransactionManager', path: '/customers/register-programmatically' }
+    ])('transactions with $mode', ({ path }) => {
+        it('commits every change, and derived queries see the changes of the transaction', async () => {
+            const response = await postJson(path, customers);
+
+            expect(response.status).toBe(201);
+            expect(await response.json()).toEqual({ registered: 4, active: 3 });
+            expect(await (await fetch(`${baseUrl}/customers`)).json()).toHaveLength(4);
+        });
+
+        it(transactional ? 'rolls back every change when the method throws' : 'keeps the changes when the method throws', async () => {
+            const response = await postJson(`${path}?fail=true`, customers);
+
+            expect(response.status).toBe(409);
+            expect(await (await fetch(`${baseUrl}/customers`)).json()).toHaveLength(transactional ? 0 : 4);
+        });
+    });
+
+    if (transactional) {
+        it('rolls back the nested transactional calls when a database error happens', async () => {
+            await postJson('/customers', [customers[0]]);
+
+            const response = await postJson('/customers/register', [customers[1], customers[0]]);
+
+            expect(response.status).toBe(500);
+            const stored = await responseJson<{ email: string }[]>(await fetch(`${baseUrl}/customers`));
+            expect(stored.map((customer) => customer.email)).toEqual([customers[0].email]);
+        });
+    }
+
+    it('should report the connections as healthy', async () => {
+        const healthEngine = await axiSparkCore.get(HealthEngine);
+
+        const checks = await healthEngine.checkAll();
+
+        expect(checks[0].status).toBe('healthy');
+        expect(checks).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    component: 'data:PRIMARY',
+                    status: 'healthy',
+                    details: expect.objectContaining({ critical: true })
+                }),
+                expect.objectContaining({
+                    component: 'data:REPORTING',
+                    status: 'healthy',
+                    details: expect.objectContaining({ critical: true })
+                })
+            ])
+        );
     });
 
     afterAll(async () => {

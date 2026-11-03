@@ -1,5 +1,6 @@
 import { Injectable } from '@axisparkjs/di';
-import { MongoRepository, ObjectLiteral } from 'typeorm';
+import { DataSource, MongoRepository, ObjectLiteral } from 'typeorm';
+import { TransactionContext } from '../transactions/transaction-context';
 import { BaseRepository } from './base-repository';
 import { ParsedMethod, ParsedPredicate, QueryMethodParser } from './query-method-parser';
 
@@ -13,11 +14,14 @@ export class MongoQueryEngine {
      *
      * @param _object Repository proxy target supplied by the executable interface.
      * @param property Derived method name, for example `findByStatus`.
-     * @param classArgs Mongo repository and owning data source constructor arguments.
+     * @param classArgs Mongo repository and owning data source constructor arguments. Inside a transaction
+     * of that data source, the query runs on the transactional repository.
      * @param methodArgs Predicate values, optionally followed by a `PageRequest`.
      */
     public async execute<T extends ObjectLiteral>(_object: BaseRepository<T>, property: string, classArgs: unknown[], methodArgs: unknown[]): Promise<unknown> {
-        const [entityRepository] = classArgs as [MongoRepository<T>, ...unknown[]];
+        const [defaultEntityRepository, dataSource] = classArgs as [MongoRepository<T>, DataSource];
+        const entityRepository =
+            defaultEntityRepository && dataSource ? TransactionContext.resolveRepository(defaultEntityRepository, dataSource) : defaultEntityRepository;
         if (!entityRepository || typeof entityRepository.find !== 'function' || typeof entityRepository.countDocuments !== 'function') {
             throw new Error('A TypeORM MongoRepository must be the first repository constructor argument for MongoDB queries.');
         }

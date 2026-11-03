@@ -107,4 +107,29 @@ describe('SimpleFormatter', () => {
 
         expect(result).toBe('[2025-01-01T10:00:00.000Z] ERROR Unexpected error\nSomething went wrong');
     });
+
+    it('should append the metadata as JSON after the message', () => {
+        const entry: LogEntry = {
+            timestamp: new Date('2025-01-01T10:00:00.000Z'),
+            level: LogLevel.Info,
+            message: 'Request completed',
+            scopes: ['HttpPlugin'],
+            metadata: { method: 'GET', status: 200 },
+            error: { name: 'Error', message: 'Boom' } as Error
+        };
+
+        expect(formatter.format(entry)).toBe('[2025-01-01T10:00:00.000Z] INFO [HttpPlugin] Request completed {"method":"GET","status":200}\nBoom');
+    });
+
+    it('should not print empty metadata', () => {
+        const entry: LogEntry = {
+            timestamp: new Date('2025-01-01T10:00:00.000Z'),
+            level: LogLevel.Info,
+            message: 'Application started',
+            scopes: [],
+            metadata: {}
+        };
+
+        expect(formatter.format(entry)).toBe('[2025-01-01T10:00:00.000Z] INFO Application started');
+    });
 });

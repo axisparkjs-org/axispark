@@ -38,4 +38,9 @@ export interface KafkaPluginOptions extends PluginOptions {
          */
         producerConfig?: ProducerConfig;
     }[];
+
+    /**
+     * Whether a health check is registered in the `HealthEngine` for each connection. Defaults to `true`.
+     */
+    healthChecks?: boolean;
 }

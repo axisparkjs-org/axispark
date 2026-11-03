@@ -1,4 +1,4 @@
-import { AxiSparkContext, Plugin } from '@axisparkjs/core';
+import { AxiSparkContext, HealthEngine, Plugin } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
 import { DataPluginOptions } from './data-plugin-options';
 import { DATA_LOGGER, DATA_OPTIONS } from '../di';
@@ -6,6 +6,8 @@ import { PluginNotConfiguredError } from '@axisparkjs/core';
 import { Injectable, InjectionToken, Injector } from '@axisparkjs/di';
 import { DataSourceConnectionManager } from '../connections';
 import { RepositoryGenerator } from '../repository/repository-generator';
+import { DataSourceHealthIndicator } from '../health';
+import { TransactionManager } from '../transactions/transaction-manager';
 
 /**
  * A plugin for integrating Data persistence into the application.
@@ -16,6 +18,7 @@ export class DataPlugin extends Plugin {
     protected options: DataPluginOptions;
     private dataSourceConnectionManager: DataSourceConnectionManager;
     private repositoryGenerator: RepositoryGenerator;
+    private transactionManager: TransactionManager;
 
     constructor(
         private logger: Logger,
@@ -38,6 +41,8 @@ export class DataPlugin extends Plugin {
 
         this.registerContainerBindings();
         await this.registerDataSourcesAndRepositories();
+        await this.registerTransactionManager();
+        await this.registerHealthChecks();
 
         await this.logger.info(`Plugin registered`);
     }
@@ -73,6 +78,20 @@ export class DataPlugin extends Plugin {
         await this.logger.info(`Repositories registered: ${repositoryDefinitions.map((r) => r.target.name).join(', ')}`);
     }
 
+    private async registerTransactionManager(): Promise<void> {
+        this.transactionManager = await this.injector.get(TransactionManager);
+        TransactionManager.setActive(this.transactionManager);
+    }
+
+    private async registerHealthChecks(): Promise<void> {
+        if (this.options.healthChecks === false) return;
+
+        const healthEngine = await this.injector.get(HealthEngine);
+        for (const [name, dataSource] of this.dataSourceConnectionManager.getAllConnections().entries()) {
+            healthEngine.register(new DataSourceHealthIndicator(dataSource), { name: `data:${name}` });
+        }
+    }
+
     /** Logs that the Data plugin has started. */
     async onStart(): Promise<void> {
         await this.logger.info(`Plugin started`);
@@ -80,6 +99,7 @@ export class DataPlugin extends Plugin {
 
     /** Closes every TypeORM data source created by this plugin. */
     async onStop(): Promise<void> {
+        if (this.transactionManager) TransactionManager.clearActive(this.transactionManager);
         await this.dataSourceConnectionManager?.destroyConnections();
         await this.logger.info(`Plugin stopped`);
     }

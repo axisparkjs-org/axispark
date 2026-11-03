@@ -3,17 +3,29 @@ import { Body, Controller, Delete, Get, Post, Query } from '@axisparkjs/http';
 import { DataSource, FindManyOptions } from 'typeorm';
 import { Customer } from '../entities/customer';
 import { CustomerRepository } from '../repositories/customer.repository';
+import { CustomerRegistrationService } from '../services/customer-registration.service';
 
 @Controller('customers')
 export class CustomerController {
     constructor(
         private readonly customers: CustomerRepository,
-        @InjectDataSource('PRIMARY') private readonly primaryDataSource: DataSource
+        @InjectDataSource('PRIMARY') private readonly primaryDataSource: DataSource,
+        private readonly registration: CustomerRegistrationService
     ) {}
 
     @Post()
     save(@Body() customers: Customer[]) {
         return this.customers.save(customers);
+    }
+
+    @Post('register')
+    register(@Body() customers: Customer[], @Query('fail') fail?: string) {
+        return this.registration.register(customers, fail === 'true');
+    }
+
+    @Post('register-programmatically')
+    registerProgrammatically(@Body() customers: Customer[], @Query('fail') fail?: string) {
+        return this.registration.registerProgrammatically(customers, fail === 'true');
     }
 
     @Get()

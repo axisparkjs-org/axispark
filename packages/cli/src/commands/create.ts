@@ -3,7 +3,8 @@ import prompts from 'prompts';
 import ora from 'ora';
 import chalk from 'chalk';
 import path from 'node:path';
-import { directoryExists, updatePackageJson } from '../utils/filesystem';
+import { TEMPLATES, validateTemplate } from '../templates';
+import { directoryExists, removeDirectory, updatePackageJson } from '../utils/filesystem';
 import { installDependencies } from '../utils/package-manager';
 import { downloadTemplate } from '../utils/template';
 
@@ -25,6 +26,7 @@ export const createCommand = new Command('create')
         }
 
         validateProjectName(name as string);
+        if (options.template) validateTemplate(options.template as string);
         const projectPath = path.resolve(process.cwd(), name as string);
 
         // 2. Check that the directory does not exist
@@ -34,30 +36,29 @@ export const createCommand = new Command('create')
         }
 
         // 3. Copy the template
-        const spinner = ora('Creating project...').start();
         if (!options.template) {
             const response = await prompts({
                 type: 'select',
                 name: 'template',
                 message: 'Select a template:',
-                choices: [
-                    { title: 'Basic', value: 'default' },
-                    { title: 'HTTP', value: 'http' },
-                    { title: 'HTTP + Security', value: 'http-security' },
-                    { title: 'Scheduler', value: 'scheduler' },
-                    { title: 'HTTP + OpenAPI', value: 'http-openapi' }
-                ],
+                choices: TEMPLATES.map(({ title, value }) => ({ title, value })),
                 initial: 0
             });
             options.template = response.template;
+            validateTemplate(options.template as string);
         }
 
+        const spinner = ora('Creating project...').start();
         try {
             await downloadTemplate(options.template as string, name as string);
             await updatePackageJson(projectPath, name as string);
             spinner.succeed(chalk.green('Project created'));
         } catch (error) {
             spinner.fail(chalk.red('Failed to create project'));
+            // The directory did not exist before, so everything in it was written by this command.
+            await removeDirectory(projectPath).catch(() => {
+                console.log(chalk.yellow(`! Could not remove the directory "${name}". Delete it before running the command again.`));
+            });
             throw error;
         }
 
@@ -79,6 +80,7 @@ export const createCommand = new Command('create')
                 spinner.succeed(chalk.green('Dependencies installed'));
             } catch (error) {
                 spinner.fail(chalk.red('Failed to install dependencies'));
+                console.log(chalk.yellow(`! The project was created. Run "npm install" in "${name}" to install the dependencies.`));
                 throw error;
             }
         }

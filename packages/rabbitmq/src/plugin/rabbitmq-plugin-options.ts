@@ -29,4 +29,9 @@ export interface RabbitMQPluginOptions extends PluginOptions {
          */
         options?: AmqpConnectionManagerOptions;
     }[];
+
+    /**
+     * Whether a health check is registered in the `HealthEngine` for each connection. Defaults to `true`.
+     */
+    healthChecks?: boolean;
 }

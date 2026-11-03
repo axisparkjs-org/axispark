@@ -19,4 +19,9 @@ export interface DataPluginOptions extends PluginOptions {
      * with the first configured source whose metadata contains that entity.
      */
     dataSources: DataSourceConfig[];
+
+    /**
+     * Whether a health check is registered in the `HealthEngine` for each data source. Defaults to `true`.
+     */
+    healthChecks?: boolean;
 }

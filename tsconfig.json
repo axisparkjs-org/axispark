@@ -46,6 +46,8 @@
             "@axisparkjs/kafka/*": ["./packages/kafka/src/*"],
             "@axisparkjs/logger": ["./packages/logger/src"],
             "@axisparkjs/logger/*": ["./packages/logger/src/*"],
+            "@axisparkjs/mcp": ["./packages/mcp/src"],
+            "@axisparkjs/mcp/*": ["./packages/mcp/src/*"],
             "@axisparkjs/openapi": ["./packages/openapi/src"],
             "@axisparkjs/openapi/*": ["./packages/openapi/src/*"],
             "@axisparkjs/rabbitmq": ["./packages/rabbitmq/src"],

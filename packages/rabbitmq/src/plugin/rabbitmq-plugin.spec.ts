@@ -1,16 +1,18 @@
-import { AxiSparkContext, PluginNotConfiguredError } from '@axisparkjs/core';
+import { AxiSparkContext, HealthEngine, PluginNotConfiguredError } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
 import { Injector, InjectionToken } from '@axisparkjs/di';
 import { RabbitMQConnectionManager } from '../connections';
 import { RABBITMQ_LOGGER, RABBITMQ_OPTIONS } from '../di';
 import { RabbitMQPlugin } from './rabbitmq-plugin';
 import { RabbitMQPluginOptions } from './rabbitmq-plugin-options';
+import { RabbitMQHealthIndicator } from '../health';
 
 describe('RabbitMQPlugin', () => {
     let plugin: RabbitMQPlugin;
     let logger: { child: jest.Mock; info: jest.Mock; error: jest.Mock };
     let connectionManager: { createConnections: jest.Mock; destroyConnections: jest.Mock; getAllConnections: jest.Mock };
     let injector: { get: jest.Mock };
+    let healthEngine: { register: jest.Mock };
     let context: { container: { bind: jest.Mock } };
 
     const options = (connections: any[] = []): RabbitMQPluginOptions => ({ connections, plugin: RabbitMQPlugin }) as RabbitMQPluginOptions;
@@ -30,8 +32,9 @@ describe('RabbitMQPlugin', () => {
             getAllConnections: jest.fn().mockReturnValue(new Map())
         };
         injector = {
-            get: jest.fn().mockImplementation((token) => Promise.resolve(token === RabbitMQConnectionManager ? connectionManager : undefined))
+            get: jest.fn().mockImplementation((token) => Promise.resolve(token === RabbitMQConnectionManager ? connectionManager : healthEngine))
         };
+        healthEngine = { register: jest.fn() };
         context = { container: { bind: jest.fn() } };
         plugin = new RabbitMQPlugin(logger as unknown as Logger, injector as unknown as Injector);
     });
@@ -70,7 +73,19 @@ describe('RabbitMQPlugin', () => {
             token: new InjectionToken('RABBITMQ_CONNECTION_REPORTS'),
             useValue: reports
         });
+        expect(injector.get).toHaveBeenCalledWith(HealthEngine);
+        expect(healthEngine.register).toHaveBeenCalledWith(expect.any(RabbitMQHealthIndicator), { name: 'rabbitmq:PRIMARY' });
+        expect(healthEngine.register).toHaveBeenCalledWith(expect.any(RabbitMQHealthIndicator), { name: 'rabbitmq:REPORTS' });
         expect(logger.info).toHaveBeenCalledWith('Plugin registered');
+    });
+
+    it('does not register health checks when they are disabled', async () => {
+        connectionManager.getAllConnections.mockReturnValue(new Map([['PRIMARY', {}]]));
+
+        await plugin.onRegister(appContext(), { ...options([{ name: 'PRIMARY', url: 'amqp://primary' }]), healthChecks: false });
+
+        expect(injector.get).not.toHaveBeenCalledWith(HealthEngine);
+        expect(healthEngine.register).not.toHaveBeenCalled();
     });
 
     it('propagates connection startup failures without logging successful registration', async () => {

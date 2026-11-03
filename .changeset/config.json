@@ -15,6 +15,7 @@
         "@axisparkjs/http-fastify",
         "@axisparkjs/kafka",
         "@axisparkjs/logger",
+        "@axisparkjs/mcp",
         "@axisparkjs/openapi",
         "@axisparkjs/rabbitmq",
         "@axisparkjs/schedule",

@@ -112,6 +112,83 @@ describe('QueryMethodParser', () => {
         expect(parser.parse(repository, 'findByStatusOrderByName').order).toEqual([{ propertyPath: 'name', direction: 'ASC' }]);
     });
 
+    describe('property names that contain keywords', () => {
+        beforeEach(() => {
+            repository = {
+                metadata: {
+                    columns: ['status', 'originCountry', 'orderId', 'androidVersion', 'customerOrdersCount', 'brandAndroid', 'orderByDate', 'brand.origin'].map(
+                        (propertyPath) => ({ propertyName: propertyPath.split('.').pop(), propertyPath })
+                    )
+                }
+            } as unknown as Repository<TestEntity>;
+        });
+
+        it.each([
+            ['findByOriginCountry', 'originCountry'],
+            ['findByOrderId', 'orderId'],
+            ['findByAndroidVersion', 'androidVersion'],
+            ['findByCustomerOrdersCount', 'customerOrdersCount'],
+            ['findByOrderByDate', 'orderByDate'],
+            ['findByBrandOrigin', 'brand.origin']
+        ])('parses %s as a single predicate', (methodName, propertyPath) => {
+            expect(parser.parse(repository, methodName)).toEqual<ParsedMethod>({
+                operation: 'findMany',
+                predicateGroups: [[{ propertyPath, operator: 'Equal', arity: 1 }]],
+                order: []
+            });
+        });
+
+        it('still reads And, Or and OrderBy as keywords between properties', () => {
+            expect(parser.parse(repository, 'findByOriginCountryOrStatus').predicateGroups).toEqual([
+                [{ propertyPath: 'originCountry', operator: 'Equal', arity: 1 }],
+                [{ propertyPath: 'status', operator: 'Equal', arity: 1 }]
+            ]);
+            expect(parser.parse(repository, 'findByStatusOrOrderIdInAndAndroidVersionGreaterThan').predicateGroups).toEqual([
+                [{ propertyPath: 'status', operator: 'Equal', arity: 1 }],
+                [
+                    { propertyPath: 'orderId', operator: 'In', arity: 1 },
+                    { propertyPath: 'androidVersion', operator: 'GreaterThan', arity: 1 }
+                ]
+            ]);
+        });
+
+        it('parses order fields that contain keywords', () => {
+            expect(parser.parse(repository, 'findByStatusOrderByBrandAndroidAsc')).toEqual<ParsedMethod>({
+                operation: 'findMany',
+                predicateGroups: [[{ propertyPath: 'status', operator: 'Equal', arity: 1 }]],
+                order: [{ propertyPath: 'brandAndroid', direction: 'ASC' }]
+            });
+            expect(parser.parse(repository, 'findByOrderIdOrderByOrderByDateDescAndOriginCountry').order).toEqual([
+                { propertyPath: 'orderByDate', direction: 'DESC' },
+                { propertyPath: 'originCountry', direction: 'ASC' }
+            ]);
+        });
+
+        it('tries a shorter property when the longest match cannot be continued', () => {
+            repository.metadata.columns.push({ propertyName: 'statusOrder', propertyPath: 'statusOrder' } as any);
+
+            expect(parser.parse(repository, 'findByStatusOrderByOrderId')).toEqual<ParsedMethod>({
+                operation: 'findMany',
+                predicateGroups: [[{ propertyPath: 'status', operator: 'Equal', arity: 1 }]],
+                order: [{ propertyPath: 'orderId', direction: 'ASC' }]
+            });
+            expect(parser.parse(repository, 'findByStatusOrder').predicateGroups).toEqual([[{ propertyPath: 'statusOrder', operator: 'Equal', arity: 1 }]]);
+        });
+
+        it('keeps the error messages for invalid method names', () => {
+            expect(() => parser.parse(repository, 'findByOriginCity')).toThrow("Cannot parse 'OriginCity' in derived query 'findByOriginCity'.");
+            expect(() => parser.parse(repository, 'findByStatusOrOriginCity')).toThrow("Cannot parse 'OriginCity'");
+            expect(() => parser.parse(repository, 'findByOrStatus')).toThrow('Empty OR clause');
+            expect(() => parser.parse(repository, 'findByAndStatus')).toThrow('Empty AND clause');
+            expect(() => parser.parse(repository, 'findByStatusOr')).toThrow('Empty OR clause');
+            expect(() => parser.parse(repository, 'findByStatusAnd')).toThrow('Empty AND clause');
+            expect(() => parser.parse(repository, 'findByStatusAndOrderByOrderId')).toThrow('Empty AND clause');
+            expect(() => parser.parse(repository, 'findByStatusOrderByOriginCity')).toThrow("Cannot parse order field 'OriginCity'");
+            expect(() => parser.parse(repository, 'findByStatusOrderByAndOrderId')).toThrow('Empty order field');
+            expect(() => parser.parse(repository, 'findByStatusOrderByOrderIdOrderByStatus')).toThrow('Only one OrderBy clause');
+        });
+    });
+
     it('extracts a valid page request and leaves ordinary method arguments untouched', () => {
         const args = ['active', { page: 2, size: 10 }];
         expect(parser.extractPageRequest('findMany', args)).toEqual({ methodArgs: ['active'], pageRequest: { page: 2, size: 10 } });

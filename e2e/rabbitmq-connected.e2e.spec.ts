@@ -1,5 +1,5 @@
 import { AxiSparkTestFactory } from '@axisparkjs/test';
-import { AxiSparkCore } from '@axisparkjs/core';
+import { AxiSparkCore, HealthEngine } from '@axisparkjs/core';
 import { RabbitMQPlugin } from '@axisparkjs/rabbitmq';
 import { app } from '@axisparkjs/samples/rabbitmq-connected/src/app';
 import { Logger } from '@axisparkjs/logger';
@@ -54,6 +54,33 @@ describe('RabbitMQ Connected App', () => {
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('RabbitMQ Connection Manager has 3 connections'));
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('RabbitMQ Connection Manager has connections: 1, 2, 3'));
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Connection 1 compared to Manager: true'));
+    });
+
+    it('should report the broken connection as unhealthy', async () => {
+        const healthEngine = await axiSparkCore.get(HealthEngine);
+
+        const checks = await healthEngine.checkAll();
+
+        expect(checks[0].status).toBe('unhealthy');
+        expect(checks).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    component: 'rabbitmq:1',
+                    status: 'healthy',
+                    details: expect.objectContaining({ critical: true })
+                }),
+                expect.objectContaining({
+                    component: 'rabbitmq:2',
+                    status: 'healthy',
+                    details: expect.objectContaining({ critical: true })
+                }),
+                expect.objectContaining({
+                    component: 'rabbitmq:3',
+                    status: 'unhealthy',
+                    details: expect.objectContaining({ critical: true, error: expect.any(String) })
+                })
+            ])
+        );
     });
 
     afterAll(async () => {

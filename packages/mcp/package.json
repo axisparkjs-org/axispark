@@ -1,0 +1,38 @@
+{
+    "name": "@axisparkjs/mcp",
+    "version": "1.4.0",
+    "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/mcp",
+    "author": "Pablo Gálvez Ortuño",
+    "license": "Apache-2.0",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "files": [
+        "lib",
+        "package.json",
+        "PACKAGE.md",
+        "README.md",
+        "LICENSE",
+        "tsconfig.build.json"
+    ],
+    "scripts": {
+        "build": "tsc -b tsconfig.build.json",
+        "prettier": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore '**/*.{ts,js,mjs,json,md,html,css,scss}' --check",
+        "lint": "eslint --config ../../eslint.config.mjs .",
+        "test:unit": "export NODE_ENV=test && jest --config jest.config.ts",
+        "sonar": "sonar-scanner -Dsonar.projectKey=axisparkjs-mcp"
+    },
+    "engines": {
+        "node": ">= 24"
+    },
+    "dependencies": {
+        "@axisparkjs/common": "1.4.0",
+        "@axisparkjs/core": "1.4.0",
+        "@axisparkjs/di": "1.4.0",
+        "@axisparkjs/engine": "1.4.0",
+        "@axisparkjs/http": "1.4.0",
+        "@axisparkjs/logger": "1.4.0",
+        "@modelcontextprotocol/node": "^2.1.2",
+        "@modelcontextprotocol/server": "^2.4.0",
+        "class-validator": "^0.15.1"
+    }
+}
