@@ -1,6 +1,6 @@
 # `@axisparkjs/data`
 
-TypeORM integration for AxiSpark.js. It creates named data sources and generates repositories with derived query methods.
+TypeORM integration for AxiSpark.js. It creates named data sources, generates repositories with derived query methods and runs them in transactions.
 
 The complete guide is in the [Data Plugin documentation](https://axisparkjs.com/docs/category/data-plugin).
 
@@ -10,6 +10,7 @@ The complete guide is in the [Data Plugin documentation](https://axisparkjs.com/
 - Discovers classes decorated with `@Repository()` and binds them in the dependency injection container.
 - Provides `BaseRepository` with the common CRUD operations of the entity.
 - Implements derived queries from method names, such as `findByStatusOrderByAgeDesc` or `countByStatus`, for SQL databases and MongoDB.
+- Runs several repository calls in one transaction with the `@Transactional` decorator or the `TransactionManager` service.
 
 ## Install and register
 
@@ -50,5 +51,23 @@ export class CustomerRepository extends BaseRepository<Customer> {
     declare findOneByEmail: (email: string) => Promise<Customer | null>;
 
     declare countByStatus: (status: string) => Promise<number>;
+}
+```
+
+Run several repository calls in one transaction. If the method throws, none of its changes are persisted:
+
+```ts title="customer.service.ts"
+import { Transactional } from '@axisparkjs/data';
+import { Injectable } from '@axisparkjs/di';
+
+@Injectable()
+export class CustomerService {
+    constructor(private readonly customers: CustomerRepository) {}
+
+    @Transactional({ dataSource: 'PRIMARY' })
+    async register(customers: Customer[]): Promise<number> {
+        await this.customers.save(customers);
+        return this.customers.countByStatus('active');
+    }
 }
 ```

@@ -1,4 +1,5 @@
 import { Brackets, ObjectLiteral, Repository } from 'typeorm';
+import { TransactionContext } from '../transactions/transaction-context';
 import { BaseRepository } from './base-repository';
 import { PageRequest } from './query-engine';
 import { QueryMethodParser } from './query-method-parser';
@@ -142,5 +143,34 @@ describe('SQLQueryEngine', () => {
         await expect(engine.execute({} as BaseRepository<TestEntity>, 'findByStatus', [], ['active'])).rejects.toThrow(
             'must be the first repository constructor argument'
         );
+    });
+
+    it('runs the query on the transactional repository when a transaction is open on the data source', async () => {
+        const dataSource = { options: { type: 'postgres' } } as any;
+        const transactionalQueryBuilder = { ...queryBuilder, getMany: jest.fn().mockResolvedValue([{ id: 1 }]) };
+        const transactionalRepository = { ...repository, createQueryBuilder: jest.fn().mockReturnValue(transactionalQueryBuilder) };
+        const manager = { getRepository: jest.fn().mockReturnValue(transactionalRepository) } as any;
+        (repository as any).target = 'TestEntity';
+
+        const result = await TransactionContext.run(dataSource, manager, () =>
+            engine.execute({} as BaseRepository<TestEntity>, 'findByStatus', [repository, dataSource], ['active'])
+        );
+
+        expect(result).toEqual([{ id: 1 }]);
+        expect(manager.getRepository).toHaveBeenCalledWith('TestEntity');
+        expect(repository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('uses the default repository outside a transaction of its data source', async () => {
+        const dataSource = { options: { type: 'postgres' } } as any;
+        const otherDataSource = { options: { type: 'postgres' } } as any;
+        const manager = { getRepository: jest.fn() } as any;
+
+        await TransactionContext.run(otherDataSource, manager, () =>
+            engine.execute({} as BaseRepository<TestEntity>, 'findByStatus', [repository, dataSource], ['active'])
+        );
+
+        expect(manager.getRepository).not.toHaveBeenCalled();
+        expect(repository.createQueryBuilder).toHaveBeenCalledWith('entity');
     });
 });

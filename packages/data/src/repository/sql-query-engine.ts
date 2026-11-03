@@ -1,5 +1,6 @@
 import { Injectable } from '@axisparkjs/di';
-import { Brackets, ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
+import { Brackets, DataSource, ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
+import { TransactionContext } from '../transactions/transaction-context';
 import { BaseRepository } from './base-repository';
 import { ParsedMethod, ParsedPredicate, QueryMethodParser } from './query-method-parser';
 
@@ -13,11 +14,14 @@ export class SQLQueryEngine {
      *
      * @param _object Repository proxy target supplied by the executable interface.
      * @param property Derived method name, for example `findByStatus`.
-     * @param classArgs Repository and owning data source constructor arguments.
+     * @param classArgs Repository and owning data source constructor arguments. Inside a transaction of
+     * that data source, the query runs on the transactional repository.
      * @param methodArgs Predicate values, optionally followed by a `PageRequest`.
      */
     public async execute<T extends ObjectLiteral>(_object: BaseRepository<T>, property: string, classArgs: unknown[], methodArgs: unknown[]): Promise<unknown> {
-        const [entityRepository] = classArgs as [Repository<T>, ...unknown[]];
+        const [defaultEntityRepository, dataSource] = classArgs as [Repository<T>, DataSource];
+        const entityRepository =
+            defaultEntityRepository && dataSource ? TransactionContext.resolveRepository(defaultEntityRepository, dataSource) : defaultEntityRepository;
         if (!entityRepository || typeof entityRepository.createQueryBuilder !== 'function') {
             throw new Error('A TypeORM Repository must be the first repository constructor argument.');
         }

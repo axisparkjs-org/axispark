@@ -1,4 +1,5 @@
 import { MongoRepository, ObjectLiteral } from 'typeorm';
+import { TransactionContext } from '../transactions/transaction-context';
 import { BaseRepository } from './base-repository';
 import { MongoQueryEngine } from './mongo-query-engine';
 import { PageRequest, QueryMethodParser } from './query-method-parser';
@@ -107,5 +108,20 @@ describe('MongoQueryEngine', () => {
 
     it('rejects an invalid repository argument', async () => {
         await expect(engine.execute({} as BaseRepository<TestDocument>, 'findById', [], [1])).rejects.toThrow('MongoRepository must be the first');
+    });
+
+    it('runs the query on the transactional Mongo repository when a transaction is open on the data source', async () => {
+        const dataSource = { options: { type: 'mongodb' } } as any;
+        const transactionalRepository = { ...repository, find: jest.fn().mockResolvedValue([{ id: 1 }]) };
+        const manager = { getMongoRepository: jest.fn().mockReturnValue(transactionalRepository) } as any;
+        (repository as any).target = 'TestDocument';
+
+        const result = await TransactionContext.run(dataSource, manager, () =>
+            engine.execute({} as BaseRepository<TestDocument>, 'findByStatus', [repository, dataSource], ['active'])
+        );
+
+        expect(result).toEqual([{ id: 1 }]);
+        expect(manager.getMongoRepository).toHaveBeenCalledWith('TestDocument');
+        expect(repository.find).not.toHaveBeenCalled();
     });
 });
