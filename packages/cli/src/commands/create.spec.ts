@@ -5,7 +5,7 @@ import { createCommand } from './create';
 import prompts from 'prompts';
 import ora from 'ora';
 
-import { directoryExists, updatePackageJson } from '../utils/filesystem';
+import { directoryExists, removeDirectory, updatePackageJson } from '../utils/filesystem';
 
 import { installDependencies } from '../utils/package-manager';
 import { downloadTemplate } from '../utils/template';
@@ -23,6 +23,7 @@ jest.mock('ora', () => ({
 jest.mock('../utils/filesystem', () => ({
     directoryExists: jest.fn(),
     copyTemplate: jest.fn(),
+    removeDirectory: jest.fn(),
     updatePackageJson: jest.fn()
 }));
 
@@ -38,6 +39,8 @@ const mockedPrompts = prompts as jest.MockedFunction<typeof prompts>;
 const mockedOra = ora as jest.MockedFunction<typeof ora>;
 
 const mockedDirectoryExists = directoryExists as jest.MockedFunction<typeof directoryExists>;
+
+const mockedRemoveDirectory = removeDirectory as jest.MockedFunction<typeof removeDirectory>;
 
 const mockedUpdatePackageJson = updatePackageJson as jest.MockedFunction<typeof updatePackageJson>;
 
@@ -70,6 +73,7 @@ describe('create command', () => {
 
         mockedDirectoryExists.mockResolvedValue(false);
         mockedUpdatePackageJson.mockResolvedValue(undefined);
+        mockedRemoveDirectory.mockResolvedValue(undefined);
         mockedDownloadTemplate.mockResolvedValue(undefined);
         mockedInstallDependencies.mockResolvedValue(undefined);
     });
@@ -443,6 +447,95 @@ describe('create command', () => {
             ).rejects.toThrow('Download failed');
 
             expect(mockedInstallDependencies).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('project cleanup', () => {
+        const projectPath = path.resolve(process.cwd(), 'my-project');
+
+        it('removes the project directory when the template download fails', async () => {
+            mockedDownloadTemplate.mockRejectedValueOnce(new Error('EACCES: permission denied'));
+
+            await expect(runCommand('my-project', { template: 'http', noInstall: true })).rejects.toThrow('EACCES: permission denied');
+
+            expect(mockedRemoveDirectory).toHaveBeenCalledWith(projectPath);
+        });
+
+        it('removes the project directory when package.json cannot be updated', async () => {
+            mockedUpdatePackageJson.mockRejectedValueOnce(new SyntaxError('Unexpected token'));
+
+            await expect(runCommand('my-project', { template: 'http', noInstall: true })).rejects.toThrow('Unexpected token');
+
+            expect(mockedRemoveDirectory).toHaveBeenCalledWith(projectPath);
+        });
+
+        it('removes the directory after the spinner fails', async () => {
+            const calls: string[] = [];
+            mockedDownloadTemplate.mockRejectedValueOnce(new Error('Download failed'));
+            spinner.fail.mockImplementation(() => calls.push('fail'));
+            mockedRemoveDirectory.mockImplementation(async () => {
+                calls.push('remove');
+            });
+
+            await expect(runCommand('my-project', { template: 'http', noInstall: true })).rejects.toThrow('Download failed');
+
+            expect(calls).toEqual(['fail', 'remove']);
+        });
+
+        it('shows the original error when the directory cannot be removed', async () => {
+            mockedDownloadTemplate.mockRejectedValueOnce(new Error('Download failed'));
+            mockedRemoveDirectory.mockRejectedValueOnce(new Error('EBUSY'));
+
+            await expect(runCommand('my-project', { template: 'http', noInstall: true })).rejects.toThrow('Download failed');
+
+            expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Could not remove the directory "my-project"'));
+        });
+
+        it('never removes a directory that already existed', async () => {
+            mockedDirectoryExists.mockResolvedValue(true);
+            processExitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {
+                throw new Error('process.exit');
+            }) as never);
+
+            await expect(runCommand('my-project', { template: 'http' })).rejects.toThrow('process.exit');
+
+            expect(mockedRemoveDirectory).not.toHaveBeenCalled();
+        });
+
+        it('keeps the project and suggests npm install when only the installation fails', async () => {
+            mockedInstallDependencies.mockRejectedValueOnce(new Error('npm install failed'));
+
+            await expect(runCommand('my-project', { template: 'http', install: true })).rejects.toThrow('npm install failed');
+
+            expect(mockedRemoveDirectory).not.toHaveBeenCalled();
+            expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Run "npm install" in "my-project"'));
+        });
+
+        it('does not remove anything when the project is created', async () => {
+            await runCommand('my-project', { template: 'http', noInstall: true });
+
+            expect(mockedRemoveDirectory).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('template validation', () => {
+        it('rejects an unknown --template before checking the directory or downloading anything', async () => {
+            await expect(runCommand('my-project', { template: 'htpp' })).rejects.toThrow(
+                'Unknown template "htpp". Available templates: default, http, http-security, scheduler, http-openapi.'
+            );
+
+            expect(mockedDirectoryExists).not.toHaveBeenCalled();
+            expect(mockedOra).not.toHaveBeenCalled();
+            expect(mockedDownloadTemplate).not.toHaveBeenCalled();
+            expect(mockedRemoveDirectory).not.toHaveBeenCalled();
+        });
+
+        it('rejects a missing template when the prompt is cancelled', async () => {
+            mockedPrompts.mockResolvedValueOnce({});
+
+            await expect(runCommand('my-project')).rejects.toThrow('Unknown template "undefined"');
+
+            expect(mockedDownloadTemplate).not.toHaveBeenCalled();
         });
     });
 
