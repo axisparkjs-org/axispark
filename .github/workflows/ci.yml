@@ -12,7 +12,14 @@ on:
 
 jobs:
   verify:
+    name: verify (Node.js ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      # A failure in one Node.js version does not cancel the other one.
+      fail-fast: false
+      matrix:
+        # Supported Node.js versions: 24 (Maintenance LTS) and 26 (Active LTS).
+        node-version: [24, 26]
     env:
       # Turborepo compares against the pull request base to calculate the affected packages.
       TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
@@ -47,7 +54,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: ${{ matrix.node-version }}
           cache: npm
 
       - name: Install dependencies
@@ -78,15 +85,16 @@ jobs:
         if: steps.changes.outputs.e2e == 'true'
         run: npm run ci:test:e2e
 
+      # SonarQube runs only in the Node.js 26 job, so a single analysis is uploaded per push to main.
       - name: Set up JDK 21
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: matrix.node-version == 26 && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Run SonarQube analysis
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: matrix.node-version == 26 && github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: >
             npm run sonar -- -- 
             -Dsonar.host.url=https://sonarcloud.io 

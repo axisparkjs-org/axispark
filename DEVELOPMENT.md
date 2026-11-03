@@ -4,7 +4,7 @@ This guide covers the development workflow of the `axispark` monorepo. Before co
 
 ## Development Setup
 
-You need [Node.js](https://nodejs.org/) version 24 or higher. Follow these steps:
+You need [Node.js](https://nodejs.org/) version 24 or higher. AxiSpark.js supports Node.js 24 (Maintenance LTS) and Node.js 26 (Active LTS): the CI pipeline runs prettier, lint, unit tests, build and e2e tests in both versions, and the packages are published with Node.js 26. Follow these steps:
 
 - Fork the repository on GitHub.
 - Clone your forked repository to your local machine.
