@@ -7,6 +7,7 @@ The complete guide is in the [Logging documentation](https://axisparkjs.com/docs
 ## What the package does
 
 - Provides the injectable `Logger` with `trace`, `debug`, `info`, `warn`, `error` and `fatal` levels, and scoped child loggers.
+- Attaches structured metadata to each entry, passed to the level methods or bound to a child logger.
 - Writes logs through transports: console, file, daily and rotating files, streams, HTTP, webhooks, memory or none.
 - Formats entries with the simple, pretty, JSON, XML or template formatters.
 
@@ -47,4 +48,15 @@ export class OrderService {
         await this.logger.info('Order created');
     }
 }
+```
+
+Pass metadata to any level method, or bind it to a child logger so it is added to every entry. The values passed to the call override the bound values with the same key:
+
+```ts
+await logger.info('Request completed', { method: 'GET', path: '/users', status: 200, durationMs: 12 });
+await logger.error('Payment failed', error, { orderId });
+
+const requestLogger = logger.child('HttpPlugin', { requestId });
+await requestLogger.info('Route matched', { route: '/users/:id' });
+// metadata: { requestId, route: '/users/:id' }
 ```
