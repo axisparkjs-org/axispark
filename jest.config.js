@@ -42,6 +42,8 @@ const config = {
         '^@axisparkjs/kafka/(.*)$': '<rootDir>../../packages/kafka/src/$1',
         '^@axisparkjs/security$': '<rootDir>../../packages/security/src',
         '^@axisparkjs/security/(.*)$': '<rootDir>../../packages/security/src/$1',
+        '^@axisparkjs/security-jwt$': '<rootDir>../../packages/security-jwt/src',
+        '^@axisparkjs/security-jwt/(.*)$': '<rootDir>../../packages/security-jwt/src/$1',
         '^@axisparkjs/logger$': '<rootDir>../../packages/logger/src',
         '^@axisparkjs/logger/(.*)$': '<rootDir>../../packages/logger/src/$1',
         '^@axisparkjs/openapi$': '<rootDir>../../packages/openapi/src',

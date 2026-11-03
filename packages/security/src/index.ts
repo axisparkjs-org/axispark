@@ -1,3 +1,4 @@
+export * from './authenticators';
 export * from './decorators';
 export * from './di';
 export * from './engine';

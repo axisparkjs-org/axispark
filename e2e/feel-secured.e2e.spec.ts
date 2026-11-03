@@ -73,6 +73,18 @@ describe('Feel Secured App', () => {
         await expect(authenticated.json()).resolves.toEqual({ access: 'authenticated' });
     });
 
+    it('reads the Bearer scheme case-insensitively and ignores other schemes', async () => {
+        const lowercase = await fetch(`${baseUrl}/access/required`, {
+            headers: { Authorization: 'bearer alice-token' }
+        });
+        expect(lowercase.status).toBe(200);
+
+        const otherScheme = await fetch(`${baseUrl}/access/required`, {
+            headers: { Authorization: 'Basic alice-token' }
+        });
+        expect(otherScheme.status).toBe(401);
+    });
+
     it('applies a method policy and distinguishes forbidden from unauthenticated', async () => {
         const anonymous = await fetch(`${baseUrl}/access/admin`);
         expect(anonymous.status).toBe(401);

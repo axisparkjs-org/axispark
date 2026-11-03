@@ -19,6 +19,7 @@
         "@axisparkjs/rabbitmq",
         "@axisparkjs/schedule",
         "@axisparkjs/security",
+        "@axisparkjs/security-jwt",
         "@axisparkjs/test",
         "@axisparkjs/websocket",
         "@axisparkjs/websocket-socketio"

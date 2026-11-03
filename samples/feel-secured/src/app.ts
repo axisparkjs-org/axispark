@@ -3,7 +3,7 @@ import { HttpPlugin } from '@axisparkjs/http';
 import { HttpPluginOptionsFactory } from '@axisparkjs/http-fastify';
 import { ConsoleTransport, LogLevel, SimpleFormatter } from '@axisparkjs/logger';
 import { SecurityPlugin, SecurityPluginOptionsFactory } from '@axisparkjs/security';
-import { BearerAuthenticator } from './authenticator';
+import { TokenAuthenticator } from './authenticator';
 import './controllers/access.controller';
 import './controllers/document.controller';
 import './security-error.filter';
@@ -25,7 +25,7 @@ app.use(
     SecurityPluginOptionsFactory.create({
         authenticator: {
             strategy: 'selected',
-            selected: [BearerAuthenticator]
+            selected: [TokenAuthenticator]
         }
     })
 );

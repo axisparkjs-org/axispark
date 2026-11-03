@@ -1,0 +1,32 @@
+{
+    "name": "@axisparkjs/security-jwt",
+    "version": "1.3.1",
+    "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/security-jwt",
+    "author": "Pablo G\u00e1lvez Ortu\u00f1o",
+    "license": "Apache-2.0",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "files": [
+        "lib",
+        "package.json",
+        "PACKAGE.md",
+        "README.md",
+        "LICENSE",
+        "tsconfig.build.json"
+    ],
+    "scripts": {
+        "build": "tsc -b tsconfig.build.json",
+        "prettier": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore '**/*.{ts,js,mjs,json,md,html,css,scss}' --check",
+        "lint": "eslint --config ../../eslint.config.mjs .",
+        "test:unit": "export NODE_ENV=test && jest --config jest.config.ts",
+        "sonar": "sonar-scanner -Dsonar.projectKey=axisparkjs-security-jwt"
+    },
+    "engines": {
+        "node": ">= 24"
+    },
+    "dependencies": {
+        "@axisparkjs/engine": "1.3.1",
+        "@axisparkjs/security": "1.3.1",
+        "jose": "^6.2.15"
+    }
+}

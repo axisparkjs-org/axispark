@@ -42,6 +42,8 @@
             "@axisparkjs/http-fastify/*": ["./packages/http-fastify/src/*"],
             "@axisparkjs/security": ["./packages/security/src"],
             "@axisparkjs/security/*": ["./packages/security/src/*"],
+            "@axisparkjs/security-jwt": ["./packages/security-jwt/src"],
+            "@axisparkjs/security-jwt/*": ["./packages/security-jwt/src/*"],
             "@axisparkjs/kafka": ["./packages/kafka/src"],
             "@axisparkjs/kafka/*": ["./packages/kafka/src/*"],
             "@axisparkjs/logger": ["./packages/logger/src"],

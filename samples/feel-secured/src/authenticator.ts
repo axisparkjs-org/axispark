@@ -1,7 +1,5 @@
 import { Injectable } from '@axisparkjs/di';
-import { ExecutionContext } from '@axisparkjs/engine';
-import { HttpContext } from '@axisparkjs/http';
-import { Authenticator } from '@axisparkjs/security';
+import { BearerAuthenticator } from '@axisparkjs/security';
 
 export interface Principal {
     id: string;
@@ -9,19 +7,16 @@ export interface Principal {
     active: boolean;
 }
 
-const principals: Record<string, Principal> = {
-    'alice-token': { id: 'alice', role: 'reader', active: true },
-    'admin-token': { id: 'admin', role: 'admin', active: true },
-    'disabled-token': { id: 'disabled', role: 'reader', active: false }
-};
+const principals = new Map<string, Principal>([
+    ['alice-token', { id: 'alice', role: 'reader', active: true }],
+    ['admin-token', { id: 'admin', role: 'admin', active: true }],
+    ['disabled-token', { id: 'disabled', role: 'reader', active: false }]
+]);
 
+/** Opaque Bearer tokens. `BearerAuthenticator` reads `Authorization: Bearer <token>`, so only the lookup is written here. */
 @Injectable()
-export class BearerAuthenticator extends Authenticator {
-    async authenticate(executionContext: ExecutionContext): Promise<Principal | undefined> {
-        const context = executionContext as HttpContext;
-        const authorization = context.request.getHeader('authorization');
-        if (typeof authorization !== 'string' || !authorization.startsWith('Bearer ')) return undefined;
-
-        return principals[authorization.slice('Bearer '.length)];
+export class TokenAuthenticator extends BearerAuthenticator<Principal> {
+    protected async validate(token: string): Promise<Principal | undefined> {
+        return principals.get(token);
     }
 }

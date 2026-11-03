@@ -1,18 +1,19 @@
 # `@axisparkjs/security`
 
-Transport-neutral authentication and authorization primitives for AxiSpark. The package provides the execution pipeline, dependency-injection integration, security context, and error types. Your application supplies the credential authenticators and authorization policies, so the package does not dictate token formats, user or role models, sessions, persistence, or policy language.
+Transport-neutral authentication and authorization primitives for AxiSpark. The package provides the execution pipeline, dependency-injection integration, security context, error types, and base authenticators for the most common HTTP credentials. Your application decides how a credential becomes a principal and supplies the authorization policies, so the package does not dictate user or role models, sessions, persistence, or policy language.
 
 The complete guide is in the [Security Plugin documentation](https://axisparkjs.com/docs/category/security-plugin).
 
 ## What the package does
 
 - Runs injectable authenticators and stores the first successful identity value in the execution context.
+- Provides base authenticators for Bearer tokens, Basic credentials and API keys, and a `safeCompare` helper. JSON Web Tokens are verified by `JwtAuthenticator` from `@axisparkjs/security-jwt`.
 - Marks class and method handlers as secured with `@Secured()`.
 - Resolves and evaluates authorization policies, combining all decisions with logical AND.
 - Adds global middleware and guards to the AxiSpark pipeline for every supported execution transport.
 - Emits framework-neutral authentication and authorization errors that an adapter or application can map to transport responses.
 
-It does not implement a built-in credential scheme. Implement a subclass of `Authenticator` for bearer tokens, API keys, sessions, mutual TLS identities, or another scheme. Implement `AuthorizationPolicy` subclasses for application rules such as roles, permissions, ownership, tenant isolation, or resource state.
+Extend the built-in authenticators for Bearer tokens, Basic credentials and API keys, or implement a subclass of `Authenticator` for sessions, mutual TLS identities, or another scheme. Implement `AuthorizationPolicy` subclasses for application rules such as roles, permissions, ownership, tenant isolation, or resource state.
 
 ## Install and register
 
@@ -23,7 +24,7 @@ import { AxiSparkFactory } from '@axisparkjs/core';
 import { HttpPlugin } from '@axisparkjs/http';
 import { HttpPluginOptionsFactory } from '@axisparkjs/http-express';
 import { SecurityPlugin, SecurityPluginOptionsFactory } from '@axisparkjs/security';
-import { BearerAuthenticator } from './auth/bearer-authenticator';
+import { TokenAuthenticator } from './auth/token-authenticator';
 
 const app = AxiSparkFactory.create({ name: 'Example', basePath: __dirname });
 
@@ -31,7 +32,7 @@ app.use(HttpPlugin, HttpPluginOptionsFactory.create({ basePath: '/api', port: 30
 app.use(
     SecurityPlugin,
     SecurityPluginOptionsFactory.create({
-        authenticator: { strategy: 'selected', selected: [BearerAuthenticator] }
+        authenticator: { strategy: 'selected', selected: [TokenAuthenticator] }
     })
 );
 ```
@@ -40,27 +41,52 @@ Use the options factory to supply `SecurityPlugin` and default configuration. Th
 
 ## Implement authentication
 
-Extend `Authenticator`, mark the class injectable, and return an application-defined principal or claims object when credentials are valid. Return a falsy value when this authenticator cannot authenticate the execution. Authenticator classes are resolved through the application's dependency injection container, so constructor dependencies are supported.
+The built-in authenticators read and parse the credential, so the application only writes how it becomes a principal. They extend `CredentialAuthenticator`, which splits `authenticate` into `extract(context)` and `validate(credential, context)`, and declare `static transports = [ExecutionTransport.Http]`.
+
+| Class | Credential | `validate` receives |
+| --- | --- | --- |
+| `BearerAuthenticator<TPrincipal>` | `Authorization: Bearer <token>` (scheme case-insensitive) | The token |
+| `BasicAuthenticator<TPrincipal>` | `Authorization: Basic <base64>` | `{ username, password }` |
+| `ApiKeyAuthenticator<TPrincipal>` | `X-API-Key` header by default, or the header or query parameter set in `source` | The key |
+
+```ts
+import { Injectable } from '@axisparkjs/di';
+import { ApiKeyAuthenticator, BearerAuthenticator, safeCompare } from '@axisparkjs/security';
+
+@Injectable()
+export class TokenAuthenticator extends BearerAuthenticator<Principal> {
+    constructor(private readonly tokenService: TokenService) {
+        super();
+    }
+
+    protected async validate(token: string): Promise<Principal | undefined> {
+        return this.tokenService.verify(token);
+    }
+}
+
+@Injectable()
+export class ApiKeyAuth extends ApiKeyAuthenticator<Client> {
+    protected readonly source = { header: 'x-api-key', query: 'api_key' };
+
+    protected async validate(apiKey: string): Promise<Client | undefined> {
+        return clients.find((client) => safeCompare(apiKey, client.apiKey));
+    }
+}
+```
+
+Compare API keys and passwords with `safeCompare(a, b)`, which uses `crypto.timingSafeEqual`, never with `===`. The HTTP authenticators read the request through a structural type, so this package does not depend on `@axisparkjs/http`. For JSON Web Tokens, use `JwtAuthenticator` from `@axisparkjs/security-jwt`.
+
+For other credentials, extend `Authenticator`, mark the class injectable, and return an application-defined principal or claims object when credentials are valid. Return a falsy value when this authenticator cannot authenticate the execution. Authenticator classes are resolved through the application's dependency injection container, so constructor dependencies are supported.
 
 ```ts
 import { Injectable } from '@axisparkjs/di';
 import { ExecutionContext } from '@axisparkjs/engine';
-import { HttpContext } from '@axisparkjs/http';
 import { Authenticator } from '@axisparkjs/security';
 
-export interface Principal {
-    id: string;
-    roles: string[];
-}
-
 @Injectable()
-export class BearerAuthenticator extends Authenticator {
+export class SessionAuthenticator extends Authenticator {
     async authenticate(context: ExecutionContext): Promise<Principal | undefined> {
-        const request = (context as HttpContext).request;
-        const authorization = request.getHeader('authorization');
-        if (typeof authorization !== 'string' || !authorization.startsWith('Bearer ')) return undefined;
-
-        return this.tokenService.verify(authorization.slice('Bearer '.length));
+        return this.sessionService.findPrincipal(context);
     }
 }
 ```
@@ -139,7 +165,7 @@ The ordering depends on AxiSpark's descending step priority: authentication is `
 SecurityPluginOptionsFactory.create({
     authenticator: {
         strategy: 'selected',
-        selected: [BearerAuthenticator, ApiKeyAuthenticator],
+        selected: [TokenAuthenticator, ApiKeyAuth],
         transports: [ExecutionTransport.Http]
     }
 });
@@ -168,6 +194,8 @@ The package does not convert these errors to HTTP or another protocol. Add an ap
 The package root exports:
 
 - `Authenticator` and `AuthenticatorType`
+- `CredentialAuthenticator`, `BearerAuthenticator`, `BasicAuthenticator` and `BasicCredentials`, `ApiKeyAuthenticator` and `ApiKeySource`
+- `safeCompare` and the `HttpCredentialContext` helpers
 - `AuthorizationPolicy` and `AuthorizationDecision`
 - `SecurityContext<T>`
 - `Secured` and `SecuredMetadata`
