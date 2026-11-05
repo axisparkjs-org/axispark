@@ -165,4 +165,18 @@ describe('Job execution', () => {
 
         expect(trigger.getNextExecutionTime).toHaveBeenCalledWith(lastExecution);
     });
+
+    it('should delegate the next execution time after a date to the trigger', () => {
+        const trigger = {
+            getNextExecutionTimeAfter: jest.fn().mockReturnValue('next')
+        };
+
+        (IntervalJobTrigger as jest.Mock).mockImplementation(() => trigger);
+
+        const job = new IntervalJobDefinition('job', 1000, jest.fn(), true);
+        const date = new Date();
+
+        expect(job.getNextExecutionTimeAfter(date)).toBe('next');
+        expect(trigger.getNextExecutionTimeAfter).toHaveBeenCalledWith(date);
+    });
 });

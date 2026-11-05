@@ -17,6 +17,16 @@ export abstract class JobTrigger {
      * @returns The next execution time, or undefined if the job has no more executions.
      */
     abstract getNextExecutionTime(lastExecutionTime?: Date): Date | undefined;
+
+    /**
+     * Gets the first execution time of a recurring job after a date.
+     * It is used to skip the executions that were missed, for example while the previous execution was running.
+     * @param date The date after which the execution time is calculated.
+     * @returns The first execution time after the date, or undefined if the job is not recurring.
+     */
+    getNextExecutionTimeAfter(_date: Date): Date | undefined {
+        return undefined;
+    }
 }
 
 /**
@@ -45,6 +55,10 @@ export class CronJobTrigger extends JobTrigger {
             throw new JobError(`Failed to calculate next execution time for cron expression: ${this.cronExpression}`);
         }
     }
+
+    override getNextExecutionTimeAfter(date: Date): Date | undefined {
+        return this.getNextExecutionTime(date);
+    }
 }
 
 /**
@@ -60,6 +74,10 @@ export class IntervalJobTrigger extends JobTrigger {
         if (!lastExecutionTime) return new Date(this.createdAt.getTime() + this.interval);
 
         return new Date(lastExecutionTime.getTime() + this.interval);
+    }
+
+    override getNextExecutionTimeAfter(date: Date): Date | undefined {
+        return new Date(date.getTime() + this.interval);
     }
 }
 

@@ -1,14 +1,15 @@
 import { SchedulerRunner } from './scheduler-runner';
-import { JobDefinition } from '../jobs/job-definition';
+import { IntervalJobDefinition, JobDefinition, JobType } from '../jobs/job-definition';
+import { CronExpression } from '../implementations';
 
 describe('SchedulerRunner', () => {
     let runner: SchedulerRunner;
-    let logger: { error: jest.Mock };
+    let logger: { error: jest.Mock; warn: jest.Mock };
 
     beforeEach(() => {
         jest.useFakeTimers();
 
-        logger = { error: jest.fn() };
+        logger = { error: jest.fn(), warn: jest.fn() };
         runner = new SchedulerRunner(logger as any);
     });
 
@@ -21,6 +22,7 @@ describe('SchedulerRunner', () => {
         ({
             name,
             getNextExecutionTime: jest.fn(),
+            getNextExecutionTimeAfter: jest.fn(),
             execute: jest.fn()
         }) as any;
 
@@ -60,6 +62,19 @@ describe('SchedulerRunner', () => {
             runner.start(job);
 
             expect(runner.isRunning(job)).toBe(false);
+            expect(logger.warn).not.toHaveBeenCalled();
+        });
+
+        it('should skip the missed executions of recurring jobs scheduled in the past', () => {
+            const job = createJob();
+            job.getNextExecutionTime.mockReturnValue(new Date(Date.now() - 1000));
+            job.getNextExecutionTimeAfter.mockReturnValue(new Date(Date.now() + 1000));
+
+            runner.start(job);
+
+            expect(job.getNextExecutionTimeAfter).toHaveBeenCalledWith(new Date());
+            expect(runner.isRunning(job)).toBe(true);
+            expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Job job skipped the executions missed since'));
         });
     });
 
@@ -146,6 +161,73 @@ describe('SchedulerRunner', () => {
 
             expect(job.getNextExecutionTime).toHaveBeenCalledTimes(1);
             expect(runner.isRunning(job)).toBe(false);
+        });
+    });
+
+    describe('executions longer than the time to the next one', () => {
+        const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+        it('should keep running an interval job after a slow execution', async () => {
+            const execute = jest.fn().mockImplementation(() => wait(1500));
+            const job = new IntervalJobDefinition('slowInterval', 1000, execute);
+
+            runner.start(job);
+
+            // First execution from 1000 ms to 2500 ms. The execution at 2000 ms is skipped and the next one runs at 3500 ms.
+            await jest.advanceTimersByTimeAsync(2500);
+            expect(execute).toHaveBeenCalledTimes(1);
+            expect(runner.isRunning(job)).toBe(true);
+            expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Job slowInterval skipped the executions missed since'));
+
+            await jest.advanceTimersByTimeAsync(1000);
+            expect(execute).toHaveBeenCalledTimes(2);
+
+            runner.stop(job);
+        });
+
+        it('should keep running a cron job after a slow execution', async () => {
+            jest.setSystemTime(new Date(2026, 0, 1, 12, 0, 30));
+            const execute = jest.fn().mockImplementation(() => wait(70_000));
+            const job = JobDefinition.fromMetadata(
+                { type: JobType.Cron, name: 'slowCron', value: CronExpression.EveryMinute, disabled: false } as any,
+                execute
+            );
+
+            runner.start(job);
+
+            // First execution from 12:01:00 to 12:02:10. The 12:02:00 slot is skipped and the next one runs at 12:03:00.
+            await jest.advanceTimersByTimeAsync(30_000 + 70_000);
+            expect(execute).toHaveBeenCalledTimes(1);
+            expect(runner.isRunning(job)).toBe(true);
+            expect(job.getNextExecutionTime()).toEqual(new Date(2026, 0, 1, 12, 2, 0));
+            expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Job slowCron skipped the executions missed since'));
+
+            await jest.advanceTimersByTimeAsync(49_999);
+            expect(execute).toHaveBeenCalledTimes(1);
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(execute).toHaveBeenCalledTimes(2);
+
+            runner.stop(job);
+        });
+
+        it('should never overlap two executions of the same job', async () => {
+            let running = 0;
+            let maxRunning = 0;
+            const execute = jest.fn().mockImplementation(async () => {
+                running++;
+                maxRunning = Math.max(maxRunning, running);
+                await wait(2500);
+                running--;
+            });
+            const job = new IntervalJobDefinition('overlap', 1000, execute);
+
+            runner.start(job);
+            await jest.advanceTimersByTimeAsync(20_000);
+            runner.stop(job);
+
+            expect(execute.mock.calls.length).toBeGreaterThan(1);
+            expect(maxRunning).toBe(1);
         });
     });
 

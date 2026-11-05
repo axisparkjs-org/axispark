@@ -47,6 +47,15 @@ export abstract class JobDefinition implements Executable {
     }
 
     /**
+     * Gets the first execution time of the job after a date, skipping the executions scheduled before it.
+     * @param date The date after which the execution time is calculated.
+     * @returns The first execution time after the date, or undefined if the job is not recurring (date and timeout jobs).
+     */
+    public getNextExecutionTimeAfter(date: Date): Date | undefined {
+        return this.trigger.getNextExecutionTimeAfter(date);
+    }
+
+    /**
      * Executes the job.
      * @returns A promise resolving when the job has been executed.
      */
