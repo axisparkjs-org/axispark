@@ -21,4 +21,4 @@
 "@axisparkjs/websocket-socketio": patch
 ---
 
-`ExpressHttpAdapter.start()` resolves when the server is listening and rejects with the `listen` error (for example `EADDRINUSE`), so the application fails to start with a clear error instead of logging that it is listening and crashing later. `stop()` closes the idle keep-alive connections, resolves when the server is closed, and closes the connections that are still open after 10 seconds, as the Fastify adapter does.
+`ExpressHttpAdapter.start()` resolves when the server is listening and rejects with the `listen` error (for example `EADDRINUSE`), so the application fails to start with a clear error instead of logging that it is listening and crashing later. `stop()` closes the idle keep-alive connections, resolves when the server is closed, and closes the connections that are still open after 10 seconds.
