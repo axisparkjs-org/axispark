@@ -9,7 +9,11 @@ interface RateLimitBucket {
     ttl: number;
 }
 
-/** Resolves HTTP rate limits using the client IP and endpoint as the bucket key. */
+/**
+ * Resolves HTTP rate limits using the client IP and the route as the bucket key.
+ * The route is identified by the HTTP method and the handler (controller and method), so every request to a route shares
+ * the same limit, whatever the values of its path parameters and its query string.
+ */
 @Injectable()
 export class HttpRateLimitResolver implements RateLimitResolver {
     private readonly buckets = new Map<string, RateLimitBucket>();
@@ -17,7 +21,7 @@ export class HttpRateLimitResolver implements RateLimitResolver {
 
     public resolve(definition: RateLimitDefinition, context: ExecutionContext): RateLimitDecision {
         const httpContext = context as HttpContext;
-        const endpoint = `${httpContext.request.method}:${httpContext.request.path}:${context.target.name}.${String(context.propertyKey)}`;
+        const endpoint = `${httpContext.request.method}:${context.target.name}.${String(context.propertyKey)}`;
         return this.consume(httpContext.request.ip, endpoint, definition);
     }
 

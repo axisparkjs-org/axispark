@@ -73,6 +73,14 @@ describe.each([
         expect((await fetch('http://localhost:3000/api/rate-limit/override')).status).toBe(429);
     });
 
+    it('should apply the limit to the route whatever its parameters and query string', async () => {
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/1')).status).toBe(200);
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/2')).status).toBe(200);
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/3')).status).toBe(429);
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/1?a=1')).status).toBe(429);
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/4?a=2')).status).toBe(429);
+    });
+
     afterAll(async () => {
         await axiSparkCore.destroy();
     });
