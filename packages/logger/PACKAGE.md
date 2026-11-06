@@ -30,6 +30,16 @@ export const app = AxiSparkFactory.create({
 });
 ```
 
+When `logTransports` is not set, the application uses a `ConsoleTransport` with `LogLevel.Trace` and the `SimpleFormatter`. The `ConsoleTransport` writes to the standard output. When the standard output is reserved for something else, such as the protocol messages of the MCP stdio transport, write the logs to `stderr` with a `StreamTransport`:
+
+```ts
+import { LogLevel, SimpleFormatter, StreamTransport } from '@axisparkjs/logger';
+
+AxiSparkFactory.create({
+    logTransports: [new StreamTransport({ stream: process.stderr, minLevel: LogLevel.Info, formatter: new SimpleFormatter() })]
+});
+```
+
 Inject the `Logger` in any injectable class:
 
 ```ts
