@@ -20,7 +20,9 @@ export class FastifyHttpRequest implements HttpRequest {
     }
 
     get path() {
-        return this.request.url;
+        const url = this.request.url;
+        const queryIndex = url.indexOf('?');
+        return queryIndex === -1 ? url : url.slice(0, queryIndex);
     }
 
     get url() {

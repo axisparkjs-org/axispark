@@ -39,8 +39,14 @@ describe('FastifyHttpRequest', () => {
         expect(httpRequest.method).toBe(request.method);
     });
 
-    it('should return the request path', () => {
-        expect(httpRequest.path).toBe(request.url);
+    it('should return the request path without the query string', () => {
+        expect(httpRequest.path).toBe('/api/users/1');
+    });
+
+    it('should return the request path when there is no query string', () => {
+        const requestWithoutQuery = new FastifyHttpRequest({ ...request, url: '/api/users/1' } as FastifyRequest);
+
+        expect(requestWithoutQuery.path).toBe('/api/users/1');
     });
 
     it('should return the request url', () => {
