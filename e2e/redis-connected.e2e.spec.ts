@@ -60,7 +60,7 @@ describe('Redis Connected App', () => {
     it('should log the errors and reconnections of the broken connection without stopping the process', () => {
         expect(mockLogger.error).toHaveBeenCalledWith(
             "Connection 'BROKEN' encountered an error",
-            expect.objectContaining({ message: expect.stringContaining('ECONNREFUSED') })
+            expect.objectContaining({ code: 'ECONNREFUSED' })
         );
         expect(mockLogger.warn).toHaveBeenCalledWith("Connection 'BROKEN' reconnecting");
         expect(mockLogger.info).toHaveBeenCalledWith("Connection 'CACHE' established");
