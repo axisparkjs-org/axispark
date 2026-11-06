@@ -50,4 +50,4 @@ export class SessionCache {
 }
 ```
 
-By default, the clients connect in the background and keep reconnecting when Redis is not available, and their health checks report them as unhealthy. Set `failOnConnectError: true` to make the application fail to start when a connection cannot be established.
+The clients connect in the background, so the application starts even when Redis is not available: the clients keep reconnecting and their health checks report them as unhealthy until they are ready.

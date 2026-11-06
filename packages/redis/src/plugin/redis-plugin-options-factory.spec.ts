@@ -8,16 +8,14 @@ describe('RedisPluginOptionsFactoryStatic', () => {
         expect(new RedisPluginOptionsFactoryStatic().create({ connections })).toEqual({
             plugin: RedisPlugin,
             healthChecks: true,
-            failOnConnectError: false,
             connections
         });
     });
 
     it('overrides the default options', () => {
-        expect(RedisPluginOptionsFactory.create({ connections: [], healthChecks: false, failOnConnectError: true })).toEqual({
+        expect(RedisPluginOptionsFactory.create({ connections: [], healthChecks: false })).toEqual({
             plugin: RedisPlugin,
             healthChecks: false,
-            failOnConnectError: true,
             connections: []
         });
     });

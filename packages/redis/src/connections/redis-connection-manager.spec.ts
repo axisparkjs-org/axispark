@@ -18,9 +18,6 @@ class ClientMock extends EventEmitter {
         this.isOpen = false;
         return Promise.resolve();
     });
-    destroy = jest.fn(() => {
-        this.isOpen = false;
-    });
 }
 
 describe('RedisConnectionManager', () => {
@@ -33,8 +30,7 @@ describe('RedisConnectionManager', () => {
     const mockClients = (...clients: ClientMock[]) => {
         for (const client of clients) createClientMock.mockReturnValueOnce(client as any);
     };
-    const createManager = (connections: any[], options: Record<string, unknown> = {}) =>
-        new RedisConnectionManager({ connections, ...options } as any, logger as any);
+    const createManager = (connections: any[]) => new RedisConnectionManager({ connections } as any, logger as any);
 
     it('creates and connects all configured connections and passes their settings through', async () => {
         const first = new ClientMock();
@@ -88,7 +84,7 @@ describe('RedisConnectionManager', () => {
         expect(logger.info).toHaveBeenCalledWith("Connection 'CACHE' finished");
     });
 
-    it('does not wait for the connections and ignores the connect rejections by default', async () => {
+    it('connects in the background and ignores the connect rejections', async () => {
         const client = new ClientMock();
         client.connect.mockImplementation(() => Promise.reject(new Error('connect ECONNREFUSED')));
         mockClients(client);
@@ -97,55 +93,6 @@ describe('RedisConnectionManager', () => {
         await expect(manager.createConnections()).resolves.toBeUndefined();
 
         expect(manager.getConnection('CACHE')).toBe(client);
-    });
-
-    it('waits for every connection when failOnConnectError is enabled', async () => {
-        const first = new ClientMock();
-        const second = new ClientMock();
-        mockClients(first, second);
-        const manager = createManager(
-            [
-                { name: 'CACHE', url: 'redis://localhost:6379/0' },
-                { name: 'LOCKS', url: 'redis://localhost:6379/1' }
-            ],
-            { failOnConnectError: true }
-        );
-
-        await expect(manager.createConnections()).resolves.toBeUndefined();
-
-        expect(first.listenerCount('error')).toBe(1);
-        expect(second.listenerCount('error')).toBe(1);
-        expect(manager.getAllConnections().size).toBe(2);
-    });
-
-    it('fails with the first connection error and stops reconnecting when failOnConnectError is enabled', async () => {
-        const client = new ClientMock();
-        client.connect.mockImplementation(() => new Promise(() => undefined));
-        mockClients(client);
-        const manager = createManager([{ name: 'CACHE', url: 'redis://localhost:6379' }], { failOnConnectError: true });
-        const error = new Error('connect ECONNREFUSED 127.0.0.1:6379');
-
-        const created = manager.createConnections();
-        client.emit('error', error);
-
-        await expect(created).rejects.toThrow("Connection 'CACHE' could not be established: connect ECONNREFUSED 127.0.0.1:6379");
-        await expect(created).rejects.toMatchObject({ cause: error });
-        expect(client.destroy).toHaveBeenCalledTimes(1);
-        expect(logger.error).toHaveBeenCalledWith("Connection 'CACHE' encountered an error", error);
-        expect(manager.getConnection('CACHE')).toBeUndefined();
-    });
-
-    it('ignores the connect rejection after the error was reported when failOnConnectError is enabled', async () => {
-        const client = new ClientMock();
-        const error = new Error('connect ECONNREFUSED 127.0.0.1:6379');
-        client.connect.mockImplementation(() => {
-            client.emit('error', error);
-            return Promise.reject(error);
-        });
-        mockClients(client);
-        const manager = createManager([{ name: 'CACHE', url: 'redis://localhost:6379' }], { failOnConnectError: true });
-
-        await expect(manager.createConnections()).rejects.toThrow("Connection 'CACHE' could not be established");
     });
 
     it('creates independent named connections when they share a URL', async () => {

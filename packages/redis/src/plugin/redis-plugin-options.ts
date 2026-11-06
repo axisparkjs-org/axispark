@@ -36,10 +36,4 @@ export interface RedisPluginOptions extends PluginOptions {
      * Whether a health check is registered in the `HealthEngine` for each connection. Defaults to `true`.
      */
     healthChecks?: boolean;
-
-    /**
-     * Whether the plugin fails to register when a connection cannot be established at startup. Defaults to `false`: the clients keep
-     * reconnecting in the background, the errors are logged and the connections are reported as unhealthy until they are ready.
-     */
-    failOnConnectError?: boolean;
 }

@@ -10,7 +10,6 @@ export class RedisPluginOptionsFactoryStatic implements Factory<RedisPluginOptio
         return {
             plugin: RedisPlugin,
             healthChecks: true,
-            failOnConnectError: false,
             ...options
         };
     }

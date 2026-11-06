@@ -40,7 +40,6 @@ describe('Redis Connected App', () => {
                     options: expect.objectContaining({
                         connections: expect.any(Array),
                         healthChecks: true,
-                        failOnConnectError: false,
                         plugin: RedisPlugin
                     })
                 }

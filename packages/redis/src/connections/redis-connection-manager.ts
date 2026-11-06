@@ -19,12 +19,11 @@ export class RedisConnectionManager {
     /**
      * Creates and connects a client for each configured connection.
      *
-     * By default, the clients connect in the background: the errors are logged and the clients keep reconnecting with their reconnect strategy.
-     * With `failOnConnectError`, it waits for every client to be ready and rejects with the first connection error.
+     * The clients connect in the background, so the application starts even when Redis is not available: the errors are logged
+     * and the clients keep reconnecting with their reconnect strategy until they are ready.
      * @throws An error when two connections have the same name.
      */
     async createConnections(): Promise<void> {
-        const pending: Promise<void>[] = [];
         for (const connectionConfig of this.redisPluginOptions.connections) {
             const { name } = connectionConfig;
             if (this.connections.has(name)) {
@@ -33,10 +32,9 @@ export class RedisConnectionManager {
 
             const connection = this.createConnection(connectionConfig);
             this.connections.set(name, connection);
-            pending.push(this.connect(name, connection));
+            // The connection errors are reported through the `error` event, so the rejection of `connect` is ignored.
+            connection.connect().catch(() => undefined);
         }
-
-        if (this.redisPluginOptions.failOnConnectError) await Promise.all(pending);
     }
 
     private createConnection({ name, url, options }: RedisConnectionOptions): RedisClientType {
@@ -47,30 +45,6 @@ export class RedisConnectionManager {
         connection.on('error', (error: Error) => this.logger.error(`Connection '${name}' encountered an error`, error));
         connection.on('end', () => this.logger.info(`Connection '${name}' finished`));
         return connection;
-    }
-
-    private connect(name: string, connection: RedisClientType): Promise<void> {
-        if (!this.redisPluginOptions.failOnConnectError) {
-            connection.connect().catch(() => undefined);
-            return Promise.resolve();
-        }
-
-        return new Promise<void>((resolve, reject) => {
-            const onError = (error: Error) => {
-                connection.off('error', onError);
-                connection.destroy();
-                this.connections.delete(name);
-                reject(new Error(`Connection '${name}' could not be established: ${error.message}`, { cause: error }));
-            };
-            connection.on('error', onError);
-            connection.connect().then(
-                () => {
-                    connection.off('error', onError);
-                    resolve();
-                },
-                () => undefined
-            );
-        });
     }
 
     getConnection(name: string): RedisClientType | undefined {
