@@ -1,5 +1,5 @@
 import { ClassType } from '@axisparkjs/common';
-import { CronJobDefinitio, DateJobDefinition, IntervalJobDefinition, JobDefinition, JobType, TimeoutJobDefinition } from './job-definition';
+import { CronJobDefinition, DateJobDefinition, IntervalJobDefinition, JobDefinition, JobType, TimeoutJobDefinition } from './job-definition';
 
 import { CronJobTrigger, DateJobTrigger, IntervalJobTrigger, TimeoutJobTrigger } from './job-trigger';
 
@@ -14,7 +14,7 @@ describe('JobDefinition.fromMetadata', () => {
     const execute = jest.fn().mockResolvedValue(undefined);
 
     it.each([
-        [JobType.Cron, '* * * * *', CronJobDefinitio],
+        [JobType.Cron, '* * * * *', CronJobDefinition],
         [JobType.Interval, 1000, IntervalJobDefinition],
         [JobType.Date, new Date(Date.now() + 10000), DateJobDefinition],
         [JobType.Timeout, 5000, TimeoutJobDefinition]
@@ -37,7 +37,7 @@ describe('CronJob', () => {
     it('should create a cron trigger', () => {
         const execute = jest.fn();
 
-        const job = new CronJobDefinitio('cron', '* * * * *', execute, true);
+        const job = new CronJobDefinition('cron', '* * * * *', execute, true);
 
         expect(job.type).toBe(JobType.Cron);
         expect(CronJobTrigger).toHaveBeenCalledWith('* * * * *', undefined);
@@ -46,7 +46,7 @@ describe('CronJob', () => {
     it('should update the cron expression', () => {
         const execute = jest.fn();
 
-        const job = new CronJobDefinitio('cron', '* * * * *', execute, true);
+        const job = new CronJobDefinition('cron', '* * * * *', execute, true);
 
         (CronJobTrigger as jest.Mock).mockClear();
 

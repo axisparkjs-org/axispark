@@ -1,5 +1,5 @@
 import { SchedulerRunner } from './scheduler-runner';
-import { IntervalJobDefinition, JobDefinition, JobType } from '../jobs/job-definition';
+import { DateJobDefinition, IntervalJobDefinition, JobDefinition, JobType, TimeoutJobDefinition } from '../jobs/job-definition';
 import { CronExpression } from '../implementations';
 
 describe('SchedulerRunner', () => {
@@ -228,6 +228,114 @@ describe('SchedulerRunner', () => {
 
             expect(execute.mock.calls.length).toBeGreaterThan(1);
             expect(maxRunning).toBe(1);
+        });
+    });
+
+    describe('delays longer than the maximum timer delay', () => {
+        const MAX_TIMER_DELAY = 2 ** 31 - 1;
+        const DAY = 24 * 60 * 60 * 1000;
+
+        it('should wait without executing the job when the delay does not fit in one timer', async () => {
+            const job = createJob();
+            job.getNextExecutionTime.mockReturnValue(new Date(Date.now() + 30 * DAY));
+            job.execute.mockResolvedValue(undefined);
+
+            runner.start(job);
+
+            await jest.advanceTimersByTimeAsync(MAX_TIMER_DELAY);
+
+            expect(job.execute).not.toHaveBeenCalled();
+            expect(job.getNextExecutionTime).toHaveBeenCalledTimes(2);
+            expect(runner.isRunning(job)).toBe(true);
+
+            await jest.advanceTimersByTimeAsync(30 * DAY - MAX_TIMER_DELAY);
+
+            expect(job.execute).toHaveBeenCalledTimes(1);
+        });
+
+        it('should not wait again when the job is stopped while waiting', async () => {
+            const job = createJob();
+            job.getNextExecutionTime.mockReturnValue(new Date(Date.now() + 30 * DAY));
+
+            runner.start(job);
+            runner.stop(job);
+
+            await jest.advanceTimersByTimeAsync(30 * DAY);
+
+            expect(job.getNextExecutionTime).toHaveBeenCalledTimes(1);
+            expect(job.execute).not.toHaveBeenCalled();
+            expect(runner.isRunning(job)).toBe(false);
+        });
+
+        it('should run a yearly cron job once a year', async () => {
+            jest.setSystemTime(new Date(2026, 0, 2));
+            const execute = jest.fn().mockResolvedValue(undefined);
+            const job = JobDefinition.fromMetadata({ type: JobType.Cron, name: 'yearly', value: CronExpression.EveryYear, disabled: false } as any, execute);
+
+            runner.start(job);
+
+            await jest.advanceTimersByTimeAsync(new Date(2027, 0, 1).getTime() - Date.now() - 1);
+            expect(execute).not.toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(execute).toHaveBeenCalledTimes(1);
+
+            await jest.advanceTimersByTimeAsync(new Date(2028, 0, 1).getTime() - Date.now() - 1);
+            expect(execute).toHaveBeenCalledTimes(1);
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(execute).toHaveBeenCalledTimes(2);
+            expect(runner.isRunning(job)).toBe(true);
+        });
+
+        it('should run an interval job once per interval', async () => {
+            const execute = jest.fn().mockResolvedValue(undefined);
+            const job = new IntervalJobDefinition('interval', 30 * DAY, execute);
+
+            runner.start(job);
+
+            await jest.advanceTimersByTimeAsync(30 * DAY - 1);
+            expect(execute).not.toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(execute).toHaveBeenCalledTimes(1);
+
+            await jest.advanceTimersByTimeAsync(30 * DAY);
+            expect(execute).toHaveBeenCalledTimes(2);
+        });
+
+        it('should run a date job once at its date', async () => {
+            const execute = jest.fn().mockResolvedValue(undefined);
+            const job = new DateJobDefinition('date', new Date(Date.now() + 30 * DAY), execute);
+
+            runner.start(job);
+
+            await jest.advanceTimersByTimeAsync(30 * DAY - 1);
+            expect(execute).not.toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(execute).toHaveBeenCalledTimes(1);
+
+            await jest.advanceTimersByTimeAsync(30 * DAY);
+            expect(execute).toHaveBeenCalledTimes(1);
+            expect(runner.isRunning(job)).toBe(false);
+        });
+
+        it('should run a timeout job once after its timeout', async () => {
+            const execute = jest.fn().mockResolvedValue(undefined);
+            const job = new TimeoutJobDefinition('timeout', 30 * DAY, execute);
+
+            runner.start(job);
+
+            await jest.advanceTimersByTimeAsync(30 * DAY - 1);
+            expect(execute).not.toHaveBeenCalled();
+
+            await jest.advanceTimersByTimeAsync(1);
+            expect(execute).toHaveBeenCalledTimes(1);
+
+            await jest.advanceTimersByTimeAsync(30 * DAY);
+            expect(execute).toHaveBeenCalledTimes(1);
+            expect(runner.isRunning(job)).toBe(false);
         });
     });
 

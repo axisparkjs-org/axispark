@@ -6,7 +6,7 @@ import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import cors from 'cors';
-import { createServer } from 'node:http';
+import { createServer, Server } from 'node:http';
 import { ExpressHttpRequest } from '../types/express-http-request';
 import { ExpressHttpResponse } from '../types/express-http-response';
 import { ExpressHttpPluginOptions } from '../plugin/express-http-plugin-options';
@@ -17,6 +17,9 @@ import { ExpressHttpSession } from '../types/express-http-session';
  */
 @Injectable()
 export class ExpressHttpAdapter implements HttpAdapter {
+    /** Milliseconds to wait for the open requests before closing their connections when the server stops. */
+    private static readonly FORCE_CLOSE_TIMEOUT = 10_000;
+
     private readonly app = express();
     private httpServer?: HttpServer;
     private readonly registeredRoutes: RouteDefinition[] = [];
@@ -61,11 +64,43 @@ export class ExpressHttpAdapter implements HttpAdapter {
         return { request: req, response: res, session: ses };
     }
 
-    start(): void {
-        this.httpServer?.listen(this.options.port);
+    /**
+     * Starts listening on the configured port.
+     * @returns A promise that resolves when the server is listening, and rejects with the `listen` error, such as `EADDRINUSE`.
+     */
+    async start(): Promise<void> {
+        const server = this.httpServer;
+        if (!server) return;
+
+        await new Promise<void>((resolve, reject) => {
+            const onError = (error: Error) => reject(error);
+            server.once('error', onError);
+            server.listen(this.options.port, () => {
+                server.off('error', onError);
+                resolve();
+            });
+        });
     }
 
-    stop(): void {
-        this.httpServer?.close();
+    /**
+     * Stops the server. The idle keep-alive connections are closed immediately, and the connections that are still
+     * handling a request are closed after 10 seconds.
+     * @returns A promise that resolves when the server is closed.
+     */
+    async stop(): Promise<void> {
+        const server = this.httpServer;
+        if (!server?.listening) return;
+
+        await new Promise<void>((resolve, reject) => {
+            const forceClose = setTimeout(() => (server as Server).closeAllConnections?.(), ExpressHttpAdapter.FORCE_CLOSE_TIMEOUT);
+            forceClose.unref();
+
+            server.close((error?: Error) => {
+                clearTimeout(forceClose);
+                if (error) reject(error);
+                else resolve();
+            });
+            (server as Server).closeIdleConnections?.();
+        });
     }
 }

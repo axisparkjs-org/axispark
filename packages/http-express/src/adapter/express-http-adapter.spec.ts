@@ -11,8 +11,13 @@ import cors from 'cors';
 import { createServer } from 'node:http';
 
 const mockServer = {
+    listening: false,
     listen: jest.fn(),
-    close: jest.fn()
+    close: jest.fn(),
+    once: jest.fn(),
+    off: jest.fn(),
+    closeIdleConnections: jest.fn(),
+    closeAllConnections: jest.fn()
 };
 
 jest.mock('node:http', () => ({
@@ -228,37 +233,100 @@ describe('ExpressHttpAdapter', () => {
     });
 
     describe('start', () => {
+        beforeEach(() => {
+            mockServer.listening = false;
+            mockServer.once.mockReset();
+            mockServer.listen.mockImplementation((_port: number, callback: () => void) => callback());
+        });
+
         it('should listen on configured port when initialized', async () => {
             const adapter = new ExpressHttpAdapter(baseConfig);
             await adapter.initialize();
 
-            adapter.start();
+            await adapter.start();
 
-            expect(mockServer.listen).toHaveBeenCalledWith(8080);
+            expect(mockServer.listen).toHaveBeenCalledWith(8080, expect.any(Function));
+            expect(mockServer.off).toHaveBeenCalledWith('error', expect.any(Function));
         });
 
-        it('should do nothing when httpServer is not initialized', () => {
+        it('should reject with the listen error when the port is in use', async () => {
+            const error = Object.assign(new Error('listen EADDRINUSE: address already in use :::8080'), { code: 'EADDRINUSE' });
+            mockServer.listen.mockImplementation(() => undefined);
+            mockServer.once.mockImplementation((_event: string, listener: (error: Error) => void) => listener(error));
+
+            const adapter = new ExpressHttpAdapter(baseConfig);
+            await adapter.initialize();
+
+            await expect(adapter.start()).rejects.toBe(error);
+            expect(mockServer.once).toHaveBeenCalledWith('error', expect.any(Function));
+        });
+
+        it('should do nothing when httpServer is not initialized', async () => {
             const adapter = new ExpressHttpAdapter(baseConfig);
 
-            expect(() => adapter.start()).not.toThrow();
+            await expect(adapter.start()).resolves.toBeUndefined();
             expect(mockServer.listen).not.toHaveBeenCalled();
         });
     });
 
     describe('stop', () => {
-        it('should close the server when initialized', async () => {
+        beforeEach(() => {
+            mockServer.listening = true;
+            mockServer.close.mockImplementation((callback: (error?: Error) => void) => callback());
+        });
+
+        it('should close the server and its idle connections when initialized', async () => {
             const adapter = new ExpressHttpAdapter(baseConfig);
             await adapter.initialize();
 
-            adapter.stop();
+            await adapter.stop();
 
             expect(mockServer.close).toHaveBeenCalled();
+            expect(mockServer.closeIdleConnections).toHaveBeenCalled();
+            expect(mockServer.closeAllConnections).not.toHaveBeenCalled();
         });
 
-        it('should do nothing when server has not been initialized', () => {
+        it('should close the remaining connections after a timeout', async () => {
+            jest.useFakeTimers();
+            let closed: (error?: Error) => void = () => undefined;
+            mockServer.close.mockImplementation((callback: (error?: Error) => void) => (closed = callback));
+
+            const adapter = new ExpressHttpAdapter(baseConfig);
+            await adapter.initialize();
+
+            const stopped = adapter.stop();
+            jest.advanceTimersByTime(10_000);
+
+            expect(mockServer.closeAllConnections).toHaveBeenCalled();
+
+            closed();
+            await expect(stopped).resolves.toBeUndefined();
+            jest.useRealTimers();
+        });
+
+        it('should reject with the close error', async () => {
+            const error = new Error('close failed');
+            mockServer.close.mockImplementation((callback: (error?: Error) => void) => callback(error));
+
+            const adapter = new ExpressHttpAdapter(baseConfig);
+            await adapter.initialize();
+
+            await expect(adapter.stop()).rejects.toBe(error);
+        });
+
+        it('should do nothing when the server is not listening', async () => {
+            mockServer.listening = false;
+            const adapter = new ExpressHttpAdapter(baseConfig);
+            await adapter.initialize();
+
+            await expect(adapter.stop()).resolves.toBeUndefined();
+            expect(mockServer.close).not.toHaveBeenCalled();
+        });
+
+        it('should do nothing when server has not been initialized', async () => {
             const adapter = new ExpressHttpAdapter(baseConfig);
 
-            expect(() => adapter.stop()).not.toThrow();
+            await expect(adapter.stop()).resolves.toBeUndefined();
             expect(mockServer.close).not.toHaveBeenCalled();
         });
     });

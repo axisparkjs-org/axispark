@@ -6,11 +6,11 @@ describe('HttpRateLimitResolver', () => {
     let resolver: HttpRateLimitResolver;
     class TestController {}
 
-    const context = (ip = '127.0.0.1', method = 'GET', path = '/items', target = TestController): ExecutionContext =>
+    const context = (ip = '127.0.0.1', method = 'GET', path = '/items', target = TestController, propertyKey = 'handle'): ExecutionContext =>
         ({
             transport: ExecutionTransport.Http,
             target,
-            propertyKey: 'handle',
+            propertyKey,
             request: { ip, method, path }
         }) as unknown as ExecutionContext;
 
@@ -39,9 +39,17 @@ describe('HttpRateLimitResolver', () => {
         expect(resolver.resolve(definition, context()).allowed).toBe(true);
         expect(resolver.resolve(definition, context('127.0.0.2')).allowed).toBe(true);
         expect(resolver.resolve(definition, context('127.0.0.1', 'POST')).allowed).toBe(true);
-        expect(resolver.resolve(definition, context('127.0.0.1', 'GET', '/other')).allowed).toBe(true);
+        expect(resolver.resolve(definition, context('127.0.0.1', 'GET', '/items', TestController, 'other')).allowed).toBe(true);
         expect(resolver.resolve(definition, context('127.0.0.1', 'GET', '/items', class AnotherController {})).allowed).toBe(true);
         expect(resolver.resolve(definition, context()).allowed).toBe(false);
+    });
+
+    it('shares the counter of a route whatever the values of its parameters and query string', () => {
+        const definition = new RateLimitDefinition(1_000, 2);
+        expect(resolver.resolve(definition, context('127.0.0.1', 'GET', '/users/1')).allowed).toBe(true);
+        expect(resolver.resolve(definition, context('127.0.0.1', 'GET', '/users/2')).allowed).toBe(true);
+        expect(resolver.resolve(definition, context('127.0.0.1', 'GET', '/users/3')).allowed).toBe(false);
+        expect(resolver.resolve(definition, context('127.0.0.1', 'GET', '/users/1?a=1')).allowed).toBe(false);
     });
 
     it('expires requests as their timestamps leave the sliding window', () => {
