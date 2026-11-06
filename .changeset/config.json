@@ -18,6 +18,7 @@
         "@axisparkjs/mcp",
         "@axisparkjs/openapi",
         "@axisparkjs/rabbitmq",
+        "@axisparkjs/redis",
         "@axisparkjs/schedule",
         "@axisparkjs/security",
         "@axisparkjs/test",
