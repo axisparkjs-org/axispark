@@ -1,9 +1,12 @@
 import fg from 'fast-glob';
 import { FileSystemScanner } from './file-system-scanner';
+import { Logger } from '@axisparkjs/logger';
 
 jest.mock('fast-glob');
 
 const mockedFg = fg as jest.MockedFunction<typeof fg>;
+
+const DEFAULT_EXCLUDE = ['**/node_modules/**', '**/dist/**', '**/coverage/**', '**/*.d.ts', '**/*.bootstrap.{js,ts}', '**/*.spec.{js,ts}', '**/*.test.{js,ts}'];
 
 describe('FileSystemScanner', () => {
     beforeEach(() => {
@@ -21,7 +24,7 @@ describe('FileSystemScanner', () => {
         expect(mockedFg).toHaveBeenCalledWith(['**/*.{js,ts}'], {
             cwd: '/project',
             absolute: true,
-            ignore: ['**/node_modules/**', '**/dist/**', '**/index.bootstrap.ts', '**/index.bootstrap.js', '**/*.d.ts', '**/*.spec.ts', '**/*.spec.js']
+            ignore: DEFAULT_EXCLUDE
         });
     });
 
@@ -36,6 +39,50 @@ describe('FileSystemScanner', () => {
         expect(importer).toHaveBeenCalledTimes(2);
         expect(importer).toHaveBeenNthCalledWith(1, '/project/a.ts');
         expect(importer).toHaveBeenNthCalledWith(2, '/project/b.js');
+    });
+
+    it('should load the files that match the include patterns', async () => {
+        mockedFg.mockResolvedValue([]);
+
+        const scanner = new FileSystemScanner('/project', jest.fn(), { include: ['controllers/**/*.ts', 'services/**/*.ts'] });
+
+        await scanner.scan();
+
+        expect(mockedFg).toHaveBeenCalledWith(['controllers/**/*.ts', 'services/**/*.ts'], {
+            cwd: '/project',
+            absolute: true,
+            ignore: DEFAULT_EXCLUDE
+        });
+    });
+
+    it('should add the exclude patterns to the default exclusions', async () => {
+        mockedFg.mockResolvedValue([]);
+
+        const scanner = new FileSystemScanner('/project', jest.fn(), { exclude: ['**/scripts/**', '**/app-*.ts'] });
+
+        await scanner.scan();
+
+        expect(mockedFg).toHaveBeenCalledWith(['**/*.{js,ts}'], {
+            cwd: '/project',
+            absolute: true,
+            ignore: [...DEFAULT_EXCLUDE, '**/scripts/**', '**/app-*.ts']
+        });
+    });
+
+    it('should log the number of loaded files at debug level and each file at trace level', async () => {
+        mockedFg.mockResolvedValue(['/project/a.ts', '/project/b.js']);
+
+        const child = { debug: jest.fn().mockResolvedValue(undefined), trace: jest.fn().mockResolvedValue(undefined) };
+        const logger = { child: jest.fn().mockReturnValue(child) } as unknown as Logger;
+        const scanner = new FileSystemScanner('/project', jest.fn().mockResolvedValue({}), {}, logger);
+
+        await scanner.scan();
+
+        expect(logger.child).toHaveBeenCalledWith('Scanner');
+        expect(child.debug).toHaveBeenCalledWith('Loading 2 files from /project', { root: '/project', files: 2 });
+        expect(child.trace).toHaveBeenCalledTimes(2);
+        expect(child.trace).toHaveBeenNthCalledWith(1, 'Loading /project/a.ts', { file: '/project/a.ts' });
+        expect(child.trace).toHaveBeenNthCalledWith(2, 'Loading /project/b.js', { file: '/project/b.js' });
     });
 
     it('should propagate errors from fast-glob', async () => {
@@ -76,7 +123,7 @@ describe('FileSystemScanner', () => {
         expect(mockedFg).toHaveBeenCalledWith(['**/*.{js,ts}'], {
             cwd: '/project',
             absolute: true,
-            ignore: ['**/node_modules/**', '**/dist/**', '**/index.bootstrap.ts', '**/index.bootstrap.js', '**/*.d.ts', '**/*.spec.ts', '**/*.spec.js']
+            ignore: DEFAULT_EXCLUDE
         });
     });
 });
