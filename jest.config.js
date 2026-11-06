@@ -50,6 +50,8 @@ const config = {
         '^@axisparkjs/openapi/(.*)$': '<rootDir>../../packages/openapi/src/$1',
         '^@axisparkjs/rabbitmq$': '<rootDir>../../packages/rabbitmq/src',
         '^@axisparkjs/rabbitmq/(.*)$': '<rootDir>../../packages/rabbitmq/src/$1',
+        '^@axisparkjs/redis$': '<rootDir>../../packages/redis/src',
+        '^@axisparkjs/redis/(.*)$': '<rootDir>../../packages/redis/src/$1',
         '^@axisparkjs/schedule$': '<rootDir>../../packages/schedule/src',
         '^@axisparkjs/schedule/(.*)$': '<rootDir>../../packages/schedule/src/$1',
         '^@axisparkjs/test$': '<rootDir>../../packages/test/src',
