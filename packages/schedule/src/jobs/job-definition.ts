@@ -64,7 +64,7 @@ export abstract class JobDefinition implements Executable {
     public static fromMetadata(metadata: JobMetadata, execute: () => Promise<void>): JobDefinition {
         switch (metadata.type) {
             case JobType.Cron:
-                return new CronJobDefinitio(metadata.name, metadata.value as string, execute, metadata.disabled, metadata.timeZone);
+                return new CronJobDefinition(metadata.name, metadata.value as string, execute, metadata.disabled, metadata.timeZone);
             case JobType.Interval:
                 return new IntervalJobDefinition(metadata.name, metadata.value as number, execute, metadata.disabled);
             case JobType.Date:
@@ -78,7 +78,7 @@ export abstract class JobDefinition implements Executable {
 /**
  * A class representing a cron job definition.
  */
-export class CronJobDefinitio extends JobDefinition {
+export class CronJobDefinition extends JobDefinition {
     readonly type: JobType = JobType.Cron;
     protected readonly trigger: CronJobTrigger;
 
