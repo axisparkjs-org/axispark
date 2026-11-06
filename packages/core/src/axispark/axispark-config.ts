@@ -1,5 +1,6 @@
 import { InjectionToken } from '@axisparkjs/di';
 import { LogTransport } from '@axisparkjs/logger';
+import { ScannerOptions } from '../scanner/scanner-options';
 
 /**
  * An injection token used to provide configuration options for the Axispark framework. This token can be used to inject an instance of `AxiSparkConfig` into components or services that require access to the configuration settings.
@@ -29,6 +30,7 @@ export const AXISPARK_CONFIG = new InjectionToken('AXISPARK_CONFIG');
  * - `environment`: An optional string that can be either 'production', 'development', or 'test', indicating the current environment of the application.
  * - `banner`: An optional boolean indicating whether to display a banner in the console when the application starts.
  * - `logTransports`: An optional array of `LogTransport` instances that define how logs should be handled and where they should be sent.
+ * - `scanner`: Optional `include` and `exclude` glob patterns that select the files loaded from `basePath`.
  *
  * Example usage:
  *
@@ -70,4 +72,11 @@ export interface AxiSparkConfig {
      * An optional array of `LogTransport` instances that define how logs should be handled and where they should be sent. This allows for customization of logging behavior, such as sending logs to different outputs or formatting them in specific ways.
      */
     logTransports?: LogTransport[];
+
+    /**
+     * Optional `include` and `exclude` glob patterns that select the files loaded by the scanner from `basePath`. Importing a file runs its top-level code, so exclude the files that must not be loaded, such as scripts or files that create other applications.
+     *
+     * By default, every `.js` and `.ts` file is loaded, except the `node_modules`, `dist` and `coverage` folders, the declaration files, the bootstrap files (`*.bootstrap.{js,ts}`) and the test files (`*.spec.{js,ts}` and `*.test.{js,ts}`). The `exclude` patterns are added to these exclusions.
+     */
+    scanner?: ScannerOptions;
 }
