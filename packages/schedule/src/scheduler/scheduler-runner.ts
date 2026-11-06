@@ -70,8 +70,8 @@ export class SchedulerRunner {
     }
 
     private schedule(job: JobDefinition): void {
-        const nextExecutionTime = job.getNextExecutionTime();
-        if (!nextExecutionTime || nextExecutionTime.getTime() <= Date.now()) return;
+        const nextExecutionTime = this.getNextExecutionTime(job);
+        if (!nextExecutionTime) return;
 
         const delay = nextExecutionTime.getTime() - Date.now();
         if (delay > MAX_TIMER_DELAY) {
@@ -94,5 +94,25 @@ export class SchedulerRunner {
         }, delay);
 
         this.runningJobs.set(job.name, timeout);
+    }
+
+    /**
+     * Gets the next execution time of a job. When it is already in the past, for example because the previous execution
+     * took longer than the time to the next one, the missed executions are skipped and the next one is calculated from now.
+     * @param job The job.
+     * @returns The next execution time, or undefined if the job has no more executions.
+     */
+    private getNextExecutionTime(job: JobDefinition): Date | undefined {
+        const nextExecutionTime = job.getNextExecutionTime();
+        if (!nextExecutionTime || nextExecutionTime.getTime() > Date.now()) return nextExecutionTime;
+
+        const rescheduledExecutionTime = job.getNextExecutionTimeAfter(new Date());
+        if (rescheduledExecutionTime) {
+            this.logger.warn(
+                `Job ${job.name} skipped the executions missed since ${nextExecutionTime.toISOString()}. Next execution at ${rescheduledExecutionTime.toISOString()}`
+            );
+        }
+
+        return rescheduledExecutionTime;
     }
 }

@@ -93,6 +93,24 @@ describe('CronJobTrigger', () => {
     });
 });
 
+describe('CronJobTrigger.getNextExecutionTimeAfter', () => {
+    it('should calculate the next slot after the date', () => {
+        (validateCronExpression as jest.Mock).mockReturnValue(true);
+
+        const next = new Date('2030-01-01T00:02:00Z');
+        const cronTime = {
+            getNextDateFrom: jest.fn().mockReturnValue({ toJSDate: () => next })
+        };
+        (CronTime as unknown as jest.Mock).mockImplementation(() => cronTime);
+
+        const trigger = new CronJobTrigger('* * * * *');
+        const date = new Date('2030-01-01T00:01:10Z');
+
+        expect(trigger.getNextExecutionTimeAfter(date)).toBe(next);
+        expect(cronTime.getNextDateFrom).toHaveBeenCalledWith(date);
+    });
+});
+
 describe('IntervalJobTrigger', () => {
     it('should throw when interval is not positive', () => {
         expect(() => new IntervalJobTrigger(0)).toThrow(JobError);
@@ -114,6 +132,13 @@ describe('IntervalJobTrigger', () => {
         const result = trigger.getNextExecutionTime(last);
 
         expect(result).toEqual(new Date(last.getTime() + 1000));
+    });
+
+    it('should calculate the next execution after a date', () => {
+        const trigger = new IntervalJobTrigger(1000);
+        const date = new Date('2030-01-01T00:00:05Z');
+
+        expect(trigger.getNextExecutionTimeAfter(date)).toEqual(new Date(date.getTime() + 1000));
     });
 });
 
@@ -142,6 +167,12 @@ describe('DateJobTrigger', () => {
 
         jest.useRealTimers();
     });
+
+    it('should not calculate an execution after a date', () => {
+        const trigger = new DateJobTrigger(new Date(Date.now() + 60_000));
+
+        expect(trigger.getNextExecutionTimeAfter(new Date())).toBeUndefined();
+    });
 });
 
 describe('TimeoutJobTrigger', () => {
@@ -156,5 +187,11 @@ describe('TimeoutJobTrigger', () => {
         const result = trigger.getNextExecutionTime();
 
         expect(result).toEqual(new Date(trigger.createdAt.getTime() + 5000));
+    });
+
+    it('should not calculate an execution after a date', () => {
+        const trigger = new TimeoutJobTrigger(5000);
+
+        expect(trigger.getNextExecutionTimeAfter(new Date())).toBeUndefined();
     });
 });
