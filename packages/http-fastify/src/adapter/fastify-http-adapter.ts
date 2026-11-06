@@ -6,7 +6,7 @@ import { FastifyHttpRequest } from '../types/fastify-http-request';
 import { FastifyHttpResponse } from '../types/fastify-http-response';
 import { FastifyHttpPluginOptions } from '../plugin/fastify-http-plugin-options';
 import { FastifyHttpSession } from '../types/fastify-http-session';
-import fastify, { FastifyReply, FastifyRequest } from 'fastify';
+import fastify, { FastifyInstance, FastifyReply, FastifyRequest, FastifyServerOptions } from 'fastify';
 import cookie from '@fastify/cookie';
 import session from '@fastify/session';
 import compress from '@fastify/compress';
@@ -21,7 +21,7 @@ import path from 'node:path';
  */
 @Injectable()
 export class FastifyHttpAdapter implements HttpAdapter {
-    private readonly app = fastify();
+    private readonly app: FastifyInstance;
     private readonly registeredRoutes: RouteDefinition[] = [];
 
     constructor(
@@ -29,7 +29,10 @@ export class FastifyHttpAdapter implements HttpAdapter {
         private readonly options: FastifyHttpPluginOptions,
         @Inject(AXISPARK_CONFIG)
         private readonly axisparkConfig: AxiSparkConfig
-    ) {}
+    ) {
+        // Fastify accepts the number of trusted proxies at runtime, although its types do not include numbers.
+        this.app = fastify({ trustProxy: (this.options.trustProxy ?? false) as FastifyServerOptions['trustProxy'] });
+    }
 
     async initialize(): Promise<void> {
         await this.app.register(fastifyStatic, {

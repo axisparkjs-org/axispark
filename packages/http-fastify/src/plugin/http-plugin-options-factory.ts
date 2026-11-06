@@ -12,6 +12,7 @@ export class HttpPluginOptionsFactoryStatic implements Factory<FastifyHttpPlugin
             plugin: HttpPlugin,
             port: 3000,
             basePath: '/',
+            trustProxy: false,
             adapter: FastifyHttpAdapter,
             bodyParser: false,
             urlEncoded: true,

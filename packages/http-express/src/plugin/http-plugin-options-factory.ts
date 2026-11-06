@@ -12,6 +12,7 @@ export class HttpPluginOptionsFactoryStatic implements Factory<ExpressHttpPlugin
             plugin: HttpPlugin,
             port: 3000,
             basePath: '/',
+            trustProxy: false,
             adapter: ExpressHttpAdapter,
             bodyParser: true,
             bodyParserOptions: undefined,

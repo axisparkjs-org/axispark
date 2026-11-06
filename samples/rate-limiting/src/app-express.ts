@@ -17,6 +17,8 @@ app.use(
     HttpPlugin,
     HttpPluginOptionsFactory.create({
         basePath: '/api',
+        // The tests run behind no proxy, so only the loopback address is trusted to send the X-Forwarded-For header.
+        trustProxy: 'loopback',
         rateLimit: true,
         rateLimitOptions: {
             ttl: 10_000,
