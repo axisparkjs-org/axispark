@@ -31,6 +31,7 @@ export class ExpressHttpAdapter implements HttpAdapter {
 
     async initialize(): Promise<void> {
         this.httpServer = createServer(this.app);
+        this.app.set('trust proxy', this.options.trustProxy ?? false);
         if (this.options.bodyParser) this.app.use(express.json(this.options.bodyParserOptions));
         if (this.options.urlEncoded) this.app.use(express.urlencoded(this.options.urlEncodedOptions));
         if (this.options.session) this.app.use(session(this.options.sessionOptions));

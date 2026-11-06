@@ -11,6 +11,7 @@ describe('HttpPluginOptionsFactory', () => {
                 plugin: HttpPlugin,
                 port: 3000,
                 basePath: '/',
+                trustProxy: false,
                 adapter: ExpressHttpAdapter,
                 bodyParser: true,
                 bodyParserOptions: undefined,
@@ -59,6 +60,7 @@ describe('HttpPluginOptionsFactory', () => {
             const options = HttpPluginOptionsFactory.create({
                 port: 8080,
                 basePath: '/',
+                trustProxy: 1,
                 bodyParser: false,
                 bodyParserOptions,
                 urlEncoded: false,
@@ -97,6 +99,7 @@ describe('HttpPluginOptionsFactory', () => {
                 plugin: HttpPlugin,
                 port: 8080,
                 basePath: '/',
+                trustProxy: 1,
                 adapter: ExpressHttpAdapter,
                 bodyParser: false,
                 bodyParserOptions,

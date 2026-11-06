@@ -27,6 +27,7 @@ jest.mock('node:http', () => ({
 jest.mock('express', () => {
     const app = {
         use: jest.fn(),
+        set: jest.fn(),
         get: jest.fn(),
         post: jest.fn(),
         put: jest.fn(),
@@ -127,6 +128,22 @@ describe('ExpressHttpAdapter', () => {
 
             expect(createServer).toHaveBeenCalledWith(app);
             expect(app.use).not.toHaveBeenCalled();
+        });
+
+        it('should not trust any proxy by default', async () => {
+            const adapter = new ExpressHttpAdapter(baseConfig);
+
+            await adapter.initialize();
+
+            expect(app.set).toHaveBeenCalledWith('trust proxy', false);
+        });
+
+        it.each([true, 1, '10.0.0.0/8', ['loopback', '10.0.0.0/8']])('should set the trust proxy setting to %p', async (trustProxy) => {
+            const adapter = new ExpressHttpAdapter({ ...baseConfig, trustProxy });
+
+            await adapter.initialize();
+
+            expect(app.set).toHaveBeenCalledWith('trust proxy', trustProxy);
         });
 
         it('should register cookies without options', async () => {

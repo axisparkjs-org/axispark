@@ -88,6 +88,20 @@ describe('FastifyHttpAdapter', () => {
         jest.clearAllMocks();
     });
 
+    describe('constructor', () => {
+        it('should not trust any proxy by default', () => {
+            new FastifyHttpAdapter(baseConfig, axisparkConfig as any);
+
+            expect(fastify).toHaveBeenCalledWith({ trustProxy: false });
+        });
+
+        it.each([true, 1, '10.0.0.0/8', ['loopback', '10.0.0.0/8']])('should create the Fastify instance with trustProxy %p', (trustProxy) => {
+            new FastifyHttpAdapter({ ...baseConfig, trustProxy }, axisparkConfig as any);
+
+            expect(fastify).toHaveBeenCalledWith({ trustProxy });
+        });
+    });
+
     describe('initialize', () => {
         it('should register all enabled plugins', async () => {
             const adapter = new FastifyHttpAdapter(
