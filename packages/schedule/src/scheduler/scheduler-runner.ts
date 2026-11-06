@@ -4,6 +4,12 @@ import { Logger } from '@axisparkjs/logger';
 import { SCHEDULE_LOGGER } from '../di';
 
 /**
+ * The maximum delay accepted by Node.js timers (2^31 - 1 ms, about 24.8 days).
+ * Longer delays are set to 1 ms by Node.js, so they are split into several timers.
+ */
+const MAX_TIMER_DELAY = 2 ** 31 - 1;
+
+/**
  * A class for running scheduled jobs.
  */
 @Injectable()
@@ -68,6 +74,14 @@ export class SchedulerRunner {
         if (!nextExecutionTime || nextExecutionTime.getTime() <= Date.now()) return;
 
         const delay = nextExecutionTime.getTime() - Date.now();
+        if (delay > MAX_TIMER_DELAY) {
+            // Wait for the maximum delay and calculate the remaining delay again, without running the job.
+            const timeout = setTimeout(() => this.schedule(job), MAX_TIMER_DELAY);
+
+            this.runningJobs.set(job.name, timeout);
+            return;
+        }
+
         const timeout = setTimeout(async () => {
             try {
                 await job.execute();
