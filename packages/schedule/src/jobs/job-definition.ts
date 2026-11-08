@@ -12,6 +12,12 @@ export enum JobType {
     Timeout = 'timeout'
 }
 
+/**
+ * The function of a job. It receives an `AbortSignal` that is aborted when the job is stopped, for example when the application stops,
+ * so a long job can end early between its steps. Jobs that do not need it can ignore it.
+ */
+export type JobFunction = (signal: AbortSignal) => Promise<void>;
+
 /** The normalized options of an exclusive job. */
 export interface JobExclusivity {
     readonly mode: JobExclusiveMode;
@@ -31,7 +37,7 @@ export abstract class JobDefinition implements Executable {
 
     public constructor(
         public readonly name: string,
-        private readonly job: () => Promise<void>,
+        private readonly job: JobFunction,
         public readonly initiallyDisabled = false
     ) {}
 
@@ -66,12 +72,13 @@ export abstract class JobDefinition implements Executable {
 
     /**
      * Executes the job.
+     * @param signal The signal passed to the job function, aborted when the job is stopped. Defaults to a signal that is never aborted.
      * @returns A promise resolving when the job has been executed.
      */
-    public async execute(): Promise<void> {
+    public async execute(signal: AbortSignal = new AbortController().signal): Promise<void> {
         this.lastExecutionTime = new Date();
         this.lastOccurrenceTime = this.lastExecutionTime;
-        await this.job();
+        await this.job(signal);
     }
 
     /**
@@ -125,11 +132,11 @@ export abstract class JobDefinition implements Executable {
      * @param execute The function to execute when the job runs.
      * @returns The created job definition.
      */
-    public static fromMetadata(metadata: JobMetadata, execute: () => Promise<void>): JobDefinition {
+    public static fromMetadata(metadata: JobMetadata, execute: JobFunction): JobDefinition {
         return JobDefinition.create(metadata, execute).setExclusive(metadata.exclusive);
     }
 
-    private static create(metadata: JobMetadata, execute: () => Promise<void>): JobDefinition {
+    private static create(metadata: JobMetadata, execute: JobFunction): JobDefinition {
         switch (metadata.type) {
             case JobType.Cron:
                 return new CronJobDefinition(metadata.name, metadata.value as string, execute, metadata.disabled, metadata.timeZone);
@@ -150,7 +157,7 @@ export class CronJobDefinition extends JobDefinition {
     readonly type: JobType = JobType.Cron;
     protected readonly trigger: CronJobTrigger;
 
-    constructor(name: string, cronExpression: string, execute: () => Promise<void>, initiallyDisabled?: boolean, timeZone?: string) {
+    constructor(name: string, cronExpression: string, execute: JobFunction, initiallyDisabled?: boolean, timeZone?: string) {
         super(name, execute, initiallyDisabled);
         this.trigger = new CronJobTrigger(cronExpression, timeZone);
     }
@@ -172,7 +179,7 @@ export class IntervalJobDefinition extends JobDefinition {
     readonly type: JobType = JobType.Interval;
     protected readonly trigger: JobTrigger;
 
-    constructor(name: string, interval: number, execute: () => Promise<void>, initiallyDisabled?: boolean) {
+    constructor(name: string, interval: number, execute: JobFunction, initiallyDisabled?: boolean) {
         super(name, execute, initiallyDisabled);
         this.trigger = new IntervalJobTrigger(interval);
     }
@@ -193,7 +200,7 @@ export class DateJobDefinition extends JobDefinition {
     readonly type: JobType = JobType.Date;
     protected readonly trigger: JobTrigger;
 
-    constructor(name: string, date: Date, execute: () => Promise<void>, initiallyDisabled?: boolean) {
+    constructor(name: string, date: Date, execute: JobFunction, initiallyDisabled?: boolean) {
         super(name, execute, initiallyDisabled);
         this.trigger = new DateJobTrigger(date);
     }
@@ -214,7 +221,7 @@ export class TimeoutJobDefinition extends JobDefinition {
     readonly type: JobType = JobType.Timeout;
     protected readonly trigger: JobTrigger;
 
-    constructor(name: string, timeout: number, execute: () => Promise<void>, initiallyDisabled?: boolean) {
+    constructor(name: string, timeout: number, execute: JobFunction, initiallyDisabled?: boolean) {
         super(name, execute, initiallyDisabled);
         this.trigger = new TimeoutJobTrigger(timeout);
     }

@@ -5,7 +5,7 @@ import { Logger } from '@axisparkjs/logger';
 import { SchedulerService } from '../scheduler';
 import { JobGenerator } from '../jobs/job-generator';
 import { MemoryStore } from '@axisparkjs/store';
-import { SchedulePluginOptions } from './schedule-plugin-options';
+import { DEFAULT_SHUTDOWN_TIMEOUT, SchedulePluginOptions } from './schedule-plugin-options';
 
 /**
  * A plugin for managing scheduled jobs.
@@ -57,7 +57,9 @@ export class SchedulePlugin extends Plugin {
     }
 
     async onStop(): Promise<void> {
-        this.scheduler.stopAllJobs();
+        // The plugin waits for the running jobs, so they end, and the locks of the `no-overlap` jobs are released, before the plugins
+        // registered before it, such as the plugin of the lock store, are stopped.
+        await this.scheduler.stopAllJobs({ timeout: this.options?.shutdownTimeout ?? DEFAULT_SHUTDOWN_TIMEOUT });
         await this.logger.info(`Plugin stopped`);
     }
 }

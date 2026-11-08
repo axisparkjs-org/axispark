@@ -128,10 +128,31 @@ describe('SchedulePlugin', () => {
             jest.clearAllMocks();
         });
 
-        it('should stop all jobs', async () => {
+        it('should stop all jobs with the default shutdown timeout', async () => {
             await plugin.onStop();
 
-            expect(scheduler.stopAllJobs).toHaveBeenCalled();
+            expect(scheduler.stopAllJobs).toHaveBeenCalledWith({ timeout: 25_000 });
+        });
+
+        it('should stop all jobs with the configured shutdown timeout', async () => {
+            await plugin.onRegister(context, SchedulePluginOptionsFactory.create({ shutdownTimeout: 1000 }));
+
+            await plugin.onStop();
+
+            expect(scheduler.stopAllJobs).toHaveBeenCalledWith({ timeout: 1000 });
+        });
+
+        it('should wait for the running jobs before logging that the plugin stopped', async () => {
+            let resolveStop!: () => void;
+            scheduler.stopAllJobs.mockReturnValue(new Promise<void>((resolve) => (resolveStop = resolve)));
+
+            const promise = plugin.onStop();
+            await Promise.resolve();
+
+            expect(logger.info).not.toHaveBeenCalledWith('Plugin stopped');
+            resolveStop();
+            await promise;
+            expect(logger.info).toHaveBeenCalledWith('Plugin stopped');
         });
 
         it('should log plugin shutdown', async () => {

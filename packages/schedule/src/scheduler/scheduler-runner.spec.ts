@@ -375,6 +375,201 @@ describe('SchedulerRunner', () => {
         });
     });
 
+    describe('graceful stop', () => {
+        const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+        const intervalJob = (execute: jest.Mock, name = 'slow') => new IntervalJobDefinition(name, 1_000, execute);
+        const settled = (promise: Promise<unknown>) => {
+            const state = { done: false };
+            promise.then(() => (state.done = true));
+            return state;
+        };
+
+        it('should report whether an execution is in progress', async () => {
+            const job = intervalJob(jest.fn().mockImplementation(() => wait(500)));
+
+            runner.start(job);
+            expect(runner.isExecuting(job)).toBe(false);
+            await jest.advanceTimersByTimeAsync(1_000);
+            expect(runner.isExecuting(job)).toBe(true);
+            expect(runner.isRunning(job)).toBe(true);
+            await jest.advanceTimersByTimeAsync(500);
+            expect(runner.isExecuting(job)).toBe(false);
+            await runner.stop(job);
+        });
+
+        it('should wait for the running executions without starting new ones', async () => {
+            const execute = jest.fn().mockImplementation(() => wait(3_000));
+            const job = intervalJob(execute);
+
+            runner.start(job);
+            await jest.advanceTimersByTimeAsync(1_000);
+            const stop = settled(runner.stopAll([job], { timeout: 10_000 }));
+
+            await jest.advanceTimersByTimeAsync(2_999);
+            expect(stop.done).toBe(false);
+            await jest.advanceTimersByTimeAsync(1);
+            expect(stop.done).toBe(true);
+            expect(runner.isExecuting(job)).toBe(false);
+
+            await jest.advanceTimersByTimeAsync(10_000);
+            expect(execute).toHaveBeenCalledTimes(1);
+            expect(logger.warn).not.toHaveBeenCalled();
+        });
+
+        it('should return at once when no job is executing', async () => {
+            const job = intervalJob(jest.fn());
+            runner.start(job);
+
+            await expect(runner.stopAll([job], { timeout: 10_000 })).resolves.toBeUndefined();
+            expect(runner.isRunning(job)).toBe(false);
+        });
+
+        it('should wait until the executions end without a timeout', async () => {
+            const job = intervalJob(jest.fn().mockImplementation(() => wait(60_000)));
+
+            runner.start(job);
+            await jest.advanceTimersByTimeAsync(1_000);
+            const stop = settled(runner.stop(job));
+
+            await jest.advanceTimersByTimeAsync(59_999);
+            expect(stop.done).toBe(false);
+            await jest.advanceTimersByTimeAsync(1);
+            expect(stop.done).toBe(true);
+        });
+
+        it('should log a warning with the jobs that are still running when the timeout ends', async () => {
+            const slow = intervalJob(
+                jest.fn().mockImplementation(() => wait(5_000)),
+                'slow'
+            );
+            const fast = intervalJob(
+                jest.fn().mockImplementation(() => wait(500)),
+                'fast'
+            );
+
+            runner.startAll([slow, fast]);
+            await jest.advanceTimersByTimeAsync(1_000);
+            const stop = settled(runner.stopAll([slow, fast], { timeout: 1_000 }));
+
+            await jest.advanceTimersByTimeAsync(1_000);
+            expect(stop.done).toBe(true);
+            expect(runner.isExecuting(slow)).toBe(true);
+            expect(logger.warn).toHaveBeenCalledWith('Stopped the scheduler without waiting for the running jobs after 1000ms: slow');
+            await jest.advanceTimersByTimeAsync(4_000);
+        });
+
+        it('should not wait with a timeout of 0', async () => {
+            const job = intervalJob(jest.fn().mockImplementation(() => wait(5_000)));
+
+            runner.start(job);
+            await jest.advanceTimersByTimeAsync(1_000);
+            await runner.stopAll([job], { timeout: 0 });
+
+            expect(runner.isExecuting(job)).toBe(true);
+            expect(logger.warn).toHaveBeenCalledWith('Stopped the scheduler without waiting for the running jobs after 0ms: slow');
+            await jest.advanceTimersByTimeAsync(5_000);
+        });
+
+        it('should abort the signal of the running executions so the jobs can end early', async () => {
+            const steps: number[] = [];
+            const execute = jest.fn().mockImplementation(async (signal: AbortSignal) => {
+                for (let step = 0; step < 10; step++) {
+                    if (signal.aborted) return;
+                    steps.push(step);
+                    await wait(1_000);
+                }
+            });
+            const job = intervalJob(execute);
+
+            runner.start(job);
+            await jest.advanceTimersByTimeAsync(1_000 + 2_500);
+            const stop = settled(runner.stopAll([job], { timeout: 30_000 }));
+            await jest.advanceTimersByTimeAsync(500);
+
+            expect(stop.done).toBe(true);
+            expect(steps).toEqual([0, 1, 2]);
+            expect(execute).toHaveBeenCalledWith(expect.any(AbortSignal));
+        });
+
+        it('should pass a new signal to every execution after the job is started again', async () => {
+            const signals: AbortSignal[] = [];
+            const job = intervalJob(jest.fn().mockImplementation(async (signal: AbortSignal) => void signals.push(signal)));
+
+            runner.start(job);
+            await jest.advanceTimersByTimeAsync(1_000);
+            await runner.stop(job);
+            runner.start(job);
+            await jest.advanceTimersByTimeAsync(1_000);
+            await runner.stop(job);
+
+            expect(signals).toHaveLength(2);
+            expect(signals[1]).not.toBe(signals[0]);
+            expect(signals[1].aborted).toBe(false);
+        });
+
+        it('should not wait for its own execution when a job stops itself', async () => {
+            let stopped = false;
+            const job: JobDefinition = intervalJob(
+                jest.fn().mockImplementation(async () => {
+                    await runner.stop(job);
+                    stopped = true;
+                })
+            );
+
+            runner.start(job);
+            await jest.advanceTimersByTimeAsync(1_000);
+
+            expect(stopped).toBe(true);
+            expect(runner.isRunning(job)).toBe(false);
+            expect(runner.isExecuting(job)).toBe(false);
+        });
+
+        describe('locks of the no-overlap jobs', () => {
+            const noOverlap = (execute: jest.Mock) => new IntervalJobDefinition('slow', 1_000, execute).setExclusive({ mode: 'no-overlap', ttl: 1_000 });
+            const createLock = () => ({
+                key: 'schedule:slow',
+                token: 't',
+                extend: jest.fn().mockResolvedValue(true),
+                release: jest.fn().mockResolvedValue(true)
+            });
+
+            it('should release the lock of a job that ends during the shutdown before the stop resolves', async () => {
+                const store = new InMemoryLockStore();
+                runner.useLockStore(store);
+                const job = noOverlap(jest.fn().mockImplementation(() => wait(2_000)));
+
+                runner.start(job);
+                await jest.advanceTimersByTimeAsync(1_000 + 500);
+                await expect(store.acquire('schedule:slow', 1)).resolves.toBeUndefined();
+
+                const stop = runner.stopAll([job], { timeout: 10_000 });
+                await jest.advanceTimersByTimeAsync(1_500);
+                await stop;
+
+                await expect(store.acquire('schedule:slow', 1)).resolves.toBeDefined();
+            });
+
+            it('should keep the lock and stop its heartbeat when the job exceeds the timeout', async () => {
+                const lock = createLock();
+                runner.useLockStore({ acquire: jest.fn().mockResolvedValue(lock) });
+                const job = noOverlap(jest.fn().mockImplementation(() => wait(10_000)));
+
+                runner.start(job);
+                await jest.advanceTimersByTimeAsync(1_000 + 1_000);
+                const extendsBeforeStop = lock.extend.mock.calls.length;
+                await Promise.all([runner.stopAll([job], { timeout: 1_000 }), jest.advanceTimersByTimeAsync(1_000)]);
+                const extendsAtTimeout = lock.extend.mock.calls.length;
+
+                expect(extendsBeforeStop).toBe(2);
+                expect(lock.release).not.toHaveBeenCalled();
+                await jest.advanceTimersByTimeAsync(5_000);
+                expect(lock.extend).toHaveBeenCalledTimes(extendsAtTimeout);
+                expect(lock.release).not.toHaveBeenCalled();
+                await jest.advanceTimersByTimeAsync(3_000);
+            });
+        });
+    });
+
     describe('exclusive jobs', () => {
         const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
         let store: InMemoryLockStore;

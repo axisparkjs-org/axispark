@@ -1,5 +1,5 @@
 import { Factory } from '@axisparkjs/common';
-import { SchedulePluginOptions } from './schedule-plugin-options';
+import { DEFAULT_SHUTDOWN_TIMEOUT, SchedulePluginOptions } from './schedule-plugin-options';
 import { SchedulePlugin } from './schedule-plugin';
 
 /**
@@ -9,6 +9,7 @@ export class SchedulePluginOptionsFactoryStatic implements Factory<SchedulePlugi
     create(options: Omit<SchedulePluginOptions, 'plugin'> = {}): SchedulePluginOptions {
         return {
             plugin: SchedulePlugin,
+            shutdownTimeout: DEFAULT_SHUTDOWN_TIMEOUT,
             ...options
         };
     }
