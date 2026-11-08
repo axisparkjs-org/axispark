@@ -173,7 +173,7 @@ export class HttpPlugin extends Plugin {
         if (!this.options.rateLimit) return;
 
         const provider = this.options.rateLimitOptions?.store ?? MemoryStore();
-        RateLimitProcessor.registerRateLimitStore(await provider('rate-limit', this.context));
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.Http, await provider('rate-limit', this.context));
     }
 
     private disableComponentIf(enabled: boolean, target: ClassType): void {

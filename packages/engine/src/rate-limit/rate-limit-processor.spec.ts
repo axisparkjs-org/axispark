@@ -19,7 +19,10 @@ describe('RateLimitProcessor', () => {
         jest.spyOn(Date, 'now').mockImplementation(() => now);
         processor = new RateLimitProcessor();
         (RateLimitProcessor as any).resolvers.clear();
-        RateLimitProcessor.registerRateLimitStore(new InMemoryRateLimitStore());
+        (RateLimitProcessor as any).stores.clear();
+        const store = new InMemoryRateLimitStore();
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.Http, store);
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.WebSocket, store);
     });
 
     afterEach(() => {
@@ -83,7 +86,7 @@ describe('RateLimitProcessor', () => {
     it('builds the bucket key with the transport, the client and the handler', async () => {
         const store: RateLimitStore = { consume: jest.fn().mockResolvedValue({ allowed: true, retryAfterMs: 0 }) };
         const definition = new RateLimitDefinition(1_000, 1);
-        RateLimitProcessor.registerRateLimitStore(store);
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.Http, store);
         RateLimitProcessor.registerRateLimit(ExecutionTransport.Http, resolverOf('127.0.0.1'));
 
         await processor.process(definition, context());
@@ -91,13 +94,39 @@ describe('RateLimitProcessor', () => {
         expect(store.consume).toHaveBeenCalledWith(JSON.stringify([ExecutionTransport.Http, '127.0.0.1', 'TestController', 'handle']), definition);
     });
 
-    it('returns undefined when no store is registered', async () => {
+    it('returns undefined when no store is registered for the transport', async () => {
         const resolver = resolverOf('127.0.0.1');
         RateLimitProcessor.registerRateLimit(ExecutionTransport.Http, resolver);
-        (RateLimitProcessor as any).store = undefined;
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.Http);
 
         await expect(processor.process(new RateLimitDefinition(1_000, 3), context())).resolves.toBeUndefined();
         expect(resolver.resolve).not.toHaveBeenCalled();
+    });
+
+    it('uses the store registered for the transport of the context', async () => {
+        const httpStore: RateLimitStore = { consume: jest.fn().mockResolvedValue({ allowed: true, retryAfterMs: 0 }) };
+        const webSocketStore: RateLimitStore = { consume: jest.fn().mockResolvedValue({ allowed: false, retryAfterMs: 100 }) };
+        const definition = new RateLimitDefinition(1_000, 1);
+        RateLimitProcessor.registerRateLimit(ExecutionTransport.Http, resolverOf('client'));
+        RateLimitProcessor.registerRateLimit(ExecutionTransport.WebSocket, resolverOf('client'));
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.Http, httpStore);
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.WebSocket, webSocketStore);
+
+        await expect(processor.process(definition, context())).resolves.toEqual({ allowed: true, retryAfterMs: 0 });
+        await expect(processor.process(definition, context(ExecutionTransport.WebSocket))).resolves.toEqual({ allowed: false, retryAfterMs: 100 });
+        expect(httpStore.consume).toHaveBeenCalledTimes(1);
+        expect(webSocketStore.consume).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the store of a transport when another transport registers its own', async () => {
+        const httpStore: RateLimitStore = { consume: jest.fn().mockResolvedValue({ allowed: true, retryAfterMs: 0 }) };
+        RateLimitProcessor.registerRateLimit(ExecutionTransport.Http, resolverOf('client'));
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.Http, httpStore);
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.WebSocket, new InMemoryRateLimitStore());
+
+        await processor.process(new RateLimitDefinition(1_000, 1), context());
+
+        expect(httpStore.consume).toHaveBeenCalledTimes(1);
     });
 
     it('returns undefined when there is no rate limit definition', async () => {
