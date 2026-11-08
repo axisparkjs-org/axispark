@@ -1,4 +1,4 @@
-import { WebSocketError, WebSocketRequestTimeoutError } from './websocket-errors';
+import { WebSocketError, WebSocketRateLimitExceededError, WebSocketRequestTimeoutError } from './websocket-errors';
 
 describe('WebSocketError', () => {
     it('should create an error with the given response message and default status', () => {
@@ -38,5 +38,26 @@ describe('WebSocketRequestTimeoutError', () => {
 
     it('should use a default message', () => {
         expect(new WebSocketRequestTimeoutError().response).toBe('Request timed out');
+    });
+});
+
+describe('WebSocketRateLimitExceededError', () => {
+    it('should create a WebSocket error with the 429 status and the retry time in its details', () => {
+        const error = new WebSocketRateLimitExceededError(750);
+
+        expect(error).toBeInstanceOf(WebSocketError);
+        expect(error.response).toBe('Too many requests. Please try again later.');
+        expect(error.status).toBe(429);
+        expect(error.retryAfterMs).toBe(750);
+        expect(error.details).toEqual({ retryAfterMs: 750 });
+        expect(error.name).toBe('WebSocketRateLimitExceededError');
+    });
+
+    it('should accept a custom message', () => {
+        expect(new WebSocketRateLimitExceededError(10, 'Slow down').response).toBe('Slow down');
+    });
+
+    it('should have no details in other WebSocket errors', () => {
+        expect(new WebSocketError('error').details).toBeUndefined();
     });
 });

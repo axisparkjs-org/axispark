@@ -1,6 +1,8 @@
 import { PluginOptions } from '@axisparkjs/core';
 import { TrustProxyOption } from '@axisparkjs/http';
+import { StoreProvider } from '@axisparkjs/store';
 import { WebSocketAdapterClass } from '../adapter/websocket-adapter';
+import { WebSocketContext } from '../types/websocket-context';
 
 /**
  * Options for configuring the timeouts of the WebSocket events.
@@ -14,6 +16,31 @@ export interface WebSocketTimeoutOptions {
      * The message sent to the client when a timeout occurs. By default, it is `Request timed out after <time>ms`.
      */
     message?: string | ((time: number) => string);
+}
+
+/**
+ * How the rate limits identify the clients of the WebSocket events: by `'address'` (the remote address of the connection), by
+ * `'connection'` (the connection id), or with a function, for example to count the events per authenticated user.
+ */
+export type WebSocketRateLimitBy = 'address' | 'connection' | ((context: WebSocketContext) => string | Promise<string>);
+
+/**
+ * Options for configuring the rate limits of the WebSocket events.
+ */
+export interface WebSocketRateLimitOptions {
+    /** The sliding time window in milliseconds. Defaults to 60000. */
+    ttl?: number;
+    /** The maximum number of events allowed in the window, per client and event handler. Defaults to 100. */
+    limit?: number;
+    /** The error message when a client exceeds the limit. The function receives the milliseconds until it can send the event again. */
+    message?: string | ((retryAfterMs: number) => string);
+    /** How the clients are identified. Defaults to `'address'`, falling back to the connection id when the adapter does not know the address. */
+    by?: WebSocketRateLimitBy;
+    /**
+     * The provider of the store that counts the events, called when the plugin starts. Defaults to `MemoryStore()`, which keeps the counters
+     * in the process. Use a shared provider, such as `RedisStore('NAME')` from `@axisparkjs/redis`, to share the limits between instances.
+     */
+    store?: StoreProvider<'rate-limit'>;
 }
 
 export interface WebSocketPluginOptions extends PluginOptions {
@@ -55,4 +82,13 @@ export interface WebSocketPluginOptions extends PluginOptions {
      * `false`, or to the `trustProxy` option of the HTTP plugin when `useHttpPluginServer` is enabled.
      */
     trustProxy?: TrustProxyOption;
+    /**
+     * Whether to apply rate limits to the WebSocket events. Defaults to false. `@RateLimit()` and `@NoRateLimit()` override the default
+     * limits on a class or event.
+     */
+    rateLimit?: boolean;
+    /**
+     * The default rate limits of the WebSocket events and their store.
+     */
+    rateLimitOptions?: WebSocketRateLimitOptions;
 }

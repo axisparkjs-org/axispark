@@ -1,4 +1,7 @@
-import { ExecutionTransport, TimeoutGenerator, TimeoutProcessor } from '@axisparkjs/engine';
+import { ExecutionTransport, RateLimitGenerator, RateLimitProcessor, TimeoutGenerator, TimeoutProcessor } from '@axisparkjs/engine';
+import { ClassRegistry } from '@axisparkjs/di';
+import { InMemoryRateLimitStore } from '@axisparkjs/store';
+import { WsRateLimitGuard } from '../implementations';
 import { WebSocketPlugin } from './websocket-plugin';
 
 describe('WebSocketPlugin', () => {
@@ -7,7 +10,7 @@ describe('WebSocketPlugin', () => {
     beforeEach(() => (httpTrustProxy = undefined));
     const createPlugin = (useHttpPluginServer = false) => {
         const adapter = { initialize: jest.fn(), registerEvents: jest.fn(), start: jest.fn(), stop: jest.fn() };
-        const container: any = { bind: jest.fn(), resolve: jest.fn().mockResolvedValue(adapter) };
+        const container: any = { bind: jest.fn(), unbind: jest.fn(), resolve: jest.fn().mockResolvedValue(adapter) };
         const logger = { child: jest.fn().mockReturnThis(), info: jest.fn() };
         const injector = {
             get: jest.fn(async (token: any) => {
@@ -76,6 +79,58 @@ describe('WebSocketPlugin', () => {
             await test.plugin.onRegister(test.context as any, { ...test.options, timeout: true, timeoutOptions: { time: 250 } });
             expect(generatorSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket, 250);
             expect(processorSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket, expect.anything());
+        });
+    });
+    describe('rate limits', () => {
+        afterEach(() => jest.restoreAllMocks());
+
+        it('removes the rate limits and the guard when rateLimit is disabled', async () => {
+            const generatorSpy = jest.spyOn(RateLimitGenerator, 'registerRateLimit');
+            const processorSpy = jest.spyOn(RateLimitProcessor, 'registerRateLimit');
+            const storeSpy = jest.spyOn(RateLimitProcessor, 'registerRateLimitStore');
+            const removeSpy = jest.spyOn(ClassRegistry, 'remove');
+            const test = createPlugin();
+            await test.plugin.onRegister(test.context as any, test.options);
+            await test.plugin.onStart();
+
+            expect(generatorSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket);
+            expect(processorSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket);
+            expect(removeSpy).toHaveBeenCalledWith(WsRateLimitGuard);
+            expect(test.container.unbind).toHaveBeenCalledWith(WsRateLimitGuard);
+            expect(storeSpy).not.toHaveBeenCalled();
+        });
+
+        it('registers the default limits, the resolver and an in-memory store when rateLimit is enabled', async () => {
+            const generatorSpy = jest.spyOn(RateLimitGenerator, 'registerRateLimit');
+            const processorSpy = jest.spyOn(RateLimitProcessor, 'registerRateLimit');
+            const storeSpy = jest.spyOn(RateLimitProcessor, 'registerRateLimitStore');
+            const removeSpy = jest.spyOn(ClassRegistry, 'remove');
+            const test = createPlugin();
+            await test.plugin.onRegister(test.context as any, { ...test.options, rateLimit: true, rateLimitOptions: { ttl: 1_000, limit: 3 } });
+
+            expect(generatorSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket, { ttl: 1_000, limit: 3 });
+            expect(processorSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket, expect.anything());
+            expect(removeSpy).not.toHaveBeenCalledWith(WsRateLimitGuard);
+            expect(storeSpy).not.toHaveBeenCalled();
+
+            await test.plugin.onStart();
+            expect(storeSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket, expect.any(InMemoryRateLimitStore));
+        });
+
+        it('creates the store with the configured provider before starting the adapter', async () => {
+            const store = new InMemoryRateLimitStore();
+            const storeSpy = jest.spyOn(RateLimitProcessor, 'registerRateLimitStore');
+            const test = createPlugin();
+            const provider = jest.fn().mockImplementation(async () => {
+                expect(test.adapter.start).not.toHaveBeenCalled();
+                return store;
+            });
+            await test.plugin.onRegister(test.context as any, { ...test.options, rateLimit: true, rateLimitOptions: { store: provider } });
+            await test.plugin.onStart();
+
+            expect(provider).toHaveBeenCalledWith('rate-limit', test.context);
+            expect(storeSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket, store);
+            expect(test.adapter.start).toHaveBeenCalled();
         });
     });
 });
