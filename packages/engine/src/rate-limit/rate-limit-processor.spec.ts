@@ -2,7 +2,7 @@ import { ExecutionContext, ExecutionTransport } from '../execution';
 import { RateLimitDefinition } from './rate-limit-definition';
 import { RateLimitProcessor } from './rate-limit-processor';
 import { RateLimitResolver } from './rate-limit-resolver';
-import { InMemoryRateLimitStore, RateLimitStore } from './rate-limit-store';
+import { InMemoryRateLimitStore, RateLimitStore } from '@axisparkjs/store';
 
 describe('RateLimitProcessor', () => {
     let processor: RateLimitProcessor;
@@ -19,7 +19,7 @@ describe('RateLimitProcessor', () => {
         jest.spyOn(Date, 'now').mockImplementation(() => now);
         processor = new RateLimitProcessor();
         (RateLimitProcessor as any).resolvers.clear();
-        RateLimitProcessor.registerRateLimitStore();
+        RateLimitProcessor.registerRateLimitStore(new InMemoryRateLimitStore());
     });
 
     afterEach(() => {
@@ -91,11 +91,13 @@ describe('RateLimitProcessor', () => {
         expect(store.consume).toHaveBeenCalledWith(JSON.stringify([ExecutionTransport.Http, '127.0.0.1', 'TestController', 'handle']), definition);
     });
 
-    it('restores an in-memory store when the registered store is removed', () => {
-        RateLimitProcessor.registerRateLimitStore({ consume: jest.fn() });
-        RateLimitProcessor.registerRateLimitStore();
+    it('returns undefined when no store is registered', async () => {
+        const resolver = resolverOf('127.0.0.1');
+        RateLimitProcessor.registerRateLimit(ExecutionTransport.Http, resolver);
+        (RateLimitProcessor as any).store = undefined;
 
-        expect((RateLimitProcessor as any).store).toBeInstanceOf(InMemoryRateLimitStore);
+        await expect(processor.process(new RateLimitDefinition(1_000, 3), context())).resolves.toBeUndefined();
+        expect(resolver.resolve).not.toHaveBeenCalled();
     });
 
     it('returns undefined when there is no rate limit definition', async () => {

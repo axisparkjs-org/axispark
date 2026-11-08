@@ -21,6 +21,7 @@
         "@axisparkjs/redis",
         "@axisparkjs/schedule",
         "@axisparkjs/security",
+        "@axisparkjs/store",
         "@axisparkjs/test",
         "@axisparkjs/websocket",
         "@axisparkjs/websocket-socketio"

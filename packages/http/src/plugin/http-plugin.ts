@@ -6,6 +6,7 @@ import { RouteGenerator, RouteDefinition, RouteValidator } from '../routes';
 import { Logger } from '@axisparkjs/logger';
 import { ClassRegistry, Injectable, InjectableScopes, Injector } from '@axisparkjs/di';
 import { ClassType } from '@axisparkjs/common';
+import { MemoryStore } from '@axisparkjs/store';
 import { HttpParameter } from '../types';
 import { VersionProcessor, VersionType } from '../version';
 import {
@@ -165,6 +166,16 @@ export class HttpPlugin extends Plugin {
         }
     }
 
+    /**
+     * Creates the rate limit store when the plugin starts, so a shared store can use the connections registered by other plugins.
+     */
+    private async registerRateLimitStore(): Promise<void> {
+        if (!this.options.rateLimit) return;
+
+        const provider = this.options.rateLimitOptions?.store ?? MemoryStore();
+        RateLimitProcessor.registerRateLimitStore(await provider('rate-limit', this.context));
+    }
+
     private disableComponentIf(enabled: boolean, target: ClassType): void {
         if (enabled) return;
 
@@ -173,6 +184,7 @@ export class HttpPlugin extends Plugin {
     }
 
     async onStart(): Promise<void> {
+        await this.registerRateLimitStore();
         await this.adapter.start();
         await this.logger.info(`Plugin started. Listening on port ${this.options.port}`);
     }

@@ -27,6 +27,24 @@ export abstract class JobTrigger {
     getNextExecutionTimeAfter(_date: Date): Date | undefined {
         return undefined;
     }
+
+    /**
+     * Identifies an occurrence of the job, so every instance of the application that runs the same occurrence uses the same lock.
+     * @param scheduledAt The scheduled time of the occurrence.
+     * @returns The scheduled time in ISO format, which is the same in every instance for date and cron jobs.
+     */
+    getOccurrenceKey(scheduledAt: Date): string {
+        return scheduledAt.toISOString();
+    }
+
+    /**
+     * Gets the time between an occurrence and the next one, used as the default time to live of the lock of an occurrence.
+     * @param _scheduledAt The scheduled time of the occurrence.
+     * @returns The milliseconds until the next occurrence, or undefined if the job is not recurring.
+     */
+    getOccurrenceInterval(_scheduledAt: Date): number | undefined {
+        return undefined;
+    }
 }
 
 /**
@@ -59,6 +77,10 @@ export class CronJobTrigger extends JobTrigger {
     override getNextExecutionTimeAfter(date: Date): Date | undefined {
         return this.getNextExecutionTime(date);
     }
+
+    override getOccurrenceInterval(scheduledAt: Date): number | undefined {
+        return (this.getNextExecutionTime(scheduledAt) as Date).getTime() - scheduledAt.getTime();
+    }
 }
 
 /**
@@ -78,6 +100,18 @@ export class IntervalJobTrigger extends JobTrigger {
 
     override getNextExecutionTimeAfter(date: Date): Date | undefined {
         return new Date(date.getTime() + this.interval);
+    }
+
+    /**
+     * Identifies the interval window of the occurrence, counted from the Unix epoch. The instances of the application start at
+     * different times, so their scheduled times differ, but each instance runs the job once per window.
+     */
+    override getOccurrenceKey(scheduledAt: Date): string {
+        return String(Math.floor(scheduledAt.getTime() / this.interval));
+    }
+
+    override getOccurrenceInterval(): number | undefined {
+        return this.interval;
     }
 }
 
@@ -107,5 +141,10 @@ export class TimeoutJobTrigger extends JobTrigger {
 
     getNextExecutionTime(): Date | undefined {
         return new Date(this.createdAt.getTime() + this.timeout);
+    }
+
+    /** The job runs once per process, so every instance shares the same lock during its time to live. */
+    override getOccurrenceKey(): string {
+        return 'timeout';
     }
 }

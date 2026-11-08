@@ -4,7 +4,6 @@ import { HttpPlugin } from '@axisparkjs/http';
 import { app as appExpress } from '@axisparkjs/samples/rate-limiting/src/app-express';
 import { app as appFastify } from '@axisparkjs/samples/rate-limiting/src/app-fastify';
 import { ExpressHttpAdapter } from '@axisparkjs/http-express';
-import { RateLimitProcessor } from '@axisparkjs/engine';
 import { FastifyHttpAdapter } from '@axisparkjs/http-fastify';
 
 describe.each([
@@ -97,7 +96,5 @@ describe.each([
 
     afterAll(async () => {
         await axiSparkCore.destroy();
-        // The buckets are kept in a static store, so each adapter starts with empty buckets.
-        RateLimitProcessor.registerRateLimitStore();
     });
 });

@@ -9,6 +9,7 @@ The complete guide is in the [Schedule Plugin documentation](https://axisparkjs.
 - Discovers classes decorated with `@Scheduler()` and starts their jobs when the application runs.
 - Declares jobs with `@Cron()`, `@Interval()`, `@Timeout()` and `@DateSchedule()`.
 - Starts and stops jobs at runtime through the `SchedulerService`.
+- Runs exclusive jobs (`exclusive: true`) on only one instance of the application, with the locks of the `lockStore` option, such as `RedisStore` from `@axisparkjs/redis`.
 
 ## Install and register
 

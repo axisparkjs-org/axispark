@@ -1,6 +1,6 @@
 import { Executable } from '@axisparkjs/common';
 import { CronJobTrigger, DateJobTrigger, IntervalJobTrigger, JobTrigger, TimeoutJobTrigger } from './job-trigger';
-import { JobMetadata } from '../metadata';
+import { JobExclusiveMode, JobExclusiveOptions, JobMetadata } from '../metadata';
 
 /**
  * An enumeration of job types.
@@ -12,6 +12,12 @@ export enum JobType {
     Timeout = 'timeout'
 }
 
+/** The normalized options of an exclusive job. */
+export interface JobExclusivity {
+    readonly mode: JobExclusiveMode;
+    readonly ttl?: number;
+}
+
 /**
  * An abstract class representing a job definition.
  */
@@ -19,6 +25,9 @@ export abstract class JobDefinition implements Executable {
     abstract readonly type: JobType;
     protected abstract trigger: JobTrigger;
     protected lastExecutionTime?: Date;
+    /** The time of the last occurrence, executed by this instance or skipped because another instance ran it. */
+    protected lastOccurrenceTime?: Date;
+    private exclusivity?: JobExclusivity;
 
     public constructor(
         public readonly name: string,
@@ -43,7 +52,7 @@ export abstract class JobDefinition implements Executable {
      * @returns The next execution time, or undefined if the job has no more executions.
      */
     public getNextExecutionTime(): Date | undefined {
-        return this.trigger.getNextExecutionTime(this.lastExecutionTime);
+        return this.trigger.getNextExecutionTime(this.lastOccurrenceTime);
     }
 
     /**
@@ -61,7 +70,53 @@ export abstract class JobDefinition implements Executable {
      */
     public async execute(): Promise<void> {
         this.lastExecutionTime = new Date();
+        this.lastOccurrenceTime = this.lastExecutionTime;
         await this.job();
+    }
+
+    /**
+     * Skips the current occurrence without executing the job, for example because another instance holds its lock.
+     * The next execution time is calculated from now, as if the job had been executed.
+     */
+    public skipExecution(): void {
+        this.lastOccurrenceTime = new Date();
+    }
+
+    /**
+     * The options of the job when it runs on only one instance of the application, or undefined when it runs on every instance.
+     */
+    public get exclusive(): JobExclusivity | undefined {
+        return this.exclusivity;
+    }
+
+    /**
+     * Sets whether the job runs on only one instance of the application.
+     * @param exclusive `true` for the `once-per-occurrence` mode, the options of the exclusive job, or `false` to run it on every instance.
+     * @returns The job definition.
+     */
+    public setExclusive(exclusive?: boolean | JobExclusiveOptions): this {
+        if (!exclusive) this.exclusivity = undefined;
+        else if (exclusive === true) this.exclusivity = { mode: 'once-per-occurrence' };
+        else this.exclusivity = { mode: exclusive.mode ?? 'once-per-occurrence', ttl: exclusive.ttl };
+        return this;
+    }
+
+    /**
+     * Identifies an occurrence of the job, so every instance that runs the same occurrence uses the same lock.
+     * @param scheduledAt The scheduled time of the occurrence.
+     * @returns The key of the occurrence.
+     */
+    public getOccurrenceKey(scheduledAt: Date): string {
+        return this.trigger.getOccurrenceKey(scheduledAt);
+    }
+
+    /**
+     * Gets the time between an occurrence and the next one.
+     * @param scheduledAt The scheduled time of the occurrence.
+     * @returns The milliseconds until the next occurrence, or undefined if the job is not recurring.
+     */
+    public getOccurrenceInterval(scheduledAt: Date): number | undefined {
+        return this.trigger.getOccurrenceInterval(scheduledAt);
     }
 
     /**
@@ -71,6 +126,10 @@ export abstract class JobDefinition implements Executable {
      * @returns The created job definition.
      */
     public static fromMetadata(metadata: JobMetadata, execute: () => Promise<void>): JobDefinition {
+        return JobDefinition.create(metadata, execute).setExclusive(metadata.exclusive);
+    }
+
+    private static create(metadata: JobMetadata, execute: () => Promise<void>): JobDefinition {
         switch (metadata.type) {
             case JobType.Cron:
                 return new CronJobDefinition(metadata.name, metadata.value as string, execute, metadata.disabled, metadata.timeZone);

@@ -56,6 +56,8 @@
             "@axisparkjs/redis/*": ["./packages/redis/src/*"],
             "@axisparkjs/schedule": ["./packages/schedule/src"],
             "@axisparkjs/schedule/*": ["./packages/schedule/src/*"],
+            "@axisparkjs/store": ["./packages/store/src"],
+            "@axisparkjs/store/*": ["./packages/store/src/*"],
             "@axisparkjs/test": ["./packages/test/src"],
             "@axisparkjs/test/*": ["./packages/test/src/*"],
             "@axisparkjs/websocket": ["./packages/websocket/src"],

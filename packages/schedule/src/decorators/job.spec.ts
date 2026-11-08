@@ -58,6 +58,34 @@ describe('Job decorators', () => {
         });
     });
 
+    describe('exclusive', () => {
+        it('should keep the exclusive option of the job', () => {
+            const defineSpy = jest.spyOn(Metadata, 'define').mockImplementation();
+
+            class TestClass {
+                @Cron({ value: '* * * * *', exclusive: true })
+                cron() {}
+            }
+
+            expect(defineSpy).toHaveBeenCalledWith(MetadataKeys.JOB, [expect.objectContaining({ exclusive: true })], TestClass.prototype);
+        });
+
+        it('should keep the exclusive options of the job', () => {
+            const defineSpy = jest.spyOn(Metadata, 'define').mockImplementation();
+
+            class TestClass {
+                @Interval({ value: 1000, exclusive: { mode: 'no-overlap', ttl: 5000 } })
+                interval() {}
+            }
+
+            expect(defineSpy).toHaveBeenCalledWith(
+                MetadataKeys.JOB,
+                [expect.objectContaining({ exclusive: { mode: 'no-overlap', ttl: 5000 } })],
+                TestClass.prototype
+            );
+        });
+    });
+
     describe('Interval', () => {
         it('should register an interval job', () => {
             const defineSpy = jest.spyOn(Metadata, 'define').mockImplementation();

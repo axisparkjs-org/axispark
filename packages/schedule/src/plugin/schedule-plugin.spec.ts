@@ -2,6 +2,8 @@ import { SchedulePlugin } from './schedule-plugin';
 import { JobGenerator } from '../jobs/job-generator';
 import { SCHEDULE_LOGGER } from '../di/tokens';
 import { SchedulerService } from '../scheduler';
+import { InMemoryLockStore } from '@axisparkjs/store';
+import { SchedulePluginOptionsFactory } from './schedule-plugin-options-factory';
 
 describe('SchedulePlugin', () => {
     let plugin: SchedulePlugin;
@@ -26,7 +28,8 @@ describe('SchedulePlugin', () => {
             registerJobs: jest.fn(),
             startAllJobs: jest.fn(),
             stopAllJobs: jest.fn(),
-            startJob: jest.fn()
+            startJob: jest.fn(),
+            useLockStore: jest.fn()
         };
 
         jobGenerator = {
@@ -95,6 +98,27 @@ describe('SchedulePlugin', () => {
             await plugin.onStart();
 
             expect(logger.info).toHaveBeenCalledWith('Plugin started. Scheduler is running');
+        });
+
+        it('should use an in-memory lock store by default', async () => {
+            await plugin.onStart();
+
+            expect(scheduler.useLockStore).toHaveBeenCalledWith(expect.any(InMemoryLockStore));
+        });
+
+        it('should use the lock store created by the configured provider before starting the jobs', async () => {
+            const store = { acquire: jest.fn() };
+            const lockStore = jest.fn().mockImplementation(async () => {
+                expect(scheduler.startAllJobs).not.toHaveBeenCalled();
+                return store;
+            });
+            await plugin.onRegister(context, SchedulePluginOptionsFactory.create({ lockStore }));
+
+            await plugin.onStart();
+
+            expect(lockStore).toHaveBeenCalledWith('lock', context);
+            expect(scheduler.useLockStore).toHaveBeenCalledWith(store);
+            expect(scheduler.startAllJobs).toHaveBeenCalledWith(true);
         });
     });
 

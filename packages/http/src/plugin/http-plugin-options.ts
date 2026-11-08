@@ -1,4 +1,5 @@
 import { PluginOptions } from '@axisparkjs/core';
+import { StoreProvider } from '@axisparkjs/store';
 import { HttpAdapterClass } from '../adapter/http-adapter';
 import { VersionType } from '../version';
 import { HttpRequest } from '../types';
@@ -64,6 +65,11 @@ export interface RateLimitOptions {
     limit: number;
     /** The response message when a client exceeds the limit. The function receives milliseconds until the oldest request expires. */
     message?: string | ((time: number) => string);
+    /**
+     * The provider of the store that counts the requests, called when the plugin starts. Defaults to `MemoryStore()`, which keeps the
+     * counters in the process. Use a shared provider, such as `RedisStore('NAME')` from `@axisparkjs/redis`, to share the limits between instances.
+     */
+    store?: StoreProvider<'rate-limit'>;
 }
 
 /** The reason why a multipart upload was rejected. */

@@ -54,6 +54,8 @@ const config = {
         '^@axisparkjs/redis/(.*)$': '<rootDir>../../packages/redis/src/$1',
         '^@axisparkjs/schedule$': '<rootDir>../../packages/schedule/src',
         '^@axisparkjs/schedule/(.*)$': '<rootDir>../../packages/schedule/src/$1',
+        '^@axisparkjs/store$': '<rootDir>../../packages/store/src',
+        '^@axisparkjs/store/(.*)$': '<rootDir>../../packages/store/src/$1',
         '^@axisparkjs/test$': '<rootDir>../../packages/test/src',
         '^@axisparkjs/test/(.*)$': '<rootDir>../../packages/test/src/$1',
         '^@axisparkjs/websocket$': '<rootDir>../../packages/websocket/src',
