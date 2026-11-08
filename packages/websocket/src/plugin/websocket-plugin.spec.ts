@@ -1,3 +1,4 @@
+import { ExecutionTransport, TimeoutGenerator, TimeoutProcessor } from '@axisparkjs/engine';
 import { WebSocketPlugin } from './websocket-plugin';
 
 describe('WebSocketPlugin', () => {
@@ -41,5 +42,26 @@ describe('WebSocketPlugin', () => {
         const test = createPlugin();
         test.context.container.resolve = jest.fn().mockResolvedValue({ registerEvents: jest.fn(), start: jest.fn(), stop: jest.fn() });
         await test.plugin.onRegister(test.context as any, test.options);
+    });
+    describe('timeouts', () => {
+        afterEach(() => jest.restoreAllMocks());
+
+        it('registers the timeout resolver without a default timeout when timeout is disabled', async () => {
+            const generatorSpy = jest.spyOn(TimeoutGenerator, 'registerTimeout');
+            const processorSpy = jest.spyOn(TimeoutProcessor, 'registerTimeout');
+            const test = createPlugin();
+            await test.plugin.onRegister(test.context as any, test.options);
+            expect(generatorSpy).not.toHaveBeenCalledWith(ExecutionTransport.WebSocket, expect.anything());
+            expect(processorSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket, expect.anything());
+        });
+
+        it('registers the default timeout and the timeout resolver when timeout is enabled', async () => {
+            const generatorSpy = jest.spyOn(TimeoutGenerator, 'registerTimeout');
+            const processorSpy = jest.spyOn(TimeoutProcessor, 'registerTimeout');
+            const test = createPlugin();
+            await test.plugin.onRegister(test.context as any, { ...test.options, timeout: true, timeoutOptions: { time: 250 } });
+            expect(generatorSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket, 250);
+            expect(processorSpy).toHaveBeenCalledWith(ExecutionTransport.WebSocket, expect.anything());
+        });
     });
 });

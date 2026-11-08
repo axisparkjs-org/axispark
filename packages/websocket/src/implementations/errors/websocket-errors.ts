@@ -11,3 +11,12 @@ export class WebSocketError extends Error {
         this.name = this.constructor.name;
     }
 }
+
+/**
+ * An error thrown when a WebSocket event exceeds its timeout. It is sent to the client through the acknowledgement with the status `408`.
+ */
+export class WebSocketRequestTimeoutError extends WebSocketError {
+    public constructor(response = 'Request timed out', options?: { cause?: unknown; description?: string }) {
+        super(response, 408, options);
+    }
+}
