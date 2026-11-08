@@ -21,10 +21,11 @@ export class JobGenerator implements Generator<Promise<JobDefinition[]>> {
             const jobsMetadata = Metadata.get<JobMetadata[]>(MetadataKeys.JOB, scheduler) ?? [];
 
             for (const jobMetadata of jobsMetadata) {
-                const method = async () => {
+                // The job methods are called directly, without the execution engine, and receive the abort signal of the execution.
+                const method = async (signal: AbortSignal) => {
                     const jobInstance = await this.injector.get(jobMetadata.target as ClassType<JobDefinition>);
                     const jobMethod = (jobInstance[jobMetadata.propertyKey as keyof typeof jobInstance] as MethodType).bind(jobInstance);
-                    await jobMethod();
+                    await jobMethod(signal);
                 };
                 jobs.push(JobDefinition.fromMetadata(jobMetadata, method.bind(this)));
             }

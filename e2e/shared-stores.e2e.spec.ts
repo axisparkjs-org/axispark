@@ -7,6 +7,7 @@ import { createClient, RedisClientType } from 'redis';
 describe('Shared Stores App', () => {
     let instances: AxiSparkCore[];
     let redis: RedisClientType;
+    let destroyed = false;
     const mockLogger = {
         info: jest.fn(),
         warn: jest.fn(),
@@ -71,8 +72,27 @@ describe('Shared Stores App', () => {
         expect(keys.length).toBeGreaterThan(0);
     });
 
-    afterAll(async () => {
+    it('should wait for the running no-overlap job and release its lock when the application stops', async () => {
+        // Wait until an execution of the no-overlap job is in progress.
+        const executing = async () => (await count('no-overlap:started')) > (await count('no-overlap:finished')) + (await count('no-overlap:aborted'));
+        const deadline = Date.now() + 5_000;
+        while (!(await executing()) && Date.now() < deadline) await wait(50);
+        expect(await executing()).toBe(true);
+        expect(await redis.exists('shared-stores:lock:schedule:noOverlapReport')).toBe(1);
+
         for (const instance of instances) await instance.destroy();
+        destroyed = true;
+
+        // Every execution ended before the Redis connections were closed, and the lock was released.
+        expect(await count('no-overlap:aborted')).toBeGreaterThanOrEqual(1);
+        expect(await count('no-overlap:started')).toBe((await count('no-overlap:finished')) + (await count('no-overlap:aborted')));
+        expect(await redis.exists('shared-stores:lock:schedule:noOverlapReport')).toBe(0);
+        expect(mockLogger.error).not.toHaveBeenCalledWith('Job noOverlapReport could not release its lock', expect.anything());
+        expect(mockLogger.warn).not.toHaveBeenCalledWith(expect.stringContaining('without waiting for the running jobs'));
+    });
+
+    afterAll(async () => {
+        if (!destroyed) for (const instance of instances) await instance.destroy();
         await redis.flushDb();
         await redis.close();
     });

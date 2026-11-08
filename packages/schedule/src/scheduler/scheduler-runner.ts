@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Inject, Injectable } from '@axisparkjs/di';
 import { Lock, LockStore } from '@axisparkjs/store';
 import { JobDefinition, JobExclusivity } from '../jobs/job-definition';
@@ -17,13 +18,35 @@ const DEFAULT_OCCURRENCE_LOCK_TTL = 60_000;
 /** The default time to live of the lock of a `no-overlap` job, which is extended every half of it while the job runs. */
 const DEFAULT_NO_OVERLAP_LOCK_TTL = 30_000;
 
+/** Options for stopping jobs. */
+export interface SchedulerStopOptions {
+    /**
+     * The maximum time to wait for the running executions, in milliseconds. `0` does not wait, and `undefined` waits until they end.
+     */
+    timeout?: number;
+}
+
+/** An execution of a job in progress. */
+interface RunningExecution {
+    promise: Promise<void>;
+    /** Aborted when the job is stopped, so the job can end early. */
+    readonly controller: AbortController;
+    /** The timer that extends the lock of a `no-overlap` job while it runs. */
+    heartbeat?: NodeJS.Timeout;
+}
+
 /**
  * A class for running scheduled jobs.
  */
 @Injectable()
 export class SchedulerRunner {
-    private readonly runningJobs = new Map<string, NodeJS.Timeout>();
+    /** The pending timer of each scheduled job. */
+    private readonly timers = new Map<string, NodeJS.Timeout>();
+    /** The execution in progress of each job. */
+    private readonly executions = new Map<string, RunningExecution>();
     private readonly enabledJobs = new Set<string>();
+    /** The execution in which the current code runs, so a job that stops itself does not wait for its own execution. */
+    private readonly currentExecution = new AsyncLocalStorage<RunningExecution>();
     private lockStore?: LockStore;
 
     constructor(@Inject(SCHEDULE_LOGGER) private readonly logger: Logger) {}
@@ -42,33 +65,37 @@ export class SchedulerRunner {
      * @param job The job to start.
      */
     start(job: JobDefinition): void {
-        if (this.runningJobs.has(job.name)) return;
+        if (this.timers.has(job.name)) return;
         this.enabledJobs.add(job.name);
         this.schedule(job);
     }
 
     /**
-     * Stops a job.
+     * Stops a job: no new execution starts, the signal of its running execution is aborted, and it waits for that execution.
      * @param job The job to stop.
+     * @param options The options to stop the job, such as the maximum time to wait for its running execution.
+     * @returns A promise resolving when the running execution ends or the timeout ends.
      */
-    stop(job: JobDefinition): void {
-        this.enabledJobs.delete(job.name);
-
-        const timeout = this.runningJobs.get(job.name);
-        if (timeout) {
-            clearTimeout(timeout);
-        }
-
-        this.runningJobs.delete(job.name);
+    async stop(job: JobDefinition, options?: SchedulerStopOptions): Promise<void> {
+        await this.stopAll([job], options);
     }
 
     /**
-     * Checks if a job is running.
+     * Checks if a job is running, this is, if it is scheduled. Use `isExecuting()` to check if an execution is in progress.
      * @param job The job to check.
-     * @returns True if the job is running, false otherwise.
+     * @returns True if the job is scheduled, false otherwise.
      */
     isRunning(job: JobDefinition): boolean {
-        return this.runningJobs.has(job.name);
+        return this.timers.has(job.name);
+    }
+
+    /**
+     * Checks if an execution of a job is in progress.
+     * @param job The job to check.
+     * @returns True if the job is executing, false otherwise.
+     */
+    isExecuting(job: JobDefinition): boolean {
+        return this.executions.has(job.name);
     }
 
     /**
@@ -80,11 +107,70 @@ export class SchedulerRunner {
     }
 
     /**
-     * Stops all jobs.
+     * Stops scheduling the jobs and waits for their running executions, up to the timeout.
+     * The timers are cancelled and the jobs disabled first, so no new execution starts, and the signal of every running execution is
+     * aborted. When the timeout ends first, a warning with the names of the jobs that are still running is logged, and the heartbeat of
+     * their locks is stopped, so the locks of the `no-overlap` jobs expire with their ttl once the process exits.
      * @param jobs The jobs to stop.
+     * @param options The options to stop the jobs, such as the maximum time to wait for the running executions.
+     * @returns A promise resolving when the running executions end or the timeout ends.
      */
-    stopAll(jobs: JobDefinition[]): void {
-        jobs.forEach((job) => this.stop(job));
+    async stopAll(jobs: JobDefinition[], options: SchedulerStopOptions = {}): Promise<void> {
+        const running: [string, RunningExecution][] = [];
+        const current = this.currentExecution.getStore();
+        for (const job of jobs) {
+            const execution = this.cancel(job);
+            // A job that stops itself would wait for its own execution forever.
+            if (execution && execution !== current) running.push([job.name, execution]);
+        }
+        if (running.length === 0) return;
+
+        const finished = await this.waitFor(
+            running.map(([, execution]) => execution.promise),
+            options.timeout
+        );
+        if (finished) return;
+
+        const pending = running.filter(([name, execution]) => this.executions.get(name) === execution);
+        if (pending.length === 0) return;
+        pending.forEach(([, execution]) => clearInterval(execution.heartbeat));
+        this.logger.warn(`Stopped the scheduler without waiting for the running jobs after ${options.timeout}ms: ${pending.map(([name]) => name).join(', ')}`);
+    }
+
+    /**
+     * Cancels the timer of a job, disables it and aborts the signal of its running execution.
+     * @param job The job.
+     * @returns The running execution of the job, if any.
+     */
+    private cancel(job: JobDefinition): RunningExecution | undefined {
+        this.enabledJobs.delete(job.name);
+        const timer = this.timers.get(job.name);
+        if (timer) clearTimeout(timer);
+        this.timers.delete(job.name);
+
+        const execution = this.executions.get(job.name);
+        execution?.controller.abort();
+        return execution;
+    }
+
+    /**
+     * Waits for the executions, up to the timeout.
+     * @returns True if every execution ended, false if the timeout ended first.
+     */
+    private async waitFor(executions: Promise<void>[], timeout?: number): Promise<boolean> {
+        const settled = Promise.allSettled(executions).then(() => true);
+        if (timeout === undefined) return await settled;
+        if (timeout <= 0) return false;
+
+        let timer: NodeJS.Timeout | undefined;
+        const expired = new Promise<boolean>((resolve) => {
+            timer = setTimeout(() => resolve(false), timeout);
+        });
+        try {
+            return await Promise.race([settled, expired]);
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     private schedule(job: JobDefinition): void {
@@ -94,34 +180,47 @@ export class SchedulerRunner {
         const delay = nextExecutionTime.getTime() - Date.now();
         if (delay > MAX_TIMER_DELAY) {
             // Wait for the maximum delay and calculate the remaining delay again, without running the job.
-            const timeout = setTimeout(() => this.schedule(job), MAX_TIMER_DELAY);
-
-            this.runningJobs.set(job.name, timeout);
+            const timer = setTimeout(() => this.schedule(job), MAX_TIMER_DELAY);
+            this.timers.set(job.name, timer);
             return;
         }
 
-        const timeout = setTimeout(async () => {
-            try {
-                await this.run(job, nextExecutionTime);
-            } catch (error) {
-                this.logger.error(`Error executing job ${job.name}`, error as Error);
-            } finally {
-                this.runningJobs.delete(job.name);
+        const timer = setTimeout(() => {
+            const execution: RunningExecution = { promise: Promise.resolve(), controller: new AbortController() };
+            this.executions.set(job.name, execution);
+            execution.promise = this.currentExecution.run(execution, () => this.execute(job, nextExecutionTime, execution, timer));
+        }, delay);
+        this.timers.set(job.name, timer);
+    }
+
+    /**
+     * Executes an occurrence of a job, logs its errors and schedules the next occurrence while the job is enabled.
+     */
+    private async execute(job: JobDefinition, scheduledAt: Date, execution: RunningExecution, timer: NodeJS.Timeout): Promise<void> {
+        try {
+            await this.run(job, scheduledAt, execution);
+        } catch (error) {
+            this.logger.error(`Error executing job ${job.name}`, error as Error);
+        } finally {
+            if (this.executions.get(job.name) === execution) this.executions.delete(job.name);
+            // The job may have been stopped, or stopped and started again, while it was executing.
+            if (this.timers.get(job.name) === timer) {
+                this.timers.delete(job.name);
                 if (this.enabledJobs.has(job.name)) this.schedule(job);
             }
-        }, delay);
-
-        this.runningJobs.set(job.name, timeout);
+        }
     }
 
     /**
      * Executes an occurrence of a job. Exclusive jobs are executed only when this instance acquires their lock.
      * @param job The job.
      * @param scheduledAt The scheduled time of the occurrence.
+     * @param execution The execution in progress.
      */
-    private async run(job: JobDefinition, scheduledAt: Date): Promise<void> {
+    private async run(job: JobDefinition, scheduledAt: Date, execution: RunningExecution): Promise<void> {
+        const signal = execution.controller.signal;
         const exclusive = job.exclusive;
-        if (!exclusive) return await job.execute();
+        if (!exclusive) return await job.execute(signal);
 
         const lock = await this.acquire(job, exclusive, scheduledAt);
         if (!lock) {
@@ -131,10 +230,10 @@ export class SchedulerRunner {
 
         if (exclusive.mode === 'once-per-occurrence') {
             // The lock is not released, so an instance whose clock is behind never runs the same occurrence again. It expires with its ttl.
-            return await job.execute();
+            return await job.execute(signal);
         }
 
-        await this.executeWhileLocked(job, lock, exclusive.ttl ?? DEFAULT_NO_OVERLAP_LOCK_TTL);
+        await this.executeWhileLocked(job, lock, exclusive.ttl ?? DEFAULT_NO_OVERLAP_LOCK_TTL, execution);
     }
 
     private async acquire(job: JobDefinition, exclusive: JobExclusivity, scheduledAt: Date): Promise<Lock | undefined> {
@@ -160,7 +259,7 @@ export class SchedulerRunner {
         return lock;
     }
 
-    private async executeWhileLocked(job: JobDefinition, lock: Lock, ttl: number): Promise<void> {
+    private async executeWhileLocked(job: JobDefinition, lock: Lock, ttl: number, execution: RunningExecution): Promise<void> {
         const extendLock = () =>
             lock.extend(ttl).then(
                 (extended) => {
@@ -169,9 +268,11 @@ export class SchedulerRunner {
                 (error: Error) => this.logger.error(`Job ${job.name} could not extend its lock`, error)
             );
         const heartbeat = setInterval(extendLock, Math.max(1, Math.floor(ttl / 2)));
+        // The shutdown stops the heartbeat of a job that exceeds its timeout, so its lock expires with its ttl once the process exits.
+        execution.heartbeat = heartbeat;
 
         try {
-            await job.execute();
+            await job.execute(execution.controller.signal);
         } finally {
             clearInterval(heartbeat);
             await lock.release().catch((error: Error) => this.logger.error(`Job ${job.name} could not release its lock`, error));

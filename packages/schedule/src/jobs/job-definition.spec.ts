@@ -172,6 +172,26 @@ describe('Job execution', () => {
         expect(job.getLastExecutionTime()).toBeInstanceOf(Date);
     });
 
+    it('should pass the abort signal to the job function', async () => {
+        const execute = jest.fn().mockResolvedValue(undefined);
+        const job = new IntervalJobDefinition('job', 1000, execute);
+        const controller = new AbortController();
+
+        await job.execute(controller.signal);
+
+        expect(execute).toHaveBeenCalledWith(controller.signal);
+    });
+
+    it('should pass a signal that is never aborted when the job is executed without one', async () => {
+        const execute = jest.fn().mockResolvedValue(undefined);
+        const job = new IntervalJobDefinition('job', 1000, execute);
+
+        await job.execute();
+
+        expect(execute).toHaveBeenCalledWith(expect.any(AbortSignal));
+        expect((execute.mock.calls[0][0] as AbortSignal).aborted).toBe(false);
+    });
+
     it('should delegate next execution time to the trigger', () => {
         const trigger = {
             getNextExecutionTime: jest.fn().mockReturnValue('next')
