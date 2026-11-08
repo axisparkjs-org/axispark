@@ -1,4 +1,5 @@
 import { PluginOptions } from '@axisparkjs/core';
+import { TrustProxyOption } from '@axisparkjs/http';
 import { WebSocketAdapterClass } from '../adapter/websocket-adapter';
 
 /**
@@ -48,4 +49,10 @@ export interface WebSocketPluginOptions extends PluginOptions {
      * Options for configuring the timeouts of the WebSocket events.
      */
     timeoutOptions?: WebSocketTimeoutOptions;
+    /**
+     * The proxies trusted to resolve the client address of a connection from the `X-Forwarded-For` header of its handshake, used by
+     * `connection.remoteAddress` and the rate limits. It accepts the same values as the `trustProxy` option of the HTTP plugin. Defaults to
+     * `false`, or to the `trustProxy` option of the HTTP plugin when `useHttpPluginServer` is enabled.
+     */
+    trustProxy?: TrustProxyOption;
 }

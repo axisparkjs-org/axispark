@@ -45,6 +45,10 @@ export class WebSocketPlugin extends Plugin {
         if (this.options.useHttpPluginServer) {
             this.httpOptions = await this.injector.get(HTTP_OPTIONS);
             this.httpAdapter = await this.injector.get(HTTP_ADAPTER);
+            // The connections share the server of the HTTP plugin, so they are behind the same proxies.
+            if (this.options.trustProxy === undefined && this.httpOptions.trustProxy !== undefined) {
+                this.options = { ...this.options, trustProxy: this.httpOptions.trustProxy };
+            }
         }
 
         this.registerContainerBindings();

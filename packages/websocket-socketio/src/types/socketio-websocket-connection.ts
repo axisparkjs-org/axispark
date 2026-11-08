@@ -1,11 +1,25 @@
 import { WebSocketConnection } from '@axisparkjs/websocket';
 import { Socket } from 'socket.io';
+import { resolveClientAddress, TrustProxyFunction } from '../adapter/trust-proxy';
 
 export class SocketIOWebSocketConnection implements WebSocketConnection {
-    constructor(private readonly socket: Socket) {}
+    /**
+     * @param socket The Socket.IO socket.
+     * @param trustProxy The function that decides which proxies are trusted to resolve the client address from the `X-Forwarded-For`
+     * header of the handshake. Without it, the address is the address of the socket.
+     */
+    constructor(
+        private readonly socket: Socket,
+        private readonly trustProxy?: TrustProxyFunction
+    ) {}
 
     get id(): string {
         return this.socket.id;
+    }
+
+    get remoteAddress(): string | undefined {
+        const handshake = this.socket.handshake;
+        return resolveClientAddress(handshake?.address || undefined, handshake?.headers ?? {}, this.trustProxy);
     }
 
     get namespace(): string | undefined {

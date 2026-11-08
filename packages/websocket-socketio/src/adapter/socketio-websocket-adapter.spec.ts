@@ -127,6 +127,21 @@ describe('SocketIOWebSocketAdapter', () => {
         expect(pattern.lastIndex).toBe(4);
     });
 
+    it('resolves the remote address of the connections with the trustProxy option', async () => {
+        const resolveAddress = async (trustProxy: unknown) => {
+            const { adapter, io } = createAdapter({ useHttpPluginServer: false, trustProxy } as any);
+            const handler = jest.fn();
+            adapter.registerEvents([{ namespace: '/', event: 'connection', handler }] as any);
+            const connect = (io.of('/') as any).on.mock.calls[0][1] as (socket: any) => Promise<void>;
+            await connect({ on: jest.fn(), handshake: { address: '10.0.0.1', headers: { 'x-forwarded-for': '203.0.113.7' } } });
+            return handler.mock.calls[0][0].connection.remoteAddress;
+        };
+
+        await expect(resolveAddress(undefined)).resolves.toBe('10.0.0.1');
+        await expect(resolveAddress(false)).resolves.toBe('10.0.0.1');
+        await expect(resolveAddress('10.0.0.0/8')).resolves.toBe('203.0.113.7');
+    });
+
     it('handles namespaces without connection events and an empty registration', async () => {
         const { adapter, io } = createAdapter({ useHttpPluginServer: false } as any);
         const messageHandler = jest.fn();
