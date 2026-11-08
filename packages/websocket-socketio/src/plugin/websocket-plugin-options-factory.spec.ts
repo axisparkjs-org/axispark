@@ -9,7 +9,8 @@ describe('WebSocketPluginOptionsFactory', () => {
             useHttpPluginServer: false,
             port: 3000,
             timeout: false,
-            timeoutOptions: { time: 5000 }
+            timeoutOptions: { time: 5000 },
+            rateLimit: false
         });
         expect(WebSocketPluginOptionsFactory.create({ port: 9, path: '/custom' })).toMatchObject({ port: 9, path: '/custom' });
     });

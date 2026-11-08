@@ -17,6 +17,7 @@ export class WebSocketPluginOptionsFactoryStatic implements Factory<SocketIOWebS
             useHttpPluginServer: false,
             port: 3000,
             timeout: false,
+            rateLimit: false,
             ...options,
             timeoutOptions: {
                 time: 5000,

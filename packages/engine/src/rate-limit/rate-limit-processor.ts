@@ -12,7 +12,7 @@ import { RateLimitResolver } from './rate-limit-resolver';
 @Injectable()
 export class RateLimitProcessor implements Processable {
     private static readonly resolvers = new Map<ExecutionTransport, RateLimitResolver>();
-    private static store?: RateLimitStore;
+    private static readonly stores = new Map<ExecutionTransport, RateLimitStore>();
 
     /** Registers the resolver that identifies the clients of a transport. Passing undefined removes it. */
     public static registerRateLimit(transport: ExecutionTransport, resolver?: RateLimitResolver): void {
@@ -21,22 +21,25 @@ export class RateLimitProcessor implements Processable {
     }
 
     /**
-     * Sets the store of the rate limit buckets. The plugins call it when they start, with the store created by the
-     * `StoreProvider` of their options, which is `MemoryStore()` by default.
+     * Sets the store of the rate limit buckets of a transport. The plugins call it when they start, with the store created by the
+     * `StoreProvider` of their options, which is `MemoryStore()` by default. Each transport keeps its own store, so a plugin never
+     * replaces the store of another one, and the keys start with the transport, so two transports that share a store never share buckets.
+     * Passing undefined removes it.
      */
-    public static registerRateLimitStore(store: RateLimitStore): void {
-        this.store = store;
+    public static registerRateLimitStore(transport: ExecutionTransport, store?: RateLimitStore): void {
+        if (store) this.stores.set(transport, store);
+        else this.stores.delete(transport);
     }
 
     /**
      * Counts the request of the context against the definition.
-     * @returns The decision, or `undefined` when there is no definition, no resolver is registered for the transport or no store is registered.
+     * @returns The decision, or `undefined` when there is no definition, or no resolver or no store is registered for the transport.
      */
     public async process(definition: RateLimitDefinition | undefined, context: ExecutionContext): Promise<RateLimitDecision | undefined> {
         if (!definition) return undefined;
 
         const resolver = RateLimitProcessor.resolvers.get(context.transport);
-        const store = RateLimitProcessor.store;
+        const store = RateLimitProcessor.stores.get(context.transport);
         if (!resolver || !store) return undefined;
 
         const clientId = await resolver.resolve(context);

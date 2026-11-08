@@ -30,6 +30,10 @@
         "@axisparkjs/di": "1.4.0",
         "@axisparkjs/logger": "1.4.0",
         "@axisparkjs/websocket": "1.4.0",
+        "proxy-addr": "^2.0.8",
         "socket.io": "^4.8.4"
+    },
+    "devDependencies": {
+        "@types/proxy-addr": "^2.0.3"
     }
 }

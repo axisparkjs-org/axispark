@@ -541,7 +541,7 @@ describe('HttpPlugin', () => {
 
             await plugin.onStart();
 
-            expect(RateLimitProcessor.registerRateLimitStore).toHaveBeenCalledWith(expect.any(InMemoryRateLimitStore));
+            expect(RateLimitProcessor.registerRateLimitStore).toHaveBeenCalledWith(ExecutionTransport.Http, expect.any(InMemoryRateLimitStore));
         });
 
         it('should register the rate limit store created by the configured provider before starting the adapter', async () => {
@@ -555,7 +555,7 @@ describe('HttpPlugin', () => {
             await plugin.onStart();
 
             expect(provider).toHaveBeenCalledWith('rate-limit', context);
-            expect(RateLimitProcessor.registerRateLimitStore).toHaveBeenCalledWith(store);
+            expect(RateLimitProcessor.registerRateLimitStore).toHaveBeenCalledWith(ExecutionTransport.Http, store);
             expect(adapter.start).toHaveBeenCalledTimes(1);
         });
     });

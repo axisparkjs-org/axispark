@@ -4,6 +4,11 @@
 export interface WebSocketConnection {
     /** Unique identifier for this connection. */
     id: string;
+    /**
+     * The address of the remote client, if the adapter knows it. Behind a proxy, it is resolved from the `X-Forwarded-For` header only
+     * when the proxy is trusted with the `trustProxy` option of the plugin. Unlike `id`, it does not change when the client reconnects.
+     */
+    readonly remoteAddress: string | undefined;
     /** Namespace this connection belongs to, if the adapter supports namespaces. */
     namespace: string | undefined;
     /** Rooms/channels this connection currently belongs to, if the adapter supports them. */

@@ -5,6 +5,7 @@ import { SocketIOWebSocketConnection } from '../types/socketio-websocket-connect
 import { SocketIOWebSocketMessage } from '../types/socketio-websocket-message';
 import { SocketIOWebSocketPluginOptions } from '../plugin/socketio-websocket-plugin-options';
 import { Server, Socket } from 'socket.io';
+import { compileTrustProxy, TrustProxyFunction } from './trust-proxy';
 
 /**
  * A Socket.IO adapter for integrating Socket.IO with the HTTP Plugin.
@@ -13,11 +14,14 @@ import { Server, Socket } from 'socket.io';
 export class SocketIOWebSocketAdapter implements WebSocketAdapter {
     private io: Server;
     private readonly registeredEvents: WebSocketEventDefinition[] = [];
+    private readonly trustProxy: TrustProxyFunction | undefined;
 
     constructor(
         @Inject(WEBSOCKET_OPTIONS)
         private readonly options: SocketIOWebSocketPluginOptions
-    ) {}
+    ) {
+        this.trustProxy = compileTrustProxy(options.trustProxy);
+    }
 
     initialize?(server?: HttpServer): void | Promise<void> {
         this.io = new Server(this.options.useHttpPluginServer ? server : undefined, {
@@ -103,7 +107,7 @@ export class SocketIOWebSocketAdapter implements WebSocketAdapter {
             ack?: (response?: unknown) => void;
         }
     ) {
-        const con = new SocketIOWebSocketConnection(socket);
+        const con = new SocketIOWebSocketConnection(socket, this.trustProxy);
         let mes;
         if (event) mes = new SocketIOWebSocketMessage(event);
         return { connection: con, message: mes };
