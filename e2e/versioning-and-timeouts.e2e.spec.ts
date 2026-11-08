@@ -88,6 +88,32 @@ describe.each([
         expect(await response.json()).toEqual({ message: 'This is a GET request example for no timeouts' });
     });
 
+    it('should handle GET requests to /timeouts/disabled-timeout with @NoTimeout() and return a response after the default timeout', async () => {
+        const start = Date.now();
+        const response = await fetch('http://localhost:3000/api/v1/timeouts/disabled-timeout', {
+            method: 'GET'
+        });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ message: 'This is a GET request example with the timeout disabled' });
+        expect(Date.now() - start).toBeGreaterThanOrEqual(450);
+    });
+
+    it('should handle GET requests to /timeouts-disabled with @NoTimeout() in the class and return a response', async () => {
+        const response = await fetch('http://localhost:3000/api/v1/timeouts-disabled', {
+            method: 'GET'
+        });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ message: 'This is a GET request example with the timeout disabled in its class' });
+    });
+
+    it('should handle GET requests to /timeouts-disabled/method-timeout and timeout after the time of the method', async () => {
+        const response = await fetch('http://localhost:3000/api/v1/timeouts-disabled/method-timeout', {
+            method: 'GET'
+        });
+        expect(response.status).toBe(408);
+        expect(await response.json()).toEqual(expect.objectContaining({ error: 'Request timeout after 100 ms' }));
+    });
+
     it('should handle GET requests to /timeouts/throw-timeout and timeout after 0.3 seconds', async () => {
         const response = await fetch('http://localhost:3000/api/v1/timeouts/throw-timeout', {
             method: 'GET'
