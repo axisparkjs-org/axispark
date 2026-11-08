@@ -5,10 +5,10 @@ import { WebSocketError } from '../errors';
 import { WebSocketResults } from '../results';
 
 /**
- * A global filter for returning errors as HTTP responses.
+ * A global filter for returning errors as WebSocket responses through the acknowledgement.
  */
 @Filter({ global: true, transport: ExecutionTransport.WebSocket, priority: StepPriority.Base })
-export class ReturnErrorFilter {
+export class WebSocketReturnErrorFilter {
     /**
      * Handles errors by returning them as WebSocket responses.
      * @param error The error to handle.
