@@ -1,3 +1,4 @@
+import { NoTimeout, Timeout } from '@axisparkjs/engine';
 import { Controller, Get } from '@axisparkjs/http';
 
 @Controller({ path: 'versions', version: '1' })
@@ -48,9 +49,39 @@ export class TimeoutController {
         };
     }
 
+    @Get('disabled-timeout')
+    @NoTimeout()
+    async exampleDisabledTimeout() {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return {
+            message: 'This is a GET request example with the timeout disabled'
+        };
+    }
+
     @Get('throw-timeout')
     async exampleThrowTimeout() {
         await new Promise((resolve) => setTimeout(resolve, 500));
         throw new Error('This is a GET request example that throws an error after timeout');
+    }
+}
+
+@Controller('timeouts-disabled')
+@NoTimeout()
+export class DisabledTimeoutController {
+    @Get()
+    async exampleClassDisabledTimeout() {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return {
+            message: 'This is a GET request example with the timeout disabled in its class'
+        };
+    }
+
+    @Get('method-timeout')
+    @Timeout(100)
+    async exampleMethodTimeout() {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return {
+            message: 'This is a GET request example with its own timeout'
+        };
     }
 }

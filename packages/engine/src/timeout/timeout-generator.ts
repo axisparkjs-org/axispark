@@ -21,13 +21,24 @@ export class TimeoutGenerator implements Generator<TimeoutDefinition | undefined
     /**
      * Generates a timeout definition based on the provided execution context.
      * @param context The execution context containing relevant information for timeout generation.
-     * @returns A generated timeout definition or undefined if no specific timeout is defined.
+     * The method metadata takes precedence over the class metadata, and both take precedence over the timeout registered for the transport.
+     * A metadata disabled by `@NoTimeout()`, or with a negative time, disables the timeout.
+     * @returns A generated timeout definition or undefined if no timeout is defined or the timeout is disabled.
      */
     public generate(context: ExecutionContext): TimeoutDefinition | undefined {
         const classMetadata = Metadata.get<TimeoutMetadata>(MetadataKeys.TIMEOUT, context.target);
         const methodMetadata = Metadata.get<TimeoutMetadata>(MetadataKeys.TIMEOUT, context.target, context.propertyKey);
-        const time = methodMetadata?.time ?? classMetadata?.time ?? TimeoutGenerator.timeouts.get(context.transport);
+        const metadata = [methodMetadata, classMetadata].find((item) => item !== undefined && (item.disabled || item.time !== undefined));
 
+        if (metadata) {
+            return TimeoutGenerator.isDisabled(metadata) ? undefined : new TimeoutDefinition(metadata.time as number);
+        }
+
+        const time = TimeoutGenerator.timeouts.get(context.transport);
         return time !== undefined ? new TimeoutDefinition(time) : undefined;
+    }
+
+    private static isDisabled(metadata: TimeoutMetadata): boolean {
+        return metadata.disabled === true || (metadata.time as number) < 0;
     }
 }
