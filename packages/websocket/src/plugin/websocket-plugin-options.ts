@@ -1,6 +1,20 @@
 import { PluginOptions } from '@axisparkjs/core';
 import { WebSocketAdapterClass } from '../adapter/websocket-adapter';
 
+/**
+ * Options for configuring the timeouts of the WebSocket events.
+ */
+export interface WebSocketTimeoutOptions {
+    /**
+     * The default timeout duration in milliseconds. Defaults to 5000 with the options factory, or to the default timeout of the engine without it.
+     */
+    time?: number;
+    /**
+     * The message sent to the client when a timeout occurs. By default, it is `Request timed out after <time>ms`.
+     */
+    message?: string | ((time: number) => string);
+}
+
 export interface WebSocketPluginOptions extends PluginOptions {
     /**
      * The WebSocket adapter to use. Express or Fastify are supported.
@@ -26,4 +40,12 @@ export interface WebSocketPluginOptions extends PluginOptions {
      * The port on which the WebSocket server will listen. Default is 3000.
      */
     port?: number;
+    /**
+     * Whether every WebSocket event has a default timeout. Defaults to false. The `@Timeout()` of an event works even when it is disabled, and `@NoTimeout()` disables the default timeout of an event.
+     */
+    timeout?: boolean;
+    /**
+     * Options for configuring the timeouts of the WebSocket events.
+     */
+    timeoutOptions?: WebSocketTimeoutOptions;
 }

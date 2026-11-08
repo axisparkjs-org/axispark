@@ -155,6 +155,44 @@ describe.each([{ name: 'Socket.IO', app: appSocketio }])('Messages Everywhere Ap
         });
     });
 
+    describe('timeouts', () => {
+        let socketTimeouts: Socket;
+        const emit = (event: string) =>
+            new Promise<{ response: any; elapsed: number }>((resolve) => {
+                const start = Date.now();
+                socketTimeouts.emit(event, {}, (response: any) => resolve({ response, elapsed: Date.now() - start }));
+            });
+
+        beforeEach(() => {
+            socketTimeouts = io(`http://localhost:3000/timeouts`, {
+                path: '/websocket'
+            });
+        });
+
+        afterEach(() => {
+            socketTimeouts.disconnect();
+        });
+
+        it('should acknowledge the result of an event that ends before its timeout', async () => {
+            const { response } = await emit('fast');
+
+            expect(response).toEqual({ done: true });
+        });
+
+        it('should acknowledge a 408 error when an event exceeds its @Timeout()', async () => {
+            const { response, elapsed } = await emit('slow');
+
+            expect(response).toEqual({ error: 'Request timed out after 100ms', status: 408, description: "Event 'slow'" });
+            expect(elapsed).toBeLessThan(400);
+        });
+
+        it('should acknowledge a 408 error when an event exceeds the default timeout of the plugin', async () => {
+            const { response } = await emit('default-timeout');
+
+            expect(response).toEqual({ error: 'Request timed out after 300ms', status: 408, description: "Event 'default-timeout'" });
+        });
+    });
+
     afterEach(async () => {
         socket?.close();
         socketV2?.close();

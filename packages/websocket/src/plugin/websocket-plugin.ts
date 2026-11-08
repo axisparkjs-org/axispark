@@ -11,10 +11,11 @@ import { HTTP_OPTIONS } from '@axisparkjs/http';
 import { HTTP_ADAPTER } from '@axisparkjs/http';
 import { WebSocketEventDefinition, WebSocketEventGenerator } from '../events';
 import { WebSocketParameter } from '../types';
-import { WsAckResolver, WsConnectionResolver, WsDataResolver, WsMessageResolver, WebSocketResultResolver } from '../implementations';
+import { WsAckResolver, WsConnectionResolver, WsDataResolver, WsMessageResolver, WebSocketResultResolver, WebSocketTimeoutResolver } from '../implementations';
 import { ParameterGenerator } from '@axisparkjs/engine';
 import { ResultProcessor } from '@axisparkjs/engine';
 import { ExecutionTransport } from '@axisparkjs/engine';
+import { TimeoutGenerator, TimeoutProcessor } from '@axisparkjs/engine';
 
 /**
  * A plugin for handling WebSockets.
@@ -64,6 +65,11 @@ export class WebSocketPlugin extends Plugin {
 
     private async registerImplementations(): Promise<void> {
         ResultProcessor.registerResult(ExecutionTransport.WebSocket, await this.injector.get(WebSocketResultResolver));
+        if (this.options.timeout) {
+            TimeoutGenerator.registerTimeout(ExecutionTransport.WebSocket, this.options.timeoutOptions?.time);
+        }
+        // The resolver is always registered, so the `@Timeout()` of an event works without a default timeout.
+        TimeoutProcessor.registerTimeout(ExecutionTransport.WebSocket, await this.injector.get(WebSocketTimeoutResolver));
 
         ParameterGenerator.registerParameter(WebSocketParameter.Connection, await this.injector.get(WsConnectionResolver));
         ParameterGenerator.registerParameter(WebSocketParameter.Message, await this.injector.get(WsMessageResolver));

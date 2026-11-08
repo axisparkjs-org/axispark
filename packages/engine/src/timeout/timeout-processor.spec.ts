@@ -2,6 +2,7 @@ import { ExecutionContext, ExecutionTransport } from '../execution';
 import { TimeoutDefinition } from './timeout-definition';
 import { TimeoutProcessor } from './timeout-processor';
 import { TimeoutResolver } from './timeout-resolver';
+import { ExecutionTimeoutError } from './timeout-errors';
 
 describe('TimeoutProcessor', () => {
     let processor: TimeoutProcessor;
@@ -68,22 +69,17 @@ describe('TimeoutProcessor', () => {
             expect(receivedTimeout.time).toBe(3000);
         });
 
-        it('should log an error when no resolver is registered', async () => {
+        it('should throw an ExecutionTimeoutError when no resolver is registered', async () => {
             const timeout = new TimeoutDefinition(3000);
             const context = {
                 transport: 'test' as ExecutionTransport
             } as ExecutionContext;
 
-            await expect(processor.process(timeout, context)).resolves.toBeUndefined();
-        });
+            const promise = processor.process(timeout, context);
 
-        it('should not throw when no resolver is registered', async () => {
-            const timeout = new TimeoutDefinition(3000);
-            const context = {
-                transport: ExecutionTransport.Http
-            } as ExecutionContext;
-
-            await expect(processor.process(timeout, context)).resolves.toBeUndefined();
+            await expect(promise).rejects.toBeInstanceOf(ExecutionTimeoutError);
+            await expect(promise).rejects.toThrow('Execution timed out after 3000ms');
+            await expect(promise).rejects.toMatchObject({ name: 'ExecutionTimeoutError', time: 3000, transport: 'test' });
         });
 
         it('should propagate resolver errors', async () => {

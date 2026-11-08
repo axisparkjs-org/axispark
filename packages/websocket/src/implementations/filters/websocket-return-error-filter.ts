@@ -1,7 +1,7 @@
 import { FilteredError as ErrorParam, Filter, Catch, ExecutionTransport, StepPriority } from '@axisparkjs/engine';
 import { Context } from '@axisparkjs/engine';
 import { WebSocketContext } from '../../types';
-import { WebSocketError } from '../errors';
+import { WebSocketError, WebSocketRequestTimeoutError } from '../errors';
 import { WebSocketResults } from '../results';
 
 /**
@@ -16,8 +16,11 @@ export class WebSocketReturnErrorFilter {
      */
     @Catch(Error)
     public async error(@ErrorParam() error: Error, @Context() context: WebSocketContext) {
+        const description = `Event '${context.message?.event}'`;
         if (!(error instanceof WebSocketError)) {
-            error = new WebSocketError(error.message, 1, { cause: error.stack, description: `Event '${context.message?.event}'` });
+            error = new WebSocketError(error.message, 1, { cause: error.stack, description });
+        } else if (error instanceof WebSocketRequestTimeoutError && !error.options?.description) {
+            error = new WebSocketRequestTimeoutError(error.response, { ...error.options, description });
         }
         return WebSocketResults.Error(error as WebSocketError);
     }

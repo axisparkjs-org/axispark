@@ -9,7 +9,9 @@ import {
     WsData,
     WsMessage
 } from '@axisparkjs/websocket';
-import { Context } from '@axisparkjs/engine';
+import { Context, Timeout } from '@axisparkjs/engine';
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 @WebSocket()
 export class ChatWebSocket {
@@ -58,5 +60,28 @@ export class ChatWebSocketV2 {
         const data = { message: 'Connection event', connectionId: connection.id };
 
         connection.emit('connection-event-v2', data);
+    }
+}
+
+@WebSocket('/timeouts')
+export class TimeoutWebSocket {
+    @WebSocketEvent('slow')
+    @Timeout(100)
+    public async onSlow() {
+        await wait(400);
+        return { done: true };
+    }
+
+    @WebSocketEvent('fast')
+    @Timeout(500)
+    public async onFast() {
+        await wait(50);
+        return { done: true };
+    }
+
+    @WebSocketEvent('default-timeout')
+    public async onDefaultTimeout() {
+        await wait(500);
+        return { done: true };
     }
 }
