@@ -29,13 +29,22 @@ describe('SchedulerService', () => {
             stop: jest.fn(),
             startAll: jest.fn(),
             stopAll: jest.fn(),
-            isRunning: jest.fn()
+            isRunning: jest.fn(),
+            useLockStore: jest.fn()
         } as any;
 
         service = new SchedulerService(registry, runner);
     });
 
     const createJob = (name = 'job') => new TestJob(name, jest.fn().mockResolvedValue(undefined));
+
+    it('should pass the lock store to the runner', () => {
+        const store = { acquire: jest.fn() };
+
+        service.useLockStore(store);
+
+        expect(runner.useLockStore).toHaveBeenCalledWith(store);
+    });
     const createInitiallyDisabledJob = (name = 'job') => new TestJob(name, jest.fn().mockResolvedValue(undefined), true);
 
     describe('registerJob', () => {

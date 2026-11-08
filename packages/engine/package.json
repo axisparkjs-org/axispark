@@ -28,6 +28,7 @@
         "@axisparkjs/common": "1.4.0",
         "@axisparkjs/di": "1.4.0",
         "@axisparkjs/logger": "1.4.0",
+        "@axisparkjs/store": "1.4.0",
         "class-validator": "^0.15.1"
     }
 }

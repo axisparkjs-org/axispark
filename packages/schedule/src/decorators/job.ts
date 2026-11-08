@@ -23,7 +23,7 @@ function Job(data: Partial<Exclude<JobMetadata, 'type'>> & Pick<JobMetadata, 'ty
     };
 }
 
-type JobParameters = Partial<Pick<JobMetadata, 'name' | 'disabled'>>;
+type JobParameters = Partial<Pick<JobMetadata, 'name' | 'disabled' | 'exclusive'>>;
 
 /**
  * A decorator for defining cron jobs.

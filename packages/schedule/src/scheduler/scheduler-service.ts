@@ -1,4 +1,5 @@
 import { Injectable } from '@axisparkjs/di';
+import { LockStore } from '@axisparkjs/store';
 import { SchedulerRegistry } from './scheduler-registry';
 import { SchedulerRunner } from './scheduler-runner';
 import { JobDefinition } from '../jobs';
@@ -13,6 +14,14 @@ export class SchedulerService {
         private readonly registry: SchedulerRegistry,
         private readonly runner: SchedulerRunner
     ) {}
+
+    /**
+     * Sets the store of the locks of the exclusive jobs.
+     * @param store The lock store.
+     */
+    useLockStore(store: LockStore): void {
+        this.runner.useLockStore(store);
+    }
 
     /**
      * Registers a job with the scheduler.

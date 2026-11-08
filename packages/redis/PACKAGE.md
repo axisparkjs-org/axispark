@@ -11,6 +11,7 @@ The complete guide is in the [Redis documentation](https://axisparkjs.com/docs/c
 - Injects connections with `@InjectRedisConnection()`.
 - Exposes every connection through the `RedisConnectionManager`.
 - Registers a `redis:<name>` health check for each connection, which sends a `PING` and reports its latency.
+- Provides `RedisStore(name)`, a store provider that shares the rate limits, the locks of the exclusive jobs and cached values between the instances of the application.
 
 ## Install and register
 
@@ -48,6 +49,18 @@ export class SessionCache {
         return await this.redis.get(`session:${id}`);
     }
 }
+```
+
+## Share state between instances
+
+```ts title="app.ts"
+import { RedisStore } from '@axisparkjs/redis';
+import { SchedulePlugin, SchedulePluginOptionsFactory } from '@axisparkjs/schedule';
+
+const redis = RedisStore('CACHE', { prefix: 'myapp:' });
+
+app.use(SchedulePlugin, SchedulePluginOptionsFactory.create({ lockStore: redis }));
+app.use(HttpPlugin, HttpPluginOptionsFactory.create({ rateLimit: true, rateLimitOptions: { ttl: 60_000, limit: 100, store: redis } }));
 ```
 
 The clients connect in the background, so the application starts even when Redis is not available: the clients keep reconnecting and their health checks report them as unhealthy until they are ready.

@@ -22,6 +22,7 @@ import {
 import { HttpParameter } from '../types';
 import { VersionProcessor, VersionType } from '../version';
 import { HttpMethod } from '../types';
+import { InMemoryRateLimitStore } from '@axisparkjs/store';
 
 jest.mock('../routes/route-generator');
 
@@ -47,7 +48,8 @@ jest.mock('@axisparkjs/engine', () => ({
         registerTimeout: jest.fn()
     },
     RateLimitProcessor: {
-        registerRateLimit: jest.fn()
+        registerRateLimit: jest.fn(),
+        registerRateLimitStore: jest.fn()
     },
     RateLimitGenerator: {
         registerRateLimit: jest.fn()
@@ -526,6 +528,35 @@ describe('HttpPlugin', () => {
             await plugin.onStart();
 
             expect(logger.info).toHaveBeenCalledWith('Plugin started. Listening on port 3000');
+        });
+
+        it('should not register a rate limit store when the rate limit is disabled', async () => {
+            await plugin.onStart();
+
+            expect(RateLimitProcessor.registerRateLimitStore).not.toHaveBeenCalled();
+        });
+
+        it('should register an in-memory rate limit store by default', async () => {
+            await plugin.onRegister(context, { ...options, rateLimit: true });
+
+            await plugin.onStart();
+
+            expect(RateLimitProcessor.registerRateLimitStore).toHaveBeenCalledWith(expect.any(InMemoryRateLimitStore));
+        });
+
+        it('should register the rate limit store created by the configured provider before starting the adapter', async () => {
+            const store = { consume: jest.fn() };
+            const provider = jest.fn().mockImplementation(async () => {
+                expect(adapter.start).not.toHaveBeenCalled();
+                return store;
+            });
+            await plugin.onRegister(context, { ...options, rateLimit: true, rateLimitOptions: { ttl: 1_000, limit: 1, store: provider } });
+
+            await plugin.onStart();
+
+            expect(provider).toHaveBeenCalledWith('rate-limit', context);
+            expect(RateLimitProcessor.registerRateLimitStore).toHaveBeenCalledWith(store);
+            expect(adapter.start).toHaveBeenCalledTimes(1);
         });
     });
 

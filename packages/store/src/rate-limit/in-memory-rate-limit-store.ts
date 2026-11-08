@@ -1,19 +1,5 @@
 import { RateLimitDecision } from './rate-limit-decision';
-import { RateLimitDefinition } from './rate-limit-definition';
-
-/**
- * Stores the requests counted by `RateLimitProcessor` and applies the sliding window of a definition.
- * Implement it to share the limits between several instances of the application, for example in Redis.
- */
-export interface RateLimitStore {
-    /**
-     * Counts a request in the bucket of the key when the limit of the definition allows it.
-     * @param key The bucket key, which identifies the transport, the client and the handler.
-     * @param definition The time window (`ttl`) and the maximum number of requests (`limit`).
-     * @returns Whether the request is allowed and, when it is not, the milliseconds until the oldest request leaves the window.
-     */
-    consume(key: string, definition: RateLimitDefinition): RateLimitDecision | Promise<RateLimitDecision>;
-}
+import { RateLimitPolicy, RateLimitStore } from './rate-limit-store';
 
 interface RateLimitBucket {
     timestamps: number[];
@@ -30,19 +16,19 @@ export class InMemoryRateLimitStore implements RateLimitStore {
     private readonly buckets = new Map<string, RateLimitBucket>();
     private checkedRequests = 0;
 
-    public consume(key: string, definition: RateLimitDefinition): RateLimitDecision {
+    public consume(key: string, policy: RateLimitPolicy): RateLimitDecision {
         const now = Date.now();
-        const bucket = this.buckets.get(key) ?? { timestamps: [], ttl: definition.ttl };
-        const cutoff = now - definition.ttl;
+        const bucket = this.buckets.get(key) ?? { timestamps: [], ttl: policy.ttl };
+        const cutoff = now - policy.ttl;
         bucket.timestamps = bucket.timestamps.filter((timestamp) => timestamp > cutoff);
-        bucket.ttl = definition.ttl;
+        bucket.ttl = policy.ttl;
 
         let decision: RateLimitDecision;
-        if (definition.limit <= 0 || bucket.timestamps.length >= definition.limit) {
+        if (policy.limit <= 0 || bucket.timestamps.length >= policy.limit) {
             const oldest = bucket.timestamps[0];
             decision = {
                 allowed: false,
-                retryAfterMs: oldest === undefined ? Math.max(definition.ttl, 0) : Math.max(oldest + definition.ttl - now, 0)
+                retryAfterMs: oldest === undefined ? Math.max(policy.ttl, 0) : Math.max(oldest + policy.ttl - now, 0)
             };
         } else {
             bucket.timestamps.push(now);
