@@ -36,6 +36,9 @@ export class HttpPluginOptionsFactoryStatic implements Factory<ExpressHttpPlugin
                 ttl: 60_000,
                 limit: 100
             },
+            cacheOptions: {
+                ttl: 60_000
+            },
             fileUpload: false,
             fileUploadOptions: {
                 maxFileSize: 5 * 1024 * 1024,

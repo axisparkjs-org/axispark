@@ -8,3 +8,4 @@ export * from './results';
 export * from './timeouts';
 export * from './rate-limits';
 export * from './versions';
+export * from './caches';
