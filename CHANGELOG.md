@@ -5,6 +5,12 @@ the changes of each release; it is generated from the changesets when a version 
 `scripts/release-notes.mjs`). A changeset that starts with a short bold title, such as `**MCP server.**`,
 gives the website changelog the name of the feature to highlight.
 
+## 1.5.1 (2026-11-09)
+
+### Improvements and fixes
+
+- Fix deployment of web
+
 ## 1.5.0 (2026-11-09)
 
 ### Features
