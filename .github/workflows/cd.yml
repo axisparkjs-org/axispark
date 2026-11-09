@@ -21,6 +21,8 @@ jobs:
     outputs:
       # Commit that contains the released versions, used to generate the documentation.
       release_sha: ${{ steps.release.outputs.sha }}
+      # Released version (fixed group), used to version the documentation.
+      release_version: ${{ steps.commit.outputs.version }}
 
     if: >
       startsWith(github.ref, 'refs/heads/release/') ||
@@ -103,6 +105,13 @@ jobs:
         if: inputs.environment != 'snapshot'
         run: npx changeset version
 
+      # The packages share their version, so the release notes go to a single CHANGELOG.md built from the
+      # changesets that `changeset version` has just consumed. Pre-releases keep their changesets until the
+      # production release, which lists all of them.
+      - name: Update changelog
+        if: inputs.environment == 'pro'
+        run: node scripts/release-notes.mjs --notes "$RUNNER_TEMP/release-notes.md"
+
       - name: Build packages with release versions
         run: npm run ci:build
 
@@ -141,12 +150,13 @@ jobs:
       # ------------------------------------------------------------
 
       - name: Commit release state
+        id: commit
         if: inputs.environment != 'snapshot'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add .changeset package.json package-lock.json packages/*/package.json
+          git add .changeset package.json package-lock.json packages/*/package.json CHANGELOG.md
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
@@ -157,7 +167,20 @@ jobs:
           VERSION=$(node -p "require('./packages/core/package.json').version")
 
           git commit -m "chore: release ${VERSION}"
-          git push
+          git tag -a "v${VERSION}" -m "AxiSpark.js ${VERSION}"
+          git push --follow-tags
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        if: inputs.environment == 'pro' && steps.commit.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.commit.outputs.version }}
+        run: |
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          [ -f "$NOTES" ] || echo "Maintenance release." > "$NOTES"
+          gh release create "v${VERSION}" --title "AxiSpark.js ${VERSION}" --notes-file "$NOTES" --verify-tag
 
       - name: Get release commit
         id: release
@@ -186,9 +209,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: publish
 
+    # Skipped when the run had no changesets to release.
     if: >
       inputs.environment == 'pro' &&
-      startsWith(github.ref, 'refs/heads/release/')
+      startsWith(github.ref, 'refs/heads/release/') &&
+      needs.publish.outputs.release_version != ''
 
     steps:
       # The documentation lives in axisparkjs/website. Its workflow checks out this repository at the
@@ -197,15 +222,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
           REF: ${{ needs.publish.outputs.release_sha }}
+          VERSION: ${{ needs.publish.outputs.release_version }}
         run: |
-          if [ -z "$REF" ]; then
+          if [ -z "$REF" ] || [ -z "$VERSION" ]; then
             echo "No release commit to document"
             exit 1
           fi
 
+          # The website snapshots the guides and the API reference as version `<major>.<minor>` and renders
+          # CHANGELOG.md from this commit.
           gh api repos/axisparkjs-org/website/dispatches \
             --method POST \
             -f event_type=axispark-release \
-            -f "client_payload[ref]=$REF"
+            -f "client_payload[ref]=$REF" \
+            -f "client_payload[version]=$VERSION"
 
-          echo "Documentation workflow requested for $REF"
+          echo "Documentation workflow requested for $VERSION ($REF)"
