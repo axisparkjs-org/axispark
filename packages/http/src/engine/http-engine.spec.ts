@@ -90,6 +90,7 @@ describe('HttpEngine', () => {
                 transport: ExecutionTransport.Http,
                 target: AdminController,
                 propertyKey: 'list',
+                route: route.path,
                 error: undefined
             });
             expect(filledContext.host?.host).toBe('admin.example.com');

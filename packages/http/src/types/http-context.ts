@@ -14,4 +14,6 @@ export interface HttpContext extends ExecutionContext {
     session: HttpSession | undefined;
     host: HostDefinition | undefined;
     version: VersionDefinition | undefined;
+    /** The template of the matched route, such as `/api/products/:id`. */
+    route?: string;
 }
