@@ -5,3 +5,4 @@ export * from './timeout';
 export * from './rate-limit';
 export * from './parameter';
 export * from './pipe';
+export * from './cache';

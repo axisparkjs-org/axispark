@@ -1,5 +1,6 @@
 import { ResultProcessor } from '../result';
 import { TimeoutDefinition, TimeoutProcessor } from '../timeout';
+import { CacheDefinition, CacheProcessor } from '../cache';
 import { ExecutionContext } from './execution-context';
 import { ExecutionEngine } from './execution-engine';
 import { HandlerInvoker } from './handler-invoker';
@@ -12,6 +13,7 @@ describe('ExecutionEngine', () => {
     let handlerInvoker: jest.Mocked<HandlerInvoker>;
     let timeoutProcessor: jest.Mocked<TimeoutProcessor>;
     let resultProcessor: jest.Mocked<ResultProcessor>;
+    let cacheProcessor: jest.Mocked<CacheProcessor>;
 
     let context: ExecutionContext;
 
@@ -34,7 +36,11 @@ describe('ExecutionEngine', () => {
             process: jest.fn()
         } as unknown as jest.Mocked<ResultProcessor>;
 
-        engine = new ExecutionEngine(planGenerator, handlerInvoker, timeoutProcessor, resultProcessor);
+        cacheProcessor = {
+            process: jest.fn()
+        } as unknown as jest.Mocked<CacheProcessor>;
+
+        engine = new ExecutionEngine(planGenerator, handlerInvoker, timeoutProcessor, resultProcessor, cacheProcessor);
 
         context = {
             target: class Controller {},
@@ -420,6 +426,63 @@ describe('ExecutionEngine', () => {
     });
 
     describe('timeout', () => {
+        it('should not use the cache processor when the plan has no cache', async () => {
+            planGenerator.plan.mockResolvedValue({ before: [], context: {}, catch: [], after: [] } as any);
+            handlerInvoker.invoke.mockResolvedValue('result');
+
+            await engine.execute(context);
+
+            expect(cacheProcessor.process).not.toHaveBeenCalled();
+            expect(resultProcessor.process).toHaveBeenCalledWith('result', context);
+        });
+
+        it('should run the before steps and let the cache processor invoke the handler when the plan has a cache', async () => {
+            const before = {};
+            const handler = {};
+            const after = {};
+            const cache = new CacheDefinition(1_000);
+            const calls: string[] = [];
+            planGenerator.plan.mockResolvedValue({ before: [before], context: handler, catch: [], after: [after], cache } as any);
+            handlerInvoker.invoke.mockImplementation(async (step) => {
+                calls.push(step === before ? 'before' : step === handler ? 'handler' : 'after');
+                return step === handler ? 'fresh' : undefined;
+            });
+            cacheProcessor.process.mockImplementation(async (_definition, _context, invoke) => {
+                calls.push('cache');
+                return await invoke();
+            });
+
+            await engine.execute(context);
+
+            expect(cacheProcessor.process).toHaveBeenCalledWith(cache, context, expect.any(Function));
+            expect(calls).toEqual(['before', 'cache', 'handler', 'after']);
+            expect(resultProcessor.process).toHaveBeenCalledWith('fresh', context);
+        });
+
+        it('should process the cached result without invoking the handler on a cache hit', async () => {
+            const before = { name: 'before' };
+            const handler = { name: 'handler' };
+            const after = { name: 'after' };
+            planGenerator.plan.mockResolvedValue({ before: [before], context: handler, catch: [], after: [after], cache: new CacheDefinition(1_000) } as any);
+            cacheProcessor.process.mockResolvedValue('cached');
+
+            await engine.execute(context);
+
+            expect(handlerInvoker.invoke.mock.calls.map(([step]) => step)).toEqual([before, after]);
+            expect(resultProcessor.process).toHaveBeenCalledWith('cached', context);
+        });
+
+        it('should not reach the cache when a before step throws', async () => {
+            const before = {};
+            planGenerator.plan.mockResolvedValue({ before: [before], context: {}, catch: [], after: [], cache: new CacheDefinition(1_000) } as any);
+            handlerInvoker.invoke.mockRejectedValue(new Error('Forbidden'));
+
+            await engine.execute(context);
+
+            expect(cacheProcessor.process).not.toHaveBeenCalled();
+            expect(context.error).toEqual(new Error('Forbidden'));
+        });
+
         it('should not invoke the timeout processor when there is no timeout', async () => {
             const plan = {
                 before: [],
