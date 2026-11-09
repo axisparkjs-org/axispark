@@ -150,3 +150,25 @@ describe('RateLimitProcessor', () => {
         await expect(processor.process(definition, context())).resolves.toBeUndefined();
     });
 });
+
+describe('RateLimitProcessor instrumentation', () => {
+    afterEach(() => {
+        RateLimitProcessor.registerInstrumentation();
+        (RateLimitProcessor as any).resolvers.clear();
+        (RateLimitProcessor as any).stores.clear();
+    });
+
+    it('reports every decision to the registered instrumentation', async () => {
+        const decided = jest.fn();
+        const definition = new RateLimitDefinition(1_000, 0);
+        const context = { transport: ExecutionTransport.Http, target: class Controller {}, propertyKey: 'handle' } as unknown as ExecutionContext;
+        RateLimitProcessor.registerInstrumentation({ decided });
+        RateLimitProcessor.registerRateLimit(ExecutionTransport.Http, { resolve: () => 'client' });
+        RateLimitProcessor.registerRateLimitStore(ExecutionTransport.Http, new InMemoryRateLimitStore());
+
+        const decision = await new RateLimitProcessor().process(definition, context);
+
+        expect(decided).toHaveBeenCalledWith(context, definition, decision);
+        expect(decision?.allowed).toBe(false);
+    });
+});

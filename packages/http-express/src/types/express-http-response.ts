@@ -4,6 +4,10 @@ import { CookieOptions, Response } from 'express';
 export class ExpressHttpResponse implements HttpResponse {
     constructor(private readonly response: Response) {}
 
+    get statusCode(): number {
+        return this.response.statusCode;
+    }
+
     status(code: number): this {
         this.response.status(code);
         return this;

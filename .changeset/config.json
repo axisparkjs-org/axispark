@@ -22,6 +22,7 @@
         "@axisparkjs/schedule",
         "@axisparkjs/security",
         "@axisparkjs/store",
+        "@axisparkjs/telemetry",
         "@axisparkjs/test",
         "@axisparkjs/websocket",
         "@axisparkjs/websocket-socketio"

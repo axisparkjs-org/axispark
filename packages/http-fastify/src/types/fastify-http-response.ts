@@ -5,6 +5,10 @@ import { FastifyReply } from 'fastify';
 export class FastifyHttpResponse implements HttpResponse {
     constructor(private readonly response: FastifyReply) {}
 
+    get statusCode(): number {
+        return this.response.statusCode;
+    }
+
     status(code: number): this {
         this.response.status(code);
         return this;

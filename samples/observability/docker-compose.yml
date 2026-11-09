@@ -1,0 +1,29 @@
+# Start it with `docker compose up -d`, then run the sample with `npm run dev`:
+# - Jaeger (traces): http://localhost:16686
+# - Prometheus (metrics): http://localhost:9090, for example `rate(http_server_request_duration_seconds_count[1m])`
+services:
+    otel-collector:
+        image: otel/opentelemetry-collector-contrib:0.139.0
+        command: ['--config=/etc/otel-collector.yml']
+        volumes:
+            - ./otel-collector.yml:/etc/otel-collector.yml:ro
+        ports:
+            - '4318:4318' # OTLP over HTTP, used by the sample
+            - '8889:8889' # Metrics scraped by Prometheus
+        depends_on:
+            - jaeger
+
+    jaeger:
+        image: jaegertracing/jaeger:2.11.0
+        ports:
+            - '16686:16686'
+
+    prometheus:
+        image: prom/prometheus:v3.7.3
+        command: ['--config.file=/etc/prometheus/prometheus.yml']
+        volumes:
+            - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+        ports:
+            - '9090:9090'
+        depends_on:
+            - otel-collector

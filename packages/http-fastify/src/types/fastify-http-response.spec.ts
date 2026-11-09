@@ -20,6 +20,14 @@ describe('FastifyHttpResponse', () => {
         httpResponse = new FastifyHttpResponse(response as FastifyReply);
     });
 
+    describe('statusCode', () => {
+        it('should read the status code of the response', () => {
+            (response as { statusCode?: number }).statusCode = 404;
+
+            expect(httpResponse.statusCode).toBe(404);
+        });
+    });
+
     describe('status', () => {
         it('should set the status code and return itself', () => {
             const result = httpResponse.status(201);

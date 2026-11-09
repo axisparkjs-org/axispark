@@ -47,6 +47,7 @@ export class HttpEngine implements Executable {
             propertyKey: versionRoute.propertyKey,
             host: hostDefinition,
             version: versionDefinition,
+            route: versionRoute.path,
             error: undefined
         };
 

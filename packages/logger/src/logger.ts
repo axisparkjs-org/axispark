@@ -3,12 +3,23 @@ import { LogData, LogMetadata } from './log-data';
 import { LogEntry } from './log-entry';
 import { LogLevel } from './log-level';
 import { LogTransport } from './log-transport';
+import { LogEnricher } from './log-enricher';
 
 /**
  * A class for handling logging operations with support for multiple transports and scoping.
  */
 @Injectable()
 export class Logger {
+    private static enricher?: LogEnricher;
+
+    /**
+     * Registers the enricher that adds context to every entry of every logger, such as the trace of the active span.
+     * Its metadata is added before the metadata of the logger and of the entry, which override it. Passing undefined removes it.
+     */
+    public static registerEnricher(enricher?: LogEnricher): void {
+        Logger.enricher = enricher;
+    }
+
     /**
      * Constructor for the Logger class.
      * @param transports An array of LogTransport instances that define how log entries are handled (e.g., written to console, file, etc.).
@@ -95,7 +106,7 @@ export class Logger {
             message: data.message,
             scopes: this.scopes,
             error: data.error,
-            metadata: this.mergeMetadata(this.metadata, data.metadata)
+            metadata: this.mergeMetadata(this.mergeMetadata(Logger.enricher?.(), this.metadata), data.metadata)
         };
 
         await Promise.all(this.transports.map((t) => t.write(entry)));
