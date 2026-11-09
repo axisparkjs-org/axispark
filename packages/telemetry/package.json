@@ -1,0 +1,46 @@
+{
+    "name": "@axisparkjs/telemetry",
+    "version": "1.4.0",
+    "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/telemetry",
+    "author": "Pablo Gálvez Ortuño",
+    "license": "Apache-2.0",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "files": [
+        "lib",
+        "package.json",
+        "PACKAGE.md",
+        "README.md",
+        "LICENSE",
+        "tsconfig.build.json"
+    ],
+    "scripts": {
+        "build": "tsc -b tsconfig.build.json",
+        "prettier": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore '**/*.{ts,js,mjs,json,md,html,css,scss}' --check",
+        "lint": "eslint --config ../../eslint.config.mjs .",
+        "test:unit": "export NODE_ENV=test && jest --config jest.config.ts",
+        "sonar": "sonar-scanner -Dsonar.projectKey=axisparkjs-telemetry"
+    },
+    "engines": {
+        "node": ">= 24"
+    },
+    "dependencies": {
+        "@axisparkjs/common": "1.4.0",
+        "@axisparkjs/core": "1.4.0",
+        "@axisparkjs/di": "1.4.0",
+        "@axisparkjs/engine": "1.4.0",
+        "@axisparkjs/logger": "1.4.0",
+        "@axisparkjs/schedule": "1.4.0",
+        "@axisparkjs/store": "1.4.0"
+    },
+    "peerDependencies": {
+        "@opentelemetry/api": "^1.10.0"
+    },
+    "devDependencies": {
+        "@opentelemetry/api": "^1.10.0",
+        "@opentelemetry/context-async-hooks": "^3.1.0",
+        "@opentelemetry/core": "^3.1.0",
+        "@opentelemetry/sdk-metrics": "^3.1.0",
+        "@opentelemetry/sdk-trace": "^3.1.0"
+    }
+}
