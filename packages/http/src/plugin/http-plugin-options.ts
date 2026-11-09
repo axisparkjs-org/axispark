@@ -72,6 +72,19 @@ export interface RateLimitOptions {
     store?: StoreProvider<'rate-limit'>;
 }
 
+/**
+ * Options for configuring the cache of the HTTP handlers decorated with `@Cache()`.
+ */
+export interface CacheOptions {
+    /** Default time to live of the cached results in milliseconds, for the handlers whose `@Cache()` has no `ttl`. Defaults to 60 seconds. */
+    ttl?: number;
+    /**
+     * The provider of the store of the cached results, called when the plugin starts. Defaults to `MemoryStore()`, which keeps the results
+     * in the process. Use a shared provider, such as `RedisStore('NAME')` from `@axisparkjs/redis`, to share the cache between instances.
+     */
+    store?: StoreProvider<'cache'>;
+}
+
 /** The reason why a multipart upload was rejected. */
 export type FileUploadLimitReason = 'fileSize' | 'files' | 'mimeType';
 
@@ -206,6 +219,10 @@ export interface HttpPluginOptions extends PluginOptions {
     rateLimit?: boolean;
     /** Default rate limits applied to endpoints without decorator overrides. */
     rateLimitOptions?: RateLimitOptions;
+    /**
+     * Options for configuring the cache of the handlers. The cache is opt-in: only the handlers decorated with `@Cache()` are cached.
+     */
+    cacheOptions?: CacheOptions;
     /**
      * Whether to use the file upload (multipart/form-data) middleware. Disabled by default.
      */

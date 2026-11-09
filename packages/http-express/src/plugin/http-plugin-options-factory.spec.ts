@@ -35,6 +35,9 @@ describe('HttpPluginOptionsFactory', () => {
                     ttl: 60_000,
                     limit: 100
                 },
+                cacheOptions: {
+                    ttl: 60_000
+                },
                 fileUpload: false,
                 fileUploadOptions: {
                     maxFileSize: 5 * 1024 * 1024,
@@ -81,6 +84,9 @@ describe('HttpPluginOptionsFactory', () => {
                     ttl: 10_000,
                     limit: 5
                 },
+                cacheOptions: {
+                    ttl: 60_000
+                },
                 fileUpload: true,
                 fileUploadOptions: {
                     maxFileSize: 1024,
@@ -120,6 +126,9 @@ describe('HttpPluginOptionsFactory', () => {
                 rateLimitOptions: {
                     ttl: 10_000,
                     limit: 5
+                },
+                cacheOptions: {
+                    ttl: 60_000
                 },
                 fileUpload: true,
                 fileUploadOptions: {

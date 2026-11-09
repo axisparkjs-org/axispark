@@ -1,4 +1,5 @@
 import { TimeoutGenerator } from '../timeout';
+import { CacheDefinition, CacheGenerator } from '../cache';
 import { StepDefinition, StepScope, StepType } from '../step';
 import { ExecutionContext } from './execution-context';
 import { ExecutionTransport } from './execution-transport';
@@ -10,6 +11,7 @@ describe('ExecutionPlanner', () => {
 
     let timeoutGenerator: jest.Mocked<TimeoutGenerator>;
     let stepGenerator: jest.Mocked<StepGenerator>;
+    let cacheGenerator: jest.Mocked<CacheGenerator>;
 
     class Controller {
         execute() {}
@@ -48,7 +50,11 @@ describe('ExecutionPlanner', () => {
             generate: jest.fn()
         } as unknown as jest.Mocked<StepGenerator>;
 
-        planner = new ExecutionPlanner(timeoutGenerator, stepGenerator);
+        cacheGenerator = {
+            generate: jest.fn().mockReturnValue(undefined)
+        } as unknown as jest.Mocked<CacheGenerator>;
+
+        planner = new ExecutionPlanner(timeoutGenerator, stepGenerator, cacheGenerator);
 
         timeoutGenerator.generate = jest.fn().mockReturnValue(undefined);
         stepGenerator.generate = jest.fn().mockResolvedValue([]);
@@ -65,7 +71,8 @@ describe('ExecutionPlanner', () => {
                 after: [],
                 context,
                 catch: [],
-                timeout: undefined
+                timeout: undefined,
+                cache: undefined
             });
         });
 
@@ -84,6 +91,19 @@ describe('ExecutionPlanner', () => {
 
             expect(stepGenerator.generate).toHaveBeenCalledTimes(1);
             expect(stepGenerator.generate).toHaveBeenCalledWith(context);
+        });
+
+        it('should generate the cache using CacheGenerator', async () => {
+            const context = createContext();
+            const cache = new CacheDefinition(30_000);
+            cacheGenerator.generate.mockReturnValue(cache);
+
+            const result = await planner.plan(context);
+            await planner.plan(context);
+
+            expect(result.cache).toBe(cache);
+            expect(cacheGenerator.generate).toHaveBeenCalledTimes(1);
+            expect(cacheGenerator.generate).toHaveBeenCalledWith(context);
         });
 
         it('should generate the timeout using TimeoutGenerator', async () => {

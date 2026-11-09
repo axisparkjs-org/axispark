@@ -10,6 +10,8 @@ import { MemoryStore } from '@axisparkjs/store';
 import { HttpParameter } from '../types';
 import { VersionProcessor, VersionType } from '../version';
 import {
+    CacheGenerator,
+    CacheProcessor,
     ExecutionTransport,
     ParameterGenerator,
     RateLimitGenerator,
@@ -42,6 +44,7 @@ import {
     HttpResultResolver,
     HttpTimeoutResolver,
     HttpRateLimitResolver,
+    HttpCacheResolver,
     UriVersionResolver,
     HeaderVersionResolver,
     MediaTypeVersionResolver
@@ -147,6 +150,9 @@ export class HttpPlugin extends Plugin {
             RateLimitProcessor.registerRateLimit(ExecutionTransport.Http);
         }
 
+        CacheGenerator.registerCache(ExecutionTransport.Http, { ttl: this.options.cacheOptions?.ttl });
+        CacheProcessor.registerCache(ExecutionTransport.Http, await this.injector.get(HttpCacheResolver));
+
         ParameterGenerator.registerParameter(HttpParameter.Request, await this.injector.get(RequestResolver));
         ParameterGenerator.registerParameter(HttpParameter.Response, await this.injector.get(ResponseResolver));
         ParameterGenerator.registerParameter(HttpParameter.Body, await this.injector.get(BodyResolver));
@@ -176,6 +182,14 @@ export class HttpPlugin extends Plugin {
         RateLimitProcessor.registerRateLimitStore(ExecutionTransport.Http, await provider('rate-limit', this.context));
     }
 
+    /**
+     * Creates the store of the cached results when the plugin starts, so a shared store can use the connections registered by other plugins.
+     */
+    private async registerCacheStore(): Promise<void> {
+        const provider = this.options.cacheOptions?.store ?? MemoryStore();
+        CacheProcessor.registerCacheStore(ExecutionTransport.Http, await provider('cache', this.context));
+    }
+
     private disableComponentIf(enabled: boolean, target: ClassType): void {
         if (enabled) return;
 
@@ -185,6 +199,7 @@ export class HttpPlugin extends Plugin {
 
     async onStart(): Promise<void> {
         await this.registerRateLimitStore();
+        await this.registerCacheStore();
         await this.adapter.start();
         await this.logger.info(`Plugin started. Listening on port ${this.options.port}`);
     }

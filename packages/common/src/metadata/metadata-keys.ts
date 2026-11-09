@@ -27,12 +27,14 @@ export const MetadataKeys = {
     STEP_TARGET: new MetadataKey('step-target'),
     STEP_METHOD: new MetadataKey('step-method'),
     TIMEOUT: new MetadataKey('timeout'),
+    CACHE: new MetadataKey('cache'),
 
     /* Http */
     CONTROLLER: new MetadataKey('controller'),
     ROUTE: new MetadataKey('route'),
     HTTP_CODE: new MetadataKey('http-code'),
     RATE_LIMIT: new MetadataKey('rate-limit'),
+    CACHE_VARY: new MetadataKey('cache-vary'),
     FILE_UPLOAD: new MetadataKey('file-upload'),
 
     /* Schedule */
