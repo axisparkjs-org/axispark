@@ -1,6 +1,6 @@
 {
     "name": "@axisparkjs/websocket-socketio",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/websocket-socketio",
     "author": "Pablo Gálvez Ortuño",
     "license": "Apache-2.0",
@@ -25,11 +25,11 @@
         "node": ">= 24"
     },
     "dependencies": {
-        "@axisparkjs/common": "1.4.0",
-        "@axisparkjs/core": "1.4.0",
-        "@axisparkjs/di": "1.4.0",
-        "@axisparkjs/logger": "1.4.0",
-        "@axisparkjs/websocket": "1.4.0",
+        "@axisparkjs/common": "1.5.0",
+        "@axisparkjs/core": "1.5.0",
+        "@axisparkjs/di": "1.5.0",
+        "@axisparkjs/logger": "1.5.0",
+        "@axisparkjs/websocket": "1.5.0",
         "proxy-addr": "^2.0.8",
         "socket.io": "^4.8.4"
     },
