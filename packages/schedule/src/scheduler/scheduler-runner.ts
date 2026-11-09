@@ -1,10 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Inject, Injectable } from '@axisparkjs/di';
-import { Lock, LockStore } from '@axisparkjs/store';
+import { instrumentStore, Lock, LockStore } from '@axisparkjs/store';
 import { JobDefinition, JobExclusivity } from '../jobs/job-definition';
 import { Logger } from '@axisparkjs/logger';
 import { SCHEDULE_LOGGER } from '../di';
 import { SchedulerError } from '../errors';
+import { JobInstrumentation, JobObserver, JobOutcome } from './job-instrumentation';
 
 /**
  * The maximum delay accepted by Node.js timers (2^31 - 1 ms, about 24.8 days).
@@ -40,6 +41,7 @@ interface RunningExecution {
  */
 @Injectable()
 export class SchedulerRunner {
+    private static instrumentation?: JobInstrumentation;
     /** The pending timer of each scheduled job. */
     private readonly timers = new Map<string, NodeJS.Timeout>();
     /** The execution in progress of each job. */
@@ -52,12 +54,20 @@ export class SchedulerRunner {
     constructor(@Inject(SCHEDULE_LOGGER) private readonly logger: Logger) {}
 
     /**
+     * Registers the instrumentation that observes the executions of every job, such as the one of `@axisparkjs/telemetry`.
+     * Passing undefined removes it.
+     */
+    static registerInstrumentation(instrumentation?: JobInstrumentation): void {
+        this.instrumentation = instrumentation;
+    }
+
+    /**
      * Sets the store of the locks of the exclusive jobs. The `SchedulePlugin` calls it when it starts, with the store created by the
      * `lockStore` provider of its options, which is `MemoryStore()` by default.
      * @param store The lock store.
      */
     useLockStore(store: LockStore): void {
-        this.lockStore = store;
+        this.lockStore = instrumentStore('lock', store);
     }
 
     /**
@@ -197,11 +207,19 @@ export class SchedulerRunner {
      * Executes an occurrence of a job, logs its errors and schedules the next occurrence while the job is enabled.
      */
     private async execute(job: JobDefinition, scheduledAt: Date, execution: RunningExecution, timer: NodeJS.Timeout): Promise<void> {
+        const observer = this.observe(job, scheduledAt);
+        let outcome: JobOutcome = 'executed';
+        let failure: Error | undefined;
         try {
-            await this.run(job, scheduledAt, execution);
+            const run = () => this.run(job, scheduledAt, execution);
+            const executed = await (observer?.run ? observer.run(run) : run());
+            if (!executed) outcome = 'skipped';
         } catch (error) {
+            outcome = 'failed';
+            failure = error as Error;
             this.logger.error(`Error executing job ${job.name}`, error as Error);
         } finally {
+            observer?.end(outcome, failure);
             if (this.executions.get(job.name) === execution) this.executions.delete(job.name);
             // The job may have been stopped, or stopped and started again, while it was executing.
             if (this.timers.get(job.name) === timer) {
@@ -216,24 +234,36 @@ export class SchedulerRunner {
      * @param job The job.
      * @param scheduledAt The scheduled time of the occurrence.
      * @param execution The execution in progress.
+     * @returns True when the job was executed, false when it was skipped because this instance did not acquire its lock.
      */
-    private async run(job: JobDefinition, scheduledAt: Date, execution: RunningExecution): Promise<void> {
+    private async run(job: JobDefinition, scheduledAt: Date, execution: RunningExecution): Promise<boolean> {
         const signal = execution.controller.signal;
         const exclusive = job.exclusive;
-        if (!exclusive) return await job.execute(signal);
+        if (!exclusive) {
+            await job.execute(signal);
+            return true;
+        }
 
         const lock = await this.acquire(job, exclusive, scheduledAt);
         if (!lock) {
             job.skipExecution();
-            return;
+            return false;
         }
 
         if (exclusive.mode === 'once-per-occurrence') {
             // The lock is not released, so an instance whose clock is behind never runs the same occurrence again. It expires with its ttl.
-            return await job.execute(signal);
+            await job.execute(signal);
+            return true;
         }
 
         await this.executeWhileLocked(job, lock, exclusive.ttl ?? DEFAULT_NO_OVERLAP_LOCK_TTL, execution);
+        return true;
+    }
+
+    /** Starts the observation of an execution with the registered instrumentation, if any. */
+    private observe(job: JobDefinition, scheduledAt: Date): JobObserver | undefined {
+        const started = SchedulerRunner.instrumentation?.start(job, scheduledAt);
+        return typeof started === 'function' ? { end: started } : started;
     }
 
     private async acquire(job: JobDefinition, exclusive: JobExclusivity, scheduledAt: Date): Promise<Lock | undefined> {

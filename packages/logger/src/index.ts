@@ -6,3 +6,4 @@ export * from './log-formatter';
 export * from './log-level';
 export * from './log-transport';
 export * from './logger';
+export * from './log-enricher';

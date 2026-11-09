@@ -5,12 +5,15 @@ import { Injectable } from '@axisparkjs/di';
 import { ResultProcessor, ResultDefinition } from '../result';
 import { ExecutionPlanner } from './execution-planner';
 import { TimeoutProcessor, TimeoutDefinition } from '../timeout';
+import { ExecutionInstrumentation, ExecutionObserver } from './execution-instrumentation';
 
 /**
  * A class representing the execution engine for handling asynchronous execution flows.
  */
 @Injectable()
 export class ExecutionEngine implements Executable {
+    private static instrumentation?: ExecutionInstrumentation;
+
     constructor(
         private readonly planGenerator: ExecutionPlanner,
         private readonly handlerInvoker: HandlerInvoker,
@@ -19,11 +22,36 @@ export class ExecutionEngine implements Executable {
     ) {}
 
     /**
+     * Registers the instrumentation that observes every execution, such as the one of `@axisparkjs/telemetry`. Passing undefined removes it.
+     * Without an instrumentation, the executions run without any extra work.
+     */
+    public static registerInstrumentation(instrumentation?: ExecutionInstrumentation): void {
+        this.instrumentation = instrumentation;
+    }
+
+    /**
      * Executes the provided execution context by generating an execution plan, invoking handlers, processing timeouts, and handling results. It manages the flow of execution, including before, context, catch, and after steps, while also handling errors and timeouts.
      * @param context The execution context to be processed.
      * @returns A promise that resolves when the execution is complete.
      */
     public async execute(context: ExecutionContext): Promise<void> {
+        const instrumentation = ExecutionEngine.instrumentation;
+        if (!instrumentation) return await this.executePlan(context);
+
+        const started = instrumentation.start(context);
+        const observer: ExecutionObserver = typeof started === 'function' ? { end: started } : started;
+        let error: Error | undefined;
+        try {
+            await (observer.run ? observer.run(() => this.executePlan(context)) : this.executePlan(context));
+        } catch (caught) {
+            error = caught as Error;
+            throw caught;
+        } finally {
+            observer.end({ error: error ?? context.error });
+        }
+    }
+
+    private async executePlan(context: ExecutionContext): Promise<void> {
         const plan = await this.planGenerator.plan(context);
         let result: unknown | ResultDefinition;
         try {
