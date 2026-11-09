@@ -1,0 +1,31 @@
+{
+    "name": "@axisparkjs/store",
+    "version": "1.5.0",
+    "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/store",
+    "author": "Pablo Gálvez Ortuño",
+    "license": "Apache-2.0",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "files": [
+        "lib",
+        "package.json",
+        "PACKAGE.md",
+        "README.md",
+        "LICENSE",
+        "tsconfig.build.json"
+    ],
+    "scripts": {
+        "build": "tsc -b tsconfig.build.json",
+        "prettier": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore '**/*.{ts,js,mjs,json,md,html,css,scss}' --check",
+        "lint": "eslint --config ../../eslint.config.mjs .",
+        "test:unit": "export NODE_ENV=test && jest --config jest.config.ts",
+        "sonar": "sonar-scanner -Dsonar.projectKey=axisparkjs-store"
+    },
+    "engines": {
+        "node": ">= 24"
+    },
+    "dependencies": {
+        "@axisparkjs/di": "1.5.0",
+        "@axisparkjs/logger": "1.5.0"
+    }
+}

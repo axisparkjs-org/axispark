@@ -93,6 +93,24 @@ describe('CronJobTrigger', () => {
     });
 });
 
+describe('CronJobTrigger.getNextExecutionTimeAfter', () => {
+    it('should calculate the next slot after the date', () => {
+        (validateCronExpression as jest.Mock).mockReturnValue(true);
+
+        const next = new Date('2030-01-01T00:02:00Z');
+        const cronTime = {
+            getNextDateFrom: jest.fn().mockReturnValue({ toJSDate: () => next })
+        };
+        (CronTime as unknown as jest.Mock).mockImplementation(() => cronTime);
+
+        const trigger = new CronJobTrigger('* * * * *');
+        const date = new Date('2030-01-01T00:01:10Z');
+
+        expect(trigger.getNextExecutionTimeAfter(date)).toBe(next);
+        expect(cronTime.getNextDateFrom).toHaveBeenCalledWith(date);
+    });
+});
+
 describe('IntervalJobTrigger', () => {
     it('should throw when interval is not positive', () => {
         expect(() => new IntervalJobTrigger(0)).toThrow(JobError);
@@ -114,6 +132,13 @@ describe('IntervalJobTrigger', () => {
         const result = trigger.getNextExecutionTime(last);
 
         expect(result).toEqual(new Date(last.getTime() + 1000));
+    });
+
+    it('should calculate the next execution after a date', () => {
+        const trigger = new IntervalJobTrigger(1000);
+        const date = new Date('2030-01-01T00:00:05Z');
+
+        expect(trigger.getNextExecutionTimeAfter(date)).toEqual(new Date(date.getTime() + 1000));
     });
 });
 
@@ -142,6 +167,12 @@ describe('DateJobTrigger', () => {
 
         jest.useRealTimers();
     });
+
+    it('should not calculate an execution after a date', () => {
+        const trigger = new DateJobTrigger(new Date(Date.now() + 60_000));
+
+        expect(trigger.getNextExecutionTimeAfter(new Date())).toBeUndefined();
+    });
 });
 
 describe('TimeoutJobTrigger', () => {
@@ -156,5 +187,50 @@ describe('TimeoutJobTrigger', () => {
         const result = trigger.getNextExecutionTime();
 
         expect(result).toEqual(new Date(trigger.createdAt.getTime() + 5000));
+    });
+
+    it('should not calculate an execution after a date', () => {
+        const trigger = new TimeoutJobTrigger(5000);
+
+        expect(trigger.getNextExecutionTimeAfter(new Date())).toBeUndefined();
+    });
+});
+
+describe('Job trigger occurrences', () => {
+    const scheduledAt = new Date('2030-01-01T00:01:00.000Z');
+
+    it('should identify cron occurrences by their scheduled time and use the time to the next one as interval', () => {
+        (validateCronExpression as jest.Mock).mockReturnValue(true);
+        const cronTime = { getNextDateFrom: jest.fn().mockReturnValue({ toJSDate: () => new Date('2030-01-01T00:02:00.000Z') }) };
+        (CronTime as unknown as jest.Mock).mockImplementation(() => cronTime);
+        const trigger = new CronJobTrigger('* * * * *');
+
+        expect(trigger.getOccurrenceKey(scheduledAt)).toBe('2030-01-01T00:01:00.000Z');
+        expect(trigger.getOccurrenceInterval(scheduledAt)).toBe(60_000);
+        expect(cronTime.getNextDateFrom).toHaveBeenCalledWith(scheduledAt);
+    });
+
+    it('should identify interval occurrences by their window since the epoch', () => {
+        const trigger = new IntervalJobTrigger(60_000);
+        const windowStart = Math.floor(scheduledAt.getTime() / 60_000);
+
+        expect(trigger.getOccurrenceKey(new Date(scheduledAt.getTime() + 1))).toBe(String(windowStart));
+        expect(trigger.getOccurrenceKey(new Date(scheduledAt.getTime() + 59_999))).toBe(String(windowStart));
+        expect(trigger.getOccurrenceKey(new Date(scheduledAt.getTime() + 60_000))).toBe(String(windowStart + 1));
+        expect(trigger.getOccurrenceInterval()).toBe(60_000);
+    });
+
+    it('should identify date occurrences by their scheduled time without an interval', () => {
+        const trigger = new DateJobTrigger(new Date(Date.now() + 60_000));
+
+        expect(trigger.getOccurrenceKey(scheduledAt)).toBe('2030-01-01T00:01:00.000Z');
+        expect(trigger.getOccurrenceInterval(scheduledAt)).toBeUndefined();
+    });
+
+    it('should share the occurrence of a timeout job between every instance', () => {
+        const trigger = new TimeoutJobTrigger(5_000);
+
+        expect(trigger.getOccurrenceKey()).toBe('timeout');
+        expect(trigger.getOccurrenceInterval(scheduledAt)).toBeUndefined();
     });
 });

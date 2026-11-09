@@ -3,6 +3,7 @@ import { Injectable } from '@axisparkjs/di';
 import { ExecutionContext, ExecutionTransport } from '../execution';
 import { TimeoutResolver } from './timeout-resolver';
 import { TimeoutDefinition } from './timeout-definition';
+import { ExecutionTimeoutError } from './timeout-errors';
 
 /**
  * A processor for handling timeout operations.
@@ -21,11 +22,12 @@ export class TimeoutProcessor implements Processable {
      * @param timeout The timeout definition to process.
      * @param context The execution context containing relevant information for timeout processing.
      * @returns A promise resolving when the timeout has been processed.
+     * @throws {ExecutionTimeoutError} When no resolver is registered for the transport of the context.
      */
     async process(timeout: TimeoutDefinition, context: ExecutionContext): Promise<void> {
         const resolver = TimeoutProcessor.resolvers.get(context.transport);
         if (!resolver) {
-            return;
+            throw new ExecutionTimeoutError(timeout.time, context.transport);
         }
 
         await resolver.resolve(timeout);

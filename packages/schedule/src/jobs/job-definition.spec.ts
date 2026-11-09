@@ -1,5 +1,5 @@
 import { ClassType } from '@axisparkjs/common';
-import { CronJobDefinitio, DateJobDefinition, IntervalJobDefinition, JobDefinition, JobType, TimeoutJobDefinition } from './job-definition';
+import { CronJobDefinition, DateJobDefinition, IntervalJobDefinition, JobDefinition, JobType, TimeoutJobDefinition } from './job-definition';
 
 import { CronJobTrigger, DateJobTrigger, IntervalJobTrigger, TimeoutJobTrigger } from './job-trigger';
 
@@ -14,7 +14,7 @@ describe('JobDefinition.fromMetadata', () => {
     const execute = jest.fn().mockResolvedValue(undefined);
 
     it.each([
-        [JobType.Cron, '* * * * *', CronJobDefinitio],
+        [JobType.Cron, '* * * * *', CronJobDefinition],
         [JobType.Interval, 1000, IntervalJobDefinition],
         [JobType.Date, new Date(Date.now() + 10000), DateJobDefinition],
         [JobType.Timeout, 5000, TimeoutJobDefinition]
@@ -22,6 +22,44 @@ describe('JobDefinition.fromMetadata', () => {
         const job = JobDefinition.fromMetadata({ name: 'job', disabled: false, value, type, propertyKey: 'execute', target: {} as ClassType }, execute);
 
         expect(job).toBeInstanceOf(expected);
+    });
+});
+
+describe('Exclusive jobs', () => {
+    const create = () => new IntervalJobDefinition('job', 1000, jest.fn());
+
+    it('should run on every instance by default', () => {
+        expect(create().exclusive).toBeUndefined();
+    });
+
+    it.each([
+        [true, { mode: 'once-per-occurrence' }],
+        [{}, { mode: 'once-per-occurrence', ttl: undefined }],
+        [{ ttl: 5_000 }, { mode: 'once-per-occurrence', ttl: 5_000 }],
+        [{ mode: 'no-overlap' as const }, { mode: 'no-overlap', ttl: undefined }]
+    ])('should normalize the exclusive option %p', (exclusive, expected) => {
+        expect(create().setExclusive(exclusive).exclusive).toEqual(expected);
+    });
+
+    it('should stop being exclusive', () => {
+        expect(create().setExclusive(true).setExclusive(false).exclusive).toBeUndefined();
+    });
+
+    it('should create exclusive jobs from metadata', () => {
+        const job = JobDefinition.fromMetadata(
+            {
+                name: 'job',
+                disabled: false,
+                value: 1000,
+                type: JobType.Interval,
+                exclusive: { mode: 'no-overlap' },
+                propertyKey: 'execute',
+                target: {} as ClassType
+            },
+            jest.fn()
+        );
+
+        expect(job.exclusive).toEqual({ mode: 'no-overlap', ttl: undefined });
     });
 });
 
@@ -37,7 +75,7 @@ describe('CronJob', () => {
     it('should create a cron trigger', () => {
         const execute = jest.fn();
 
-        const job = new CronJobDefinitio('cron', '* * * * *', execute, true);
+        const job = new CronJobDefinition('cron', '* * * * *', execute, true);
 
         expect(job.type).toBe(JobType.Cron);
         expect(CronJobTrigger).toHaveBeenCalledWith('* * * * *', undefined);
@@ -46,7 +84,7 @@ describe('CronJob', () => {
     it('should update the cron expression', () => {
         const execute = jest.fn();
 
-        const job = new CronJobDefinitio('cron', '* * * * *', execute, true);
+        const job = new CronJobDefinition('cron', '* * * * *', execute, true);
 
         (CronJobTrigger as jest.Mock).mockClear();
 
@@ -134,6 +172,26 @@ describe('Job execution', () => {
         expect(job.getLastExecutionTime()).toBeInstanceOf(Date);
     });
 
+    it('should pass the abort signal to the job function', async () => {
+        const execute = jest.fn().mockResolvedValue(undefined);
+        const job = new IntervalJobDefinition('job', 1000, execute);
+        const controller = new AbortController();
+
+        await job.execute(controller.signal);
+
+        expect(execute).toHaveBeenCalledWith(controller.signal);
+    });
+
+    it('should pass a signal that is never aborted when the job is executed without one', async () => {
+        const execute = jest.fn().mockResolvedValue(undefined);
+        const job = new IntervalJobDefinition('job', 1000, execute);
+
+        await job.execute();
+
+        expect(execute).toHaveBeenCalledWith(expect.any(AbortSignal));
+        expect((execute.mock.calls[0][0] as AbortSignal).aborted).toBe(false);
+    });
+
     it('should delegate next execution time to the trigger', () => {
         const trigger = {
             getNextExecutionTime: jest.fn().mockReturnValue('next')
@@ -164,5 +222,45 @@ describe('Job execution', () => {
         job.getNextExecutionTime();
 
         expect(trigger.getNextExecutionTime).toHaveBeenCalledWith(lastExecution);
+    });
+
+    it('should skip an occurrence without executing the job and calculate the next one from the skip', () => {
+        const trigger = { getNextExecutionTime: jest.fn() };
+        (IntervalJobTrigger as jest.Mock).mockImplementation(() => trigger);
+        const execute = jest.fn();
+        const job = new IntervalJobDefinition('job', 1000, execute, true);
+
+        job.skipExecution();
+        job.getNextExecutionTime();
+
+        expect(execute).not.toHaveBeenCalled();
+        expect(job.getLastExecutionTime()).toBeUndefined();
+        expect(trigger.getNextExecutionTime).toHaveBeenCalledWith(expect.any(Date));
+    });
+
+    it('should delegate the occurrences to the trigger', () => {
+        const trigger = { getOccurrenceKey: jest.fn().mockReturnValue('key'), getOccurrenceInterval: jest.fn().mockReturnValue(1000) };
+        (IntervalJobTrigger as jest.Mock).mockImplementation(() => trigger);
+        const job = new IntervalJobDefinition('job', 1000, jest.fn(), true);
+        const date = new Date();
+
+        expect(job.getOccurrenceKey(date)).toBe('key');
+        expect(job.getOccurrenceInterval(date)).toBe(1000);
+        expect(trigger.getOccurrenceKey).toHaveBeenCalledWith(date);
+        expect(trigger.getOccurrenceInterval).toHaveBeenCalledWith(date);
+    });
+
+    it('should delegate the next execution time after a date to the trigger', () => {
+        const trigger = {
+            getNextExecutionTimeAfter: jest.fn().mockReturnValue('next')
+        };
+
+        (IntervalJobTrigger as jest.Mock).mockImplementation(() => trigger);
+
+        const job = new IntervalJobDefinition('job', 1000, jest.fn(), true);
+        const date = new Date();
+
+        expect(job.getNextExecutionTimeAfter(date)).toBe('next');
+        expect(trigger.getNextExecutionTimeAfter).toHaveBeenCalledWith(date);
     });
 });

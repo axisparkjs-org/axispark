@@ -12,6 +12,7 @@ export class HttpPluginOptionsFactoryStatic implements Factory<ExpressHttpPlugin
             plugin: HttpPlugin,
             port: 3000,
             basePath: '/',
+            trustProxy: false,
             adapter: ExpressHttpAdapter,
             bodyParser: true,
             bodyParserOptions: undefined,
@@ -34,6 +35,9 @@ export class HttpPluginOptionsFactoryStatic implements Factory<ExpressHttpPlugin
             rateLimitOptions: {
                 ttl: 60_000,
                 limit: 100
+            },
+            cacheOptions: {
+                ttl: 60_000
             },
             fileUpload: false,
             fileUploadOptions: {

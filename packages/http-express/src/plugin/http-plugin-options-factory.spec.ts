@@ -11,6 +11,7 @@ describe('HttpPluginOptionsFactory', () => {
                 plugin: HttpPlugin,
                 port: 3000,
                 basePath: '/',
+                trustProxy: false,
                 adapter: ExpressHttpAdapter,
                 bodyParser: true,
                 bodyParserOptions: undefined,
@@ -33,6 +34,9 @@ describe('HttpPluginOptionsFactory', () => {
                 rateLimitOptions: {
                     ttl: 60_000,
                     limit: 100
+                },
+                cacheOptions: {
+                    ttl: 60_000
                 },
                 fileUpload: false,
                 fileUploadOptions: {
@@ -59,6 +63,7 @@ describe('HttpPluginOptionsFactory', () => {
             const options = HttpPluginOptionsFactory.create({
                 port: 8080,
                 basePath: '/',
+                trustProxy: 1,
                 bodyParser: false,
                 bodyParserOptions,
                 urlEncoded: false,
@@ -79,6 +84,9 @@ describe('HttpPluginOptionsFactory', () => {
                     ttl: 10_000,
                     limit: 5
                 },
+                cacheOptions: {
+                    ttl: 60_000
+                },
                 fileUpload: true,
                 fileUploadOptions: {
                     maxFileSize: 1024,
@@ -97,6 +105,7 @@ describe('HttpPluginOptionsFactory', () => {
                 plugin: HttpPlugin,
                 port: 8080,
                 basePath: '/',
+                trustProxy: 1,
                 adapter: ExpressHttpAdapter,
                 bodyParser: false,
                 bodyParserOptions,
@@ -117,6 +126,9 @@ describe('HttpPluginOptionsFactory', () => {
                 rateLimitOptions: {
                     ttl: 10_000,
                     limit: 5
+                },
+                cacheOptions: {
+                    ttl: 60_000
                 },
                 fileUpload: true,
                 fileUploadOptions: {

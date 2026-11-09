@@ -5,3 +5,4 @@ export * from './timeout-metadata';
 export * from './rate-limit-metadata';
 export * from './pipe-metadata';
 export * from './use-metadata';
+export * from './cache-metadata';

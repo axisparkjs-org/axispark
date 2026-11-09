@@ -29,4 +29,13 @@ describe('SocketIOWebSocketConnection', () => {
         expect(socket.to).toHaveBeenCalledWith('r');
         expect(socket.disconnect).toHaveBeenCalledWith(true);
     });
+
+    it('returns the address of the handshake as the remote address', () => {
+        const socket: any = { handshake: { address: '10.0.0.1', headers: { 'x-forwarded-for': '203.0.113.7' } } };
+
+        expect(new SocketIOWebSocketConnection(socket).remoteAddress).toBe('10.0.0.1');
+        expect(new SocketIOWebSocketConnection(socket, () => true).remoteAddress).toBe('203.0.113.7');
+        expect(new SocketIOWebSocketConnection({ handshake: { address: '' } } as any).remoteAddress).toBeUndefined();
+        expect(new SocketIOWebSocketConnection({} as any).remoteAddress).toBeUndefined();
+    });
 });

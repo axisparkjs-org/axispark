@@ -2,6 +2,8 @@ import { SchedulePlugin } from './schedule-plugin';
 import { JobGenerator } from '../jobs/job-generator';
 import { SCHEDULE_LOGGER } from '../di/tokens';
 import { SchedulerService } from '../scheduler';
+import { InMemoryLockStore } from '@axisparkjs/store';
+import { SchedulePluginOptionsFactory } from './schedule-plugin-options-factory';
 
 describe('SchedulePlugin', () => {
     let plugin: SchedulePlugin;
@@ -26,7 +28,8 @@ describe('SchedulePlugin', () => {
             registerJobs: jest.fn(),
             startAllJobs: jest.fn(),
             stopAllJobs: jest.fn(),
-            startJob: jest.fn()
+            startJob: jest.fn(),
+            useLockStore: jest.fn()
         };
 
         jobGenerator = {
@@ -96,6 +99,27 @@ describe('SchedulePlugin', () => {
 
             expect(logger.info).toHaveBeenCalledWith('Plugin started. Scheduler is running');
         });
+
+        it('should use an in-memory lock store by default', async () => {
+            await plugin.onStart();
+
+            expect(scheduler.useLockStore).toHaveBeenCalledWith(expect.any(InMemoryLockStore));
+        });
+
+        it('should use the lock store created by the configured provider before starting the jobs', async () => {
+            const store = { acquire: jest.fn() };
+            const lockStore = jest.fn().mockImplementation(async () => {
+                expect(scheduler.startAllJobs).not.toHaveBeenCalled();
+                return store;
+            });
+            await plugin.onRegister(context, SchedulePluginOptionsFactory.create({ lockStore }));
+
+            await plugin.onStart();
+
+            expect(lockStore).toHaveBeenCalledWith('lock', context);
+            expect(scheduler.useLockStore).toHaveBeenCalledWith(store);
+            expect(scheduler.startAllJobs).toHaveBeenCalledWith(true);
+        });
     });
 
     describe('onStop', () => {
@@ -104,10 +128,31 @@ describe('SchedulePlugin', () => {
             jest.clearAllMocks();
         });
 
-        it('should stop all jobs', async () => {
+        it('should stop all jobs with the default shutdown timeout', async () => {
             await plugin.onStop();
 
-            expect(scheduler.stopAllJobs).toHaveBeenCalled();
+            expect(scheduler.stopAllJobs).toHaveBeenCalledWith({ timeout: 25_000 });
+        });
+
+        it('should stop all jobs with the configured shutdown timeout', async () => {
+            await plugin.onRegister(context, SchedulePluginOptionsFactory.create({ shutdownTimeout: 1000 }));
+
+            await plugin.onStop();
+
+            expect(scheduler.stopAllJobs).toHaveBeenCalledWith({ timeout: 1000 });
+        });
+
+        it('should wait for the running jobs before logging that the plugin stopped', async () => {
+            let resolveStop!: () => void;
+            scheduler.stopAllJobs.mockReturnValue(new Promise<void>((resolve) => (resolveStop = resolve)));
+
+            const promise = plugin.onStop();
+            await Promise.resolve();
+
+            expect(logger.info).not.toHaveBeenCalledWith('Plugin stopped');
+            resolveStop();
+            await promise;
+            expect(logger.info).toHaveBeenCalledWith('Plugin stopped');
         });
 
         it('should log plugin shutdown', async () => {

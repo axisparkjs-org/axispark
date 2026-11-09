@@ -1,6 +1,6 @@
 {
     "name": "@axisparkjs/websocket",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/websocket",
     "author": "Pablo Gálvez Ortuño",
     "license": "Apache-2.0",
@@ -25,11 +25,12 @@
         "node": ">= 24"
     },
     "dependencies": {
-        "@axisparkjs/common": "1.4.0",
-        "@axisparkjs/core": "1.4.0",
-        "@axisparkjs/di": "1.4.0",
-        "@axisparkjs/engine": "1.4.0",
-        "@axisparkjs/http": "1.4.0",
-        "@axisparkjs/logger": "1.4.0"
+        "@axisparkjs/common": "1.5.0",
+        "@axisparkjs/core": "1.5.0",
+        "@axisparkjs/di": "1.5.0",
+        "@axisparkjs/engine": "1.5.0",
+        "@axisparkjs/http": "1.5.0",
+        "@axisparkjs/logger": "1.5.0",
+        "@axisparkjs/store": "1.5.0"
     }
 }

@@ -1,14 +1,11 @@
 import { Resolver } from '@axisparkjs/common';
 import { ExecutionContext } from '../execution';
-import { RateLimitDefinition } from './rate-limit-definition';
 
-/** The result of checking a request against a rate limit. */
-export interface RateLimitDecision {
-    allowed: boolean;
-    retryAfterMs: number;
-}
-
-/** Resolves a rate limit using the identity and state of a specific transport. */
-export interface RateLimitResolver extends Resolver<RateLimitDecision> {
-    resolve(definition: RateLimitDefinition, context: ExecutionContext): RateLimitDecision | Promise<RateLimitDecision>;
+/**
+ * Identifies the client of a request from the context of a specific transport, such as the IP address for HTTP.
+ * `RateLimitProcessor` uses the identifier to build the bucket key, so the transport does not implement buckets or windows.
+ * Returning `undefined` counts the request in a bucket shared by every client without an identifier.
+ */
+export interface RateLimitResolver extends Resolver<string | undefined> {
+    resolve(context: ExecutionContext): string | undefined | Promise<string | undefined>;
 }

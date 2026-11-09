@@ -9,8 +9,10 @@ import { HttpPluginOptions } from './http-plugin-options';
 import { FileUploadGuard, HealthController, RateLimitGuard, VersionGuard } from '../implementations';
 import { LogErrorFilter, LogHttpErrorFilter } from '../implementations/filters';
 import { LogHttpRequestInterceptor, LogHttpResponseInterceptor } from '../implementations';
-import { HttpRateLimitResolver, HttpResultResolver, HttpTimeoutResolver } from '../implementations';
+import { HttpCacheResolver, HttpRateLimitResolver, HttpResultResolver, HttpTimeoutResolver } from '../implementations';
 import {
+    CacheGenerator,
+    CacheProcessor,
     ExecutionTransport,
     ParameterGenerator,
     RateLimitGenerator,
@@ -22,6 +24,7 @@ import {
 import { HttpParameter } from '../types';
 import { VersionProcessor, VersionType } from '../version';
 import { HttpMethod } from '../types';
+import { InMemoryCacheStore, InMemoryRateLimitStore } from '@axisparkjs/store';
 
 jest.mock('../routes/route-generator');
 
@@ -47,10 +50,18 @@ jest.mock('@axisparkjs/engine', () => ({
         registerTimeout: jest.fn()
     },
     RateLimitProcessor: {
-        registerRateLimit: jest.fn()
+        registerRateLimit: jest.fn(),
+        registerRateLimitStore: jest.fn()
     },
     RateLimitGenerator: {
         registerRateLimit: jest.fn()
+    },
+    CacheProcessor: {
+        registerCache: jest.fn(),
+        registerCacheStore: jest.fn()
+    },
+    CacheGenerator: {
+        registerCache: jest.fn()
     }
 }));
 
@@ -446,6 +457,27 @@ describe('HttpPlugin', () => {
             expect(injector.get).not.toHaveBeenCalledWith(HttpRateLimitResolver);
         });
 
+        it('should register the HTTP cache resolver and the default ttl', async () => {
+            const resolver = {};
+            injector.get.mockImplementation(async (target: any) =>
+                target === HttpCacheResolver ? resolver : { generate: jest.fn().mockResolvedValue([]), validate: jest.fn() }
+            );
+
+            await plugin.onRegister(context, { ...options, cacheOptions: { ttl: 30_000 } });
+
+            expect(CacheGenerator.registerCache).toHaveBeenCalledWith(ExecutionTransport.Http, { ttl: 30_000 });
+            expect(CacheProcessor.registerCache).toHaveBeenCalledWith(ExecutionTransport.Http, resolver);
+        });
+
+        it('should register the HTTP cache resolver without cache options', async () => {
+            injector.get.mockImplementation(async () => ({ generate: jest.fn().mockResolvedValue([]), validate: jest.fn() }));
+
+            await plugin.onRegister(context, optionsWithoutComponents);
+
+            expect(CacheGenerator.registerCache).toHaveBeenCalledWith(ExecutionTransport.Http, { ttl: undefined });
+            expect(injector.get).toHaveBeenCalledWith(HttpCacheResolver);
+        });
+
         it('should register all HTTP parameter resolvers', async () => {
             injector.get.mockResolvedValue({
                 generate: jest.fn().mockResolvedValue([]),
@@ -526,6 +558,59 @@ describe('HttpPlugin', () => {
             await plugin.onStart();
 
             expect(logger.info).toHaveBeenCalledWith('Plugin started. Listening on port 3000');
+        });
+
+        it('should not register a rate limit store when the rate limit is disabled', async () => {
+            await plugin.onStart();
+
+            expect(RateLimitProcessor.registerRateLimitStore).not.toHaveBeenCalled();
+        });
+
+        it('should register an in-memory rate limit store by default', async () => {
+            await plugin.onRegister(context, { ...options, rateLimit: true });
+
+            await plugin.onStart();
+
+            expect(RateLimitProcessor.registerRateLimitStore).toHaveBeenCalledWith(ExecutionTransport.Http, expect.any(InMemoryRateLimitStore));
+        });
+
+        it('should register the rate limit store created by the configured provider before starting the adapter', async () => {
+            const store = { consume: jest.fn() };
+            const provider = jest.fn().mockImplementation(async () => {
+                expect(adapter.start).not.toHaveBeenCalled();
+                return store;
+            });
+            await plugin.onRegister(context, { ...options, rateLimit: true, rateLimitOptions: { ttl: 1_000, limit: 1, store: provider } });
+
+            await plugin.onStart();
+
+            expect(provider).toHaveBeenCalledWith('rate-limit', context);
+            expect(RateLimitProcessor.registerRateLimitStore).toHaveBeenCalledWith(ExecutionTransport.Http, store);
+            expect(adapter.start).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('onStart cache store', () => {
+        it('should register an in-memory cache store by default', async () => {
+            await plugin.onRegister(context, options);
+
+            await plugin.onStart();
+
+            expect(CacheProcessor.registerCacheStore).toHaveBeenCalledWith(ExecutionTransport.Http, expect.any(InMemoryCacheStore));
+        });
+
+        it('should register the cache store created by the configured provider before starting the adapter', async () => {
+            const store = { get: jest.fn(), set: jest.fn(), delete: jest.fn() };
+            const provider = jest.fn().mockImplementation(async () => {
+                expect(adapter.start).not.toHaveBeenCalled();
+                return store;
+            });
+            await plugin.onRegister(context, { ...options, cacheOptions: { store: provider } });
+
+            await plugin.onStart();
+
+            expect(provider).toHaveBeenCalledWith('cache', context);
+            expect(CacheProcessor.registerCacheStore).toHaveBeenCalledWith(ExecutionTransport.Http, store);
         });
     });
 

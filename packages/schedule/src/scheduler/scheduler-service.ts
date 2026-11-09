@@ -1,6 +1,7 @@
 import { Injectable } from '@axisparkjs/di';
+import { LockStore } from '@axisparkjs/store';
 import { SchedulerRegistry } from './scheduler-registry';
-import { SchedulerRunner } from './scheduler-runner';
+import { SchedulerRunner, SchedulerStopOptions } from './scheduler-runner';
 import { JobDefinition } from '../jobs';
 import { SchedulerError } from '../errors';
 
@@ -13,6 +14,14 @@ export class SchedulerService {
         private readonly registry: SchedulerRegistry,
         private readonly runner: SchedulerRunner
     ) {}
+
+    /**
+     * Sets the store of the locks of the exclusive jobs.
+     * @param store The lock store.
+     */
+    useLockStore(store: LockStore): void {
+        this.runner.useLockStore(store);
+    }
 
     /**
      * Registers a job with the scheduler.
@@ -52,33 +61,48 @@ export class SchedulerService {
     }
 
     /**
-     * Stops a job.
+     * Stops a job: no new execution starts, the signal of its running execution is aborted, and it waits for that execution.
      * @param job The job to stop.
+     * @param options The options to stop the job. Without a `timeout`, it waits until the running execution ends.
+     * @returns A promise resolving when the running execution ends or the timeout ends.
      */
-    stopJob(job: string | JobDefinition): void {
+    async stopJob(job: string | JobDefinition, options?: SchedulerStopOptions): Promise<void> {
         const jobInstance = this.registry.getJob(typeof job === 'string' ? job : job.name);
         if (!jobInstance) return;
 
-        this.runner.stop(jobInstance);
+        await this.runner.stop(jobInstance, options);
     }
 
     /**
-     * Stops all jobs.
+     * Stops all jobs: no new execution starts, the signal of the running executions is aborted, and it waits for them.
+     * @param options The options to stop the jobs. Without a `timeout`, it waits until the running executions end.
+     * @returns A promise resolving when the running executions end or the timeout ends.
      */
-    stopAllJobs(): void {
+    async stopAllJobs(options?: SchedulerStopOptions): Promise<void> {
         const jobs = this.registry.getAllJobs();
-        this.runner.stopAll(jobs);
+        await this.runner.stopAll(jobs, options);
     }
 
     /**
-     * Checks if a job is running.
+     * Checks if a job is running, this is, if it is scheduled. Use `isJobExecuting()` to check if an execution is in progress.
      * @param job The job to check.
-     * @returns True if the job is running, false otherwise.
+     * @returns True if the job is scheduled, false otherwise.
      */
     isJobRunning(job: string | JobDefinition): boolean {
         const jobInstance = this.registry.getJob(typeof job === 'string' ? job : job.name);
         if (!jobInstance) return false;
 
         return this.runner.isRunning(jobInstance);
+    }
+
+    /**
+     * Checks if an execution of a job is in progress.
+     * @param job The job to check.
+     * @returns True if the job is executing, false otherwise.
+     */
+    isJobExecuting(job: string | JobDefinition): boolean {
+        const jobInstance = this.registry.getJob(typeof job === 'string' ? job : job.name);
+        if (!jobInstance) return false;
+        return this.runner.isExecuting(jobInstance);
     }
 }

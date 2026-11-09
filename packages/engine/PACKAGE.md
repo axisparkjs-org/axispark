@@ -9,7 +9,7 @@ The complete guide is in the [Engine System documentation](https://axisparkjs.co
 - Runs each execution through middlewares, guards, interceptors, the handler and filters.
 - Declares engine steps with `@Middleware()`, `@Guard()`, `@Interceptor()` and `@Filter()`, globally or per transport.
 - Resolves handler parameters with decorators such as `@Context()`, and transforms or validates them with pipes (`@Pipe()`).
-- Supports timeouts and rate limiting for executions.
+- Supports timeouts and rate limiting for executions. The rate limit buckets and the sliding window are shared by every transport, which only identifies its clients. The buckets are kept by a `RateLimitStore` from `@axisparkjs/store`.
 
 ## Install and use
 

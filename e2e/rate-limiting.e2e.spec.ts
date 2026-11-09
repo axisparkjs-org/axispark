@@ -33,6 +33,7 @@ describe.each([
                     basePath: '/api',
                     plugin: HttpPlugin,
                     port: 3000,
+                    trustProxy: 'loopback',
                     rateLimit: true,
                     rateLimitOptions: {
                         ttl: 10_000,
@@ -71,6 +72,26 @@ describe.each([
     it('should use partial handler options with the configured time window', async () => {
         expect((await fetch('http://localhost:3000/api/rate-limit/override')).status).toBe(200);
         expect((await fetch('http://localhost:3000/api/rate-limit/override')).status).toBe(429);
+    });
+
+    it('should apply the limit to the route whatever its parameters and query string', async () => {
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/1')).status).toBe(200);
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/2')).status).toBe(200);
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/3')).status).toBe(429);
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/1?a=1')).status).toBe(429);
+        expect((await fetch('http://localhost:3000/api/rate-limit/users/4?a=2')).status).toBe(429);
+    });
+
+    it('should apply the limit per client address behind a trusted proxy', async () => {
+        const fetchAs = (ip: string) => fetch('http://localhost:3000/api/rate-limit/default', { headers: { 'X-Forwarded-For': ip } });
+
+        expect((await fetchAs('203.0.113.1')).status).toBe(200);
+        expect((await fetchAs('203.0.113.1')).status).toBe(200);
+        expect((await fetchAs('203.0.113.1')).status).toBe(429);
+
+        expect((await fetchAs('203.0.113.2')).status).toBe(200);
+        expect((await fetchAs('203.0.113.2')).status).toBe(200);
+        expect((await fetchAs('203.0.113.2')).status).toBe(429);
     });
 
     afterAll(async () => {

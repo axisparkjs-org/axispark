@@ -1,0 +1,35 @@
+{
+    "name": "@axisparkjs/redis",
+    "version": "1.5.0",
+    "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/redis",
+    "author": "Pablo Gálvez Ortuño",
+    "license": "Apache-2.0",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "files": [
+        "lib",
+        "package.json",
+        "PACKAGE.md",
+        "README.md",
+        "LICENSE",
+        "tsconfig.build.json"
+    ],
+    "scripts": {
+        "build": "tsc -b tsconfig.build.json",
+        "prettier": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore '**/*.{ts,js,mjs,json,md,html,css,scss}' --check",
+        "lint": "eslint --config ../../eslint.config.mjs .",
+        "test:unit": "export NODE_ENV=test && jest --config jest.config.ts",
+        "sonar": "sonar-scanner -Dsonar.projectKey=axisparkjs-redis"
+    },
+    "engines": {
+        "node": ">= 24"
+    },
+    "dependencies": {
+        "@axisparkjs/common": "1.5.0",
+        "@axisparkjs/core": "1.5.0",
+        "@axisparkjs/di": "1.5.0",
+        "@axisparkjs/logger": "1.5.0",
+        "@axisparkjs/store": "1.5.0",
+        "redis": "6.3.1"
+    }
+}

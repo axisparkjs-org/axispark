@@ -1,1 +1,1 @@
-export * from './return-error-filter';
+export * from './websocket-return-error-filter';

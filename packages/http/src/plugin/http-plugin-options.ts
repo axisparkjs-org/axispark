@@ -1,4 +1,5 @@
 import { PluginOptions } from '@axisparkjs/core';
+import { StoreProvider } from '@axisparkjs/store';
 import { HttpAdapterClass } from '../adapter/http-adapter';
 import { VersionType } from '../version';
 import { HttpRequest } from '../types';
@@ -64,6 +65,24 @@ export interface RateLimitOptions {
     limit: number;
     /** The response message when a client exceeds the limit. The function receives milliseconds until the oldest request expires. */
     message?: string | ((time: number) => string);
+    /**
+     * The provider of the store that counts the requests, called when the plugin starts. Defaults to `MemoryStore()`, which keeps the
+     * counters in the process. Use a shared provider, such as `RedisStore('NAME')` from `@axisparkjs/redis`, to share the limits between instances.
+     */
+    store?: StoreProvider<'rate-limit'>;
+}
+
+/**
+ * Options for configuring the cache of the HTTP handlers decorated with `@Cache()`.
+ */
+export interface CacheOptions {
+    /** Default time to live of the cached results in milliseconds, for the handlers whose `@Cache()` has no `ttl`. Defaults to 60 seconds. */
+    ttl?: number;
+    /**
+     * The provider of the store of the cached results, called when the plugin starts. Defaults to `MemoryStore()`, which keeps the results
+     * in the process. Use a shared provider, such as `RedisStore('NAME')` from `@axisparkjs/redis`, to share the cache between instances.
+     */
+    store?: StoreProvider<'cache'>;
 }
 
 /** The reason why a multipart upload was rejected. */
@@ -106,6 +125,16 @@ export interface RouteValidationOptions {
 }
 
 /**
+ * The proxies whose `X-Forwarded-For` header is trusted to resolve the client address of a request.
+ *
+ * - `false`: no proxy is trusted, and the client address is the address of the socket.
+ * - `true`: every proxy is trusted. Use it only when the application cannot be reached without the proxy.
+ * - A number: the number of proxies between the client and the application.
+ * - A string or string array: addresses or subnets of the trusted proxies, such as `'10.0.0.0/8'` or `'loopback'`. A string can contain several values separated by commas.
+ */
+export type TrustProxyOption = boolean | number | string | string[];
+
+/**
  * Options for configuring the HTTP plugin.
  */
 export interface HttpPluginOptions extends PluginOptions {
@@ -121,6 +150,11 @@ export interface HttpPluginOptions extends PluginOptions {
      * The base path for the HTTP server.
      */
     basePath: string;
+    /**
+     * The proxies trusted to resolve the client address from the `X-Forwarded-For` header, used by `request.ip` and the rate limits.
+     * Set it when the application runs behind a reverse proxy or a load balancer. Defaults to `false`.
+     */
+    trustProxy?: TrustProxyOption;
     /**
      * The HTTP adapter to use. Express or Fastify are supported.
      */
@@ -185,6 +219,10 @@ export interface HttpPluginOptions extends PluginOptions {
     rateLimit?: boolean;
     /** Default rate limits applied to endpoints without decorator overrides. */
     rateLimitOptions?: RateLimitOptions;
+    /**
+     * Options for configuring the cache of the handlers. The cache is opt-in: only the handlers decorated with `@Cache()` are cached.
+     */
+    cacheOptions?: CacheOptions;
     /**
      * Whether to use the file upload (multipart/form-data) middleware. Disabled by default.
      */

@@ -19,6 +19,11 @@ export class RateLimitController {
     excluded() {
         return { endpoint: 'excluded' };
     }
+
+    @Get('users/:id')
+    user() {
+        return { endpoint: 'user' };
+    }
 }
 
 @RateLimit({ limit: 1 })

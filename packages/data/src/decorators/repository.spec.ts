@@ -15,6 +15,6 @@ describe('@Repository', () => {
 
         expect(Metadata.get(MetadataKeys.REPOSITORY, UserRepository)).toEqual({ target: UserRepository, entity: UserEntity });
         expect(Metadata.has(MetadataKeys.INJECTABLE, UserRepository)).toBe(true);
-        expect(ClassRegistry.get(UserRepository.name)).toBe(UserRepository);
+        expect(ClassRegistry.has(UserRepository)).toBe(true);
     });
 });

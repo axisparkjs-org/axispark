@@ -11,6 +11,7 @@ describe('HttpPluginOptionsFactory', () => {
                 plugin: HttpPlugin,
                 port: 3000,
                 basePath: '/',
+                trustProxy: false,
                 adapter: FastifyHttpAdapter,
                 bodyParser: false,
                 urlEncoded: true,
@@ -34,6 +35,9 @@ describe('HttpPluginOptionsFactory', () => {
                 rateLimitOptions: {
                     ttl: 60_000,
                     limit: 100
+                },
+                cacheOptions: {
+                    ttl: 60_000
                 },
                 fileUpload: false,
                 fileUploadOptions: {
@@ -59,6 +63,7 @@ describe('HttpPluginOptionsFactory', () => {
             const options = HttpPluginOptionsFactory.create({
                 port: 8080,
                 basePath: '/api',
+                trustProxy: 1,
                 bodyParser: false,
                 urlEncoded: false,
                 urlEncodedOptions,
@@ -77,6 +82,9 @@ describe('HttpPluginOptionsFactory', () => {
                 rateLimitOptions: {
                     ttl: 10_000,
                     limit: 5
+                },
+                cacheOptions: {
+                    ttl: 60_000
                 },
                 fileUpload: true,
                 fileUploadOptions: {
@@ -96,6 +104,7 @@ describe('HttpPluginOptionsFactory', () => {
                 plugin: HttpPlugin,
                 port: 8080,
                 basePath: '/api',
+                trustProxy: 1,
                 adapter: FastifyHttpAdapter,
                 bodyParser: false,
                 urlEncoded: false,
@@ -115,6 +124,9 @@ describe('HttpPluginOptionsFactory', () => {
                 rateLimitOptions: {
                     ttl: 10_000,
                     limit: 5
+                },
+                cacheOptions: {
+                    ttl: 60_000
                 },
                 fileUpload: true,
                 fileUploadOptions: {

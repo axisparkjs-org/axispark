@@ -36,7 +36,10 @@ export class AxiSparkContext {
         this.plugins = new PluginRegistry();
         this.container = new Container();
 
-        this.scanner = this.privateConfig.scanner === 'null' ? new NullScanner() : new FileSystemScanner(this.config.basePath);
+        this.scanner =
+            this.privateConfig.scanner === 'null'
+                ? new NullScanner()
+                : new FileSystemScanner(this.config.basePath, undefined, this.config.scanner, this.logger);
 
         this.container.bind({
             token: AXISPARK_CONFIG,

@@ -102,9 +102,11 @@ describe('JobGenerator', () => {
 
         expect(jobs).toEqual([expect.objectContaining({ name: 'job', type: JobType.Interval, value: 1000 })]);
 
-        await jobs[0].execute();
+        const signal = new AbortController().signal;
+        await jobs[0].execute(signal);
         expect(injector.get).toHaveBeenCalledWith(Scheduler);
         expect(instance.execute).toHaveBeenCalledTimes(1);
+        expect(instance.execute).toHaveBeenCalledWith(signal);
     });
 
     it('should bind the method to the resolved instance', async () => {

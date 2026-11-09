@@ -4,6 +4,7 @@ export * from './implementations';
 export * from './parameter';
 export * from './result';
 export * from './rate-limit';
+export * from './cache';
 export * from './step';
 export * from './timeout';
 export * from './pipe';

@@ -14,9 +14,10 @@ import { ExecutionPlan } from './execution-plan';
 import { ExecutionTransport } from './execution-transport';
 import { Injectable } from '@axisparkjs/di';
 import { TimeoutGenerator } from '../timeout';
+import { CacheGenerator } from '../cache';
 
 /**
- * A class responsible for generating execution plans based on the provided execution context. It utilizes the `StepGenerator` to generate steps and the `TimeoutGenerator` to generate timeout definitions. The generated execution plan includes before, after, catch, and context steps, as well as an optional timeout definition. The class also caches registered plans for efficient reuse.
+ * A class responsible for generating execution plans based on the provided execution context. It utilizes the `StepGenerator` to generate steps and the `TimeoutGenerator` to generate timeout definitions and the `CacheGenerator` to generate cache definitions. The generated execution plan includes before, after, catch, and context steps, as well as an optional timeout definition and an optional cache definition. The class also caches registered plans for efficient reuse.
  */
 @Injectable()
 export class ExecutionPlanner {
@@ -24,7 +25,8 @@ export class ExecutionPlanner {
 
     constructor(
         private readonly timeoutGenerator: TimeoutGenerator,
-        private readonly stepGenerator: StepGenerator
+        private readonly stepGenerator: StepGenerator,
+        private readonly cacheGenerator: CacheGenerator
     ) {}
 
     /**
@@ -50,8 +52,9 @@ export class ExecutionPlanner {
         const afterSteps = this.generateAfterSteps(validSteps);
         const catchSteps = this.generateCatchSteps(validSteps);
         const timeoutStep = this.timeoutGenerator.generate(context);
+        const cache = this.cacheGenerator.generate(context);
 
-        return { before: beforeSteps, after: afterSteps, context, catch: catchSteps, timeout: timeoutStep };
+        return { before: beforeSteps, after: afterSteps, context, catch: catchSteps, timeout: timeoutStep, cache };
     }
 
     private getSteps(steps: StepDefinition[], type: StepType, global: boolean) {

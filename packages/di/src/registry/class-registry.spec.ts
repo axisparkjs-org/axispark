@@ -17,21 +17,28 @@ describe('ClassRegistry', () => {
         it('should register a class', () => {
             ClassRegistry.register(TestClassA);
 
-            expect(ClassRegistry.get(TestClassA.name)).toBe(TestClassA);
+            expect(ClassRegistry.has(TestClassA)).toBe(true);
+            expect(ClassRegistry.getAll()).toEqual([TestClassA]);
         });
 
-        it('should overwrite an existing class with the same name', () => {
-            class Original {}
-            class Replacement {}
+        it('should register only once the same class', () => {
+            ClassRegistry.register(TestClassA);
+            ClassRegistry.register(TestClassA);
 
-            Object.defineProperty(Replacement, 'name', {
-                value: Original.name
-            });
+            expect(ClassRegistry.getAll()).toEqual([TestClassA]);
+        });
 
-            ClassRegistry.register(Original);
-            ClassRegistry.register(Replacement);
+        it('should keep both classes when two different classes have the same name', () => {
+            const createClass = () => class Duplicated {};
+            const First = createClass();
+            const Second = createClass();
 
-            expect(ClassRegistry.get(Original.name)).toBe(Replacement);
+            expect(First.name).toBe(Second.name);
+
+            ClassRegistry.register(First);
+            ClassRegistry.register(Second);
+
+            expect(ClassRegistry.getAll()).toEqual([First, Second]);
         });
     });
 
@@ -41,23 +48,54 @@ describe('ClassRegistry', () => {
 
             ClassRegistry.remove(TestClassA);
 
-            expect(ClassRegistry.get(TestClassA.name)).toBeUndefined();
+            expect(ClassRegistry.has(TestClassA)).toBe(false);
         });
 
         it('should do nothing when removing a non-registered class', () => {
             expect(() => ClassRegistry.remove(TestClassA)).not.toThrow();
         });
+
+        it('should only remove the given class when another class has the same name', () => {
+            const createClass = () => class Duplicated {};
+            const First = createClass();
+            const Second = createClass();
+
+            ClassRegistry.register(First);
+            ClassRegistry.register(Second);
+            ClassRegistry.remove(First);
+
+            expect(ClassRegistry.getAll()).toEqual([Second]);
+        });
     });
 
-    describe('get', () => {
-        it('should return the registered class', () => {
-            ClassRegistry.register(TestClassA);
+    describe('has', () => {
+        it('should return false for a class with the name of a registered class', () => {
+            class Original {}
+            class Other {}
+            Object.defineProperty(Other, 'name', { value: Original.name });
 
-            expect(ClassRegistry.get(TestClassA.name)).toBe(TestClassA);
+            ClassRegistry.register(Original);
+
+            expect(ClassRegistry.has(Other)).toBe(false);
+        });
+    });
+
+    describe('getAllByName', () => {
+        it('should return every registered class with the name', () => {
+            const createClass = () => class Duplicated {};
+            const First = createClass();
+            const Second = createClass();
+
+            ClassRegistry.register(First);
+            ClassRegistry.register(TestClassA);
+            ClassRegistry.register(Second);
+
+            expect(ClassRegistry.getAllByName('Duplicated')).toEqual([First, Second]);
+            expect(ClassRegistry.getAllByName(TestClassA.name)).toEqual([TestClassA]);
         });
 
-        it('should return undefined when the class is not registered', () => {
-            expect(ClassRegistry.get('UnknownClass')).toBeUndefined();
+        it('should return an empty array when no class has the name', () => {
+            expect(ClassRegistry.getAllByName('UnknownClass')).toEqual([]);
         });
     });
 

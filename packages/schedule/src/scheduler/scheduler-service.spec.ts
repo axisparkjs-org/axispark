@@ -29,13 +29,23 @@ describe('SchedulerService', () => {
             stop: jest.fn(),
             startAll: jest.fn(),
             stopAll: jest.fn(),
-            isRunning: jest.fn()
+            isRunning: jest.fn(),
+            isExecuting: jest.fn(),
+            useLockStore: jest.fn()
         } as any;
 
         service = new SchedulerService(registry, runner);
     });
 
     const createJob = (name = 'job') => new TestJob(name, jest.fn().mockResolvedValue(undefined));
+
+    it('should pass the lock store to the runner', () => {
+        const store = { acquire: jest.fn() };
+
+        service.useLockStore(store);
+
+        expect(runner.useLockStore).toHaveBeenCalledWith(store);
+    });
     const createInitiallyDisabledJob = (name = 'job') => new TestJob(name, jest.fn().mockResolvedValue(undefined), true);
 
     describe('registerJob', () => {
@@ -126,7 +136,7 @@ describe('SchedulerService', () => {
 
             service.stopJob('job');
 
-            expect(runner.stop).toHaveBeenCalledWith(job);
+            expect(runner.stop).toHaveBeenCalledWith(job, undefined);
         });
 
         it('should stop a registered job instance', () => {
@@ -134,9 +144,9 @@ describe('SchedulerService', () => {
 
             registry.getJob.mockReturnValue(job);
 
-            service.stopJob(job);
+            service.stopJob(job, { timeout: 500 });
 
-            expect(runner.stop).toHaveBeenCalledWith(job);
+            expect(runner.stop).toHaveBeenCalledWith(job, { timeout: 500 });
         });
 
         it('should do nothing when the job does not exist', () => {
@@ -156,7 +166,41 @@ describe('SchedulerService', () => {
 
             service.stopAllJobs();
 
-            expect(runner.stopAll).toHaveBeenCalledWith(jobs);
+            expect(runner.stopAll).toHaveBeenCalledWith(jobs, undefined);
+        });
+
+        it('should pass the stop options and wait for the runner', async () => {
+            const jobs = [createJob('a')];
+            let resolveStop!: () => void;
+            runner.stopAll.mockReturnValue(new Promise<void>((resolve) => (resolveStop = resolve)));
+            registry.getAllJobs.mockReturnValue(jobs);
+
+            let stopped = false;
+            const promise = service.stopAllJobs({ timeout: 1000 }).then(() => (stopped = true));
+            await Promise.resolve();
+
+            expect(runner.stopAll).toHaveBeenCalledWith(jobs, { timeout: 1000 });
+            expect(stopped).toBe(false);
+            resolveStop();
+            await promise;
+            expect(stopped).toBe(true);
+        });
+    });
+
+    describe('isJobExecuting', () => {
+        it('should check whether a registered job is executing', () => {
+            const job = createJob();
+            registry.getJob.mockReturnValue(job);
+            runner.isExecuting.mockReturnValue(true);
+
+            expect(service.isJobExecuting('job')).toBe(true);
+            expect(runner.isExecuting).toHaveBeenCalledWith(job);
+        });
+
+        it('should return false for a job that is not registered', () => {
+            registry.getJob.mockReturnValue(undefined);
+
+            expect(service.isJobExecuting('unknown')).toBe(false);
         });
     });
 

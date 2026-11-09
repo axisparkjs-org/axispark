@@ -34,7 +34,8 @@ export class ErrorWebSocketResult extends WebSocketResult<WebSocketError> {
         context.message?.ack?.({
             error: this.value.response,
             status: this.value.status,
-            description: this.value.options?.description
+            description: this.value.options?.description,
+            ...this.value.details
         });
     }
 }
