@@ -29,7 +29,7 @@
         "@axisparkjs/core": "1.5.1",
         "@axisparkjs/di": "1.5.1",
         "@axisparkjs/logger": "1.5.1",
-        "amqplib": "2.2.0",
+        "amqplib": "2.2.1",
         "amqp-connection-manager": "5.0.1"
     }
 }
