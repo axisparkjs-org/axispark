@@ -60,6 +60,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The repositories live in the axisparkjs-org organization: the links to the old name depend on a redirect.
+      - name: Check the repository links
+        run: |
+          if git grep -nE 'github\.com/axisparkjs/' -- ':!CHANGELOG.md' ':!**/CHANGELOG.md'; then
+            echo "Link the repositories of the axisparkjs-org organization (github.com/axisparkjs-org/...)"
+            exit 1
+          fi
+
       - name: Run prettier checks
         run: npm run ${{ steps.changes.outputs.full == 'true' && 'prettier' || 'ci:prettier' }}
 

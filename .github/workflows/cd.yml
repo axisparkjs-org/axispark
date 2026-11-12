@@ -216,7 +216,7 @@ jobs:
       needs.publish.outputs.release_version != ''
 
     steps:
-      # The documentation lives in axisparkjs/website. Its workflow checks out this repository at the
+      # The documentation lives in axisparkjs-org/website. Its workflow checks out this repository at the
       # release commit, generates the API reference from the code and deploys the site.
       - name: Dispatch the documentation workflow
         env:
