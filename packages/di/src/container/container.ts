@@ -102,14 +102,14 @@ export class Container implements Initializable {
     private async resolveExisting<T>(provider: ExistingProvider<T>, scopedContainer?: ScopedContainer): Promise<T> {
         const aliases: Token[] = [provider.token];
         let target: Token<T> = provider.useExisting;
-        let targetProvider = this.providers.get(TokenUtils.getName(target)) as Provider<T> | undefined;
+        let targetProvider = this.providers.get(target) as Provider<T> | undefined;
         while (targetProvider && 'useExisting' in targetProvider) {
             if (aliases.includes(target)) {
                 throw new CircularDependencyError([...aliases, target].map((t) => TokenUtils.getName(t)).join(' -> '));
             }
             aliases.push(target);
             target = targetProvider.useExisting;
-            targetProvider = this.providers.get(TokenUtils.getName(target)) as Provider<T> | undefined;
+            targetProvider = this.providers.get(target) as Provider<T> | undefined;
         }
 
         return await this.resolve(target, scopedContainer);
