@@ -1,6 +1,8 @@
 import { ResultDefinition } from '@axisparkjs/engine';
 import { HttpStatusCode, HttpContext } from '../../types';
-import { HttpError, RateLimitExceededError } from '../errors';
+import { HttpError, NotFoundError, RateLimitExceededError } from '../errors';
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
 
 /**
  * An abstract class for representing HTTP results.
@@ -67,14 +69,32 @@ export class RedirectHttpResult extends HttpResult<undefined> {
  * A class for representing HTTP file results.
  */
 export class FileHttpResult extends HttpResult<undefined> {
+    /**
+     * Creates a file result.
+     * @param filePath The absolute path of the file, the same with every adapter. Build it with `path.join(__dirname, ...)`, for example.
+     * @param options The name of the downloaded file and the content type.
+     * @throws {Error} If the path is relative, because each adapter would resolve it against a different folder.
+     */
     public constructor(
         private readonly filePath: string,
         private readonly options?: { filename?: string; contentType?: string }
     ) {
         super(undefined, HttpStatusCode.Ok);
+        if (!path.isAbsolute(filePath)) {
+            throw new Error(`The path of a file result must be absolute, but "${filePath}" is relative. Build it with path.join(__dirname, ...), for example.`);
+        }
     }
 
+    /**
+     * Sends the file, or answers `404` in the format of the framework when the file does not exist.
+     * @param context The HTTP context of the request.
+     */
     public async process(context: HttpContext): Promise<void> {
+        if (!(await FileHttpResult.isFile(this.filePath))) {
+            await new ErrorHttpResult(new NotFoundError('File not found')).process(context);
+            return;
+        }
+
         const { filename, contentType } = this.options || {};
         if (contentType) {
             context.response.header('Content-Type', contentType);
@@ -82,7 +102,15 @@ export class FileHttpResult extends HttpResult<undefined> {
         if (filename) {
             context.response.header('Content-Disposition', `attachment; filename="${filename}"`);
         }
-        context.response.file(this.filePath);
+        await context.response.file(this.filePath);
+    }
+
+    private static async isFile(filePath: string): Promise<boolean> {
+        try {
+            return (await stat(filePath)).isFile();
+        } catch {
+            return false;
+        }
     }
 }
 /**

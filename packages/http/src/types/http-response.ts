@@ -15,7 +15,12 @@ export interface HttpResponse {
     ): this;
     json(body?: any): void;
     send(body?: any): void;
-    file(filePath: string): void;
+    /**
+     * Sends a file. The headers that are already set, such as `Content-Type` and `Content-Disposition`, are kept.
+     * @param filePath The absolute path of the file.
+     * @returns A promise that resolves when the file is sent, and rejects when it can not be sent before any byte of the response is written.
+     */
+    file(filePath: string): Promise<void>;
     stream(stream: NodeJS.ReadableStream): void;
     end(): void;
     isCommitted(): boolean;

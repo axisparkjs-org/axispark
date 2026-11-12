@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { HttpResponse } from '@axisparkjs/http';
 import { SerializeOptions } from '@fastify/cookie';
 import { FastifyReply } from 'fastify';
@@ -33,8 +34,23 @@ export class FastifyHttpResponse implements HttpResponse {
         this.response.send(body);
     }
 
-    file(filePath: string): void {
-        this.response.sendFile(filePath);
+    file(filePath: string): Promise<void> {
+        return new Promise((resolve) => {
+            const raw = this.response.raw;
+            const done = () => {
+                raw.off('finish', done);
+                raw.off('close', done);
+                resolve();
+            };
+            raw.once('finish', done);
+            raw.once('close', done);
+            // The file is sent from its own folder, so the path does not depend on the root of the static files,
+            // and the Content-Type is only set from the extension when the result has not set it.
+            this.response.sendFile(path.basename(filePath), path.dirname(filePath), {
+                dotfiles: 'allow',
+                contentType: !this.response.hasHeader('content-type')
+            });
+        });
     }
 
     stream(stream: NodeJS.ReadableStream): void {

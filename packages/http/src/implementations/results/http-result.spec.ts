@@ -1,6 +1,9 @@
 import { HttpContext, HttpStatusCode } from '../../types';
 import { BodyHttpResult, ErrorHttpResult, FileHttpResult, RedirectHttpResult, StreamHttpResult } from './http-result';
 import { BadRequestError, RateLimitExceededError } from '../errors';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 const response = {
     status: jest.fn(),
@@ -78,14 +81,39 @@ describe('RedirectHttpResult', () => {
 });
 
 describe('FileHttpResult', () => {
-    it('should send a file', async () => {
-        await new FileHttpResult('/tmp/test.txt').process(context);
+    let folder: string;
+    let filePath: string;
 
-        expect(response.file).toHaveBeenCalledWith('/tmp/test.txt');
+    beforeAll(() => {
+        folder = mkdtempSync(path.join(tmpdir(), 'file-http-result-'));
+        filePath = path.join(folder, 'test.txt');
+        writeFileSync(filePath, 'test');
+    });
+
+    afterAll(() => {
+        rmSync(folder, { recursive: true, force: true });
+    });
+
+    it('should send a file', async () => {
+        await new FileHttpResult(filePath).process(context);
+
+        expect(response.file).toHaveBeenCalledWith(filePath);
+    });
+
+    it('should wait until the file is sent', async () => {
+        let sent = false;
+        response.file.mockImplementationOnce(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            sent = true;
+        });
+
+        await new FileHttpResult(filePath).process(context);
+
+        expect(sent).toBe(true);
     });
 
     it('should set headers when options are provided', async () => {
-        await new FileHttpResult('/tmp/test.txt', {
+        await new FileHttpResult(filePath, {
             filename: 'file.txt',
             contentType: 'text/plain'
         }).process(context);
@@ -93,6 +121,22 @@ describe('FileHttpResult', () => {
         expect(response.header).toHaveBeenCalledWith('Content-Type', 'text/plain');
 
         expect(response.header).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="file.txt"');
+    });
+
+    it.each([
+        ['a missing file', () => path.join(folder, 'missing.txt')],
+        ['a folder', () => folder]
+    ])('should answer 404 in the format of the framework for %s', async (_, getPath) => {
+        await new FileHttpResult(getPath(), { filename: 'file.txt' }).process(context);
+
+        expect(response.status).toHaveBeenCalledWith(HttpStatusCode.NotFound);
+        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'File not found', status: HttpStatusCode.NotFound }));
+        expect(response.header).not.toHaveBeenCalled();
+        expect(response.file).not.toHaveBeenCalled();
+    });
+
+    it('should reject a relative path', () => {
+        expect(() => new FileHttpResult('public/test.txt')).toThrow('The path of a file result must be absolute, but "public/test.txt" is relative.');
     });
 });
 
