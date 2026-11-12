@@ -1,8 +1,8 @@
 import { AxiSparkContext, HealthEngine, PluginNotConfiguredError } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
-import { InjectableScopes, Injector, InjectionToken } from '@axisparkjs/di';
+import { InjectableScopes, Injector } from '@axisparkjs/di';
 import { KafkaConnectionManager } from '../connections';
-import { KAFKA_LOGGER, KAFKA_OPTIONS } from '../di';
+import { KAFKA_LOGGER, KAFKA_OPTIONS, kafkaConnectionToken, kafkaConsumerToken, kafkaProducerToken } from '../di';
 import { KafkaPlugin } from './kafka-plugin';
 import { KafkaPluginOptions } from './kafka-plugin-options';
 import { KafkaHealthIndicator } from '../health';
@@ -82,19 +82,19 @@ describe('KafkaPlugin', () => {
         expect(injector.get).toHaveBeenCalledWith(KafkaConnectionManager);
         expect(connectionManager.createConnections).toHaveBeenCalledTimes(1);
         expect(context.container.bind).toHaveBeenCalledWith({
-            token: new InjectionToken('KAFKA_CONNECTION_PRIMARY'),
+            token: kafkaConnectionToken('PRIMARY'),
             useValue: primary
         });
         expect(context.container.bind).toHaveBeenCalledWith({
-            token: new InjectionToken('KAFKA_CONNECTION_REPORTS'),
+            token: kafkaConnectionToken('REPORTS'),
             useValue: reports
         });
         expect(context.container.bind).toHaveBeenCalledWith({
-            token: new InjectionToken('KAFKA_PRODUCER_PRIMARY'),
+            token: kafkaProducerToken('PRIMARY'),
             useValue: primaryProducer
         });
         expect(context.container.bind).toHaveBeenCalledWith({
-            token: new InjectionToken('KAFKA_CONSUMER_PRIMARY'),
+            token: kafkaConsumerToken('PRIMARY'),
             useValue: primaryConsumer
         });
         expect(injector.get).toHaveBeenCalledWith(HealthEngine);

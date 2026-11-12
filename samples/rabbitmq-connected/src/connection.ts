@@ -1,15 +1,15 @@
 import { Logger } from '@axisparkjs/logger';
 import { Timeout, Scheduler } from '@axisparkjs/schedule';
 import { AmqpConnectionManager } from 'amqp-connection-manager';
-import { InjectRabbitMQConnection, RabbitMQConnectionManager } from '@axisparkjs/rabbitmq';
-import { Inject, InjectionToken } from '@axisparkjs/di';
+import { InjectRabbitMQConnection, RabbitMQConnectionManager, rabbitMQConnectionToken } from '@axisparkjs/rabbitmq';
+import { Inject } from '@axisparkjs/di';
 
 @Scheduler()
 export class UsingRabbitMQExample {
     constructor(
         private readonly logger: Logger,
         @InjectRabbitMQConnection('1') private readonly rabbitMQConnection1: AmqpConnectionManager,
-        @Inject(new InjectionToken('RABBITMQ_CONNECTION_2')) private readonly rabbitMQConnection2: AmqpConnectionManager,
+        @Inject(rabbitMQConnectionToken('2')) private readonly rabbitMQConnection2: AmqpConnectionManager,
         @InjectRabbitMQConnection('3') private readonly rabbitMQConnection3: AmqpConnectionManager,
         private readonly rabbitMQConnectionMaganer: RabbitMQConnectionManager
     ) {}
