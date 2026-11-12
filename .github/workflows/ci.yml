@@ -60,6 +60,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check the package metadata
+        run: npm run check:packages
+
       - name: Run prettier checks
         run: npm run ${{ steps.changes.outputs.full == 'true' && 'prettier' || 'ci:prettier' }}
 

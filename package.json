@@ -21,6 +21,7 @@
         "ci:test:unit": "export NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules && turbo run test:unit --affected",
         "ci:test:e2e": "export NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules && jest --config jest.e2e.config.ts",
         "ci:sonar": "turbo run sonar --affected",
+        "check:packages": "node scripts/check-package-metadata.mjs",
         "cd:changeset": "changeset",
         "cd:version": "changeset version",
         "cd:publish": "changeset publish"

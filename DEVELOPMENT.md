@@ -20,6 +20,10 @@ You would run `npm run cd:changeset` and select the type of change you are makin
 - "Minor" option if you are adding a new feature
 - "Major" option if you are making a breaking change
 
+## Package metadata
+
+Every package in `packages/` must declare `repository` (with the `directory` of the package), `homepage`, `bugs`, `keywords` and, for libraries, its public entry point in `exports`. npm needs the `repository.url` to publish the production versions with provenance. Run `npm run check:packages` to check them; the CI pipeline runs it too. Packages are imported from their root only: code that needs an internal type must have it exported from the `index.ts` of its package.
+
 ## Need to test your package before submitting a pull request?
 
 There is a pipeline that builds a snapshot of your branch and publishes it to GitHub Packages. You can use this snapshot to test your changes in another project before submitting a pull request. To do this, follow these steps:

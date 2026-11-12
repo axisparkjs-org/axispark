@@ -1,4 +1,4 @@
-import { InjectableMetadata } from '@axisparkjs/di/src/metadata';
+import { InjectableMetadata } from '../metadata';
 import { Constructable } from './constructable';
 import { Metadata, MetadataKeys } from '@axisparkjs/common';
 
