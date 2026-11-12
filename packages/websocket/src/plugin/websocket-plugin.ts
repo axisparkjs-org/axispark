@@ -35,7 +35,7 @@ export class WebSocketPlugin extends Plugin {
     static override readonly dependencies = [{ plugin: HttpPlugin, optional: true }];
 
     private context: AxiSparkContext;
-    protected options: WebSocketPluginOptions;
+    declare protected options: WebSocketPluginOptions;
     private adapter: WebSocketAdapter;
     private httpAdapter: HttpAdapter;
     private httpOptions: HttpPluginOptions;

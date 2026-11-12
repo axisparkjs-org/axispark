@@ -13,7 +13,7 @@ import { KafkaHealthIndicator } from '../health';
 @Injectable()
 export class KafkaPlugin extends Plugin {
     private context: AxiSparkContext;
-    protected options: KafkaPluginOptions;
+    declare protected options: KafkaPluginOptions;
     private connectionManager: KafkaConnectionManager;
 
     constructor(

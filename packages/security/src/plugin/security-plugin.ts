@@ -17,7 +17,7 @@ import { Injectable } from '@axisparkjs/di';
 @Injectable()
 export class SecurityPlugin extends Plugin {
     private context: AxiSparkContext;
-    protected options: SecurityPluginOptions;
+    declare protected options: SecurityPluginOptions;
 
     /** @param logger Application logger used to create the plugin's scoped logger. */
     constructor(private logger: Logger) {
