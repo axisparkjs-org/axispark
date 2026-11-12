@@ -1,7 +1,8 @@
 import { ResultDefinition } from '@axisparkjs/engine';
 import { HttpStatusCode, HttpContext } from '../../types';
-import { HttpError, RateLimitExceededError } from '../errors';
+import { HttpError, InternalServerError, RateLimitExceededError } from '../errors';
 import { contentDisposition } from './content-disposition';
+import { toReadable, waitForFirstChunk } from './stream-start';
 
 /**
  * An abstract class for representing HTTP results.
@@ -97,7 +98,26 @@ export class StreamHttpResult extends HttpResult<undefined> {
         super(undefined, HttpStatusCode.Ok);
     }
 
+    /**
+     * Sends the stream and waits for the end of the transfer.
+     *
+     * - When the stream fails before sending any data, the request is answered with `500` in the format of the framework.
+     * - When the stream fails after the response has started, the connection is destroyed, so the client sees an incomplete transfer.
+     *
+     * In both cases the error of the stream is thrown after the response is handled, so it is logged.
+     * @param context The HTTP context of the request.
+     * @throws {Error} The error of the stream.
+     */
     public async process(context: HttpContext): Promise<void> {
+        const source = toReadable(this.stream);
+        try {
+            await waitForFirstChunk(source);
+        } catch (error) {
+            source.destroy();
+            await new ErrorHttpResult(new InternalServerError('Stream failed')).process(context);
+            throw error;
+        }
+
         const { filename, contentType } = this.options || {};
         if (contentType) {
             context.response.header('Content-Type', contentType);
@@ -105,7 +125,14 @@ export class StreamHttpResult extends HttpResult<undefined> {
         if (filename) {
             context.response.header('Content-Disposition', contentDisposition(filename));
         }
-        context.response.stream(this.stream);
+
+        try {
+            await context.response.stream(source);
+        } catch (error) {
+            // The client closed the connection before the end: the source is already destroyed and there is nothing to answer.
+            if ((error as NodeJS.ErrnoException).code === 'ERR_STREAM_PREMATURE_CLOSE') return;
+            throw error;
+        }
     }
 }
 /**

@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { createCommand } from './create';
+import { CancelledError } from '../errors';
 
 import prompts from 'prompts';
 import ora from 'ora';
@@ -36,6 +37,8 @@ jest.mock('../utils/template', () => ({
 }));
 
 const mockedPrompts = prompts as jest.MockedFunction<typeof prompts>;
+
+const ON_CANCEL = { onCancel: expect.any(Function) };
 const mockedOra = ora as jest.MockedFunction<typeof ora>;
 
 const mockedDirectoryExists = directoryExists as jest.MockedFunction<typeof directoryExists>;
@@ -146,7 +149,8 @@ describe('create command', () => {
                     type: 'text',
                     name: 'name',
                     message: 'What is your project name?'
-                })
+                }),
+                ON_CANCEL
             );
 
             expect(mockedDownloadTemplate).toHaveBeenCalledWith('default', 'my-project');
@@ -250,7 +254,8 @@ describe('create command', () => {
                     type: 'select',
                     name: 'template',
                     message: 'Select a template:'
-                })
+                }),
+                ON_CANCEL
             );
 
             expect(mockedDownloadTemplate).toHaveBeenCalledWith('http', 'my-project');
@@ -293,7 +298,8 @@ describe('create command', () => {
                         }
                     ],
                     initial: 0
-                })
+                }),
+                ON_CANCEL
             );
         });
 
@@ -312,7 +318,8 @@ describe('create command', () => {
                 1,
                 expect.objectContaining({
                     initial: 0
-                })
+                }),
+                ON_CANCEL
             );
         });
     });
@@ -530,10 +537,10 @@ describe('create command', () => {
             expect(mockedRemoveDirectory).not.toHaveBeenCalled();
         });
 
-        it('rejects a missing template when the prompt is cancelled', async () => {
+        it('stops the command when the template prompt is cancelled', async () => {
             mockedPrompts.mockResolvedValueOnce({});
 
-            await expect(runCommand('my-project')).rejects.toThrow('Unknown template "undefined"');
+            await expect(runCommand('my-project')).rejects.toThrow(CancelledError);
 
             expect(mockedDownloadTemplate).not.toHaveBeenCalled();
         });
@@ -555,7 +562,8 @@ describe('create command', () => {
                     name: 'install',
                     message: 'Install dependencies?',
                     initial: true
-                })
+                }),
+                ON_CANCEL
             );
         });
 
@@ -856,6 +864,80 @@ describe('create command', () => {
             expect(mockedInstallDependencies).toHaveBeenCalledWith(projectPath);
 
             expect(mockedPrompts).toHaveBeenCalledTimes(3);
+        });
+    });
+
+    describe('cancellation', () => {
+        const cancelOnCall = () =>
+            mockedPrompts.mockImplementationOnce((async (_question: unknown, options?: { onCancel?: () => boolean }) => {
+                options?.onCancel?.();
+                return {};
+            }) as any);
+
+        it('stops the command when the name prompt is cancelled, without creating anything', async () => {
+            cancelOnCall();
+
+            await expect(runCommand()).rejects.toThrow(new CancelledError());
+
+            expect(mockedDirectoryExists).not.toHaveBeenCalled();
+            expect(mockedDownloadTemplate).not.toHaveBeenCalled();
+        });
+
+        it('stops the command when the name prompt returns no answer', async () => {
+            mockedPrompts.mockResolvedValueOnce({});
+
+            await expect(runCommand()).rejects.toThrow(CancelledError);
+            expect(mockedDownloadTemplate).not.toHaveBeenCalled();
+        });
+
+        it('stops the command when the template prompt is cancelled, without creating anything', async () => {
+            cancelOnCall();
+
+            await expect(runCommand('my-project')).rejects.toThrow(CancelledError);
+
+            expect(mockedDownloadTemplate).not.toHaveBeenCalled();
+        });
+
+        it('continues without installing the dependencies when the install prompt is cancelled', async () => {
+            cancelOnCall();
+
+            await expect(runCommand('my-project', { template: 'default' })).resolves.toBeUndefined();
+
+            expect(mockedDownloadTemplate).toHaveBeenCalledWith('default', 'my-project');
+            expect(mockedInstallDependencies).not.toHaveBeenCalled();
+            expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Dependencies not installed.'));
+            expect(consoleLogSpy).toHaveBeenCalledWith('  npm install');
+        });
+
+        it('throws the errors of the install prompt that are not a cancellation', async () => {
+            mockedPrompts.mockRejectedValueOnce(new Error('No TTY'));
+
+            await expect(runCommand('my-project', { template: 'default' })).rejects.toThrow('No TTY');
+        });
+    });
+
+    describe('project name validation', () => {
+        it('explains the rule of the project names', async () => {
+            await expect(runCommand('my project', { template: 'default' })).rejects.toThrow(
+                'Invalid project name "my project". Use only letters, numbers, "-" and "_".'
+            );
+        });
+
+        it('validates the name while typing', async () => {
+            mockedPrompts.mockResolvedValueOnce({ name: 'my-project' }).mockResolvedValueOnce({ install: false });
+
+            await runCommand(undefined, { template: 'default' });
+
+            const { validate } = mockedPrompts.mock.calls[0][0] as unknown as { validate: (value: string) => true | string };
+            expect(validate('my-project')).toBe(true);
+            expect(validate('')).toBe('Use only letters, numbers, "-" and "_".');
+            expect(validate('my project')).toBe('Use only letters, numbers, "-" and "_".');
+        });
+
+        it('does not print the npm install step when the dependencies are installed', async () => {
+            await runCommand('my-project', { template: 'default', install: true });
+
+            expect(consoleLogSpy).not.toHaveBeenCalledWith('  npm install');
         });
     });
 });

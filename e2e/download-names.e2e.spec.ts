@@ -23,10 +23,10 @@ describe.each<[AdapterName, number]>([
 
     const download = (route: string, name: string) => fetch(`http://localhost:${port}/api/downloads/${route}?name=${encodeURIComponent(name)}`);
 
-    // The Fastify adapter sends the file and stream results with an empty body (#165), so only their headers are checked with it.
+    // The Fastify adapter sends the file results with an empty body until #165, so only the stream route is checked with it.
     const routes = adapter === 'express' ? ['stream', 'file'] : ['stream'];
     const expectContent = async (response: Response) => {
-        if (adapter === 'express') expect(await response.text()).toBe('Quarterly report\n');
+        expect(await response.text()).toBe('Quarterly report\n');
     };
 
     it.each(routes)('should send a name with quotes and accents with an ASCII fallback and its UTF-8 version (%s)', async (route) => {

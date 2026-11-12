@@ -147,6 +147,11 @@ export interface HttpPluginOptions extends PluginOptions {
      */
     port: number;
     /**
+     * The address on which the HTTP server will listen, such as `127.0.0.1` to accept only local connections.
+     * Defaults to every network interface with both adapters: `::` when IPv6 is available, and `0.0.0.0` otherwise, as Node.js does.
+     */
+    host?: string;
+    /**
      * The base path for the HTTP server.
      */
     basePath: string;

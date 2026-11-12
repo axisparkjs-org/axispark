@@ -201,7 +201,14 @@ export class HttpPlugin extends Plugin {
         await this.registerRateLimitStore();
         await this.registerCacheStore();
         await this.adapter.start();
-        await this.logger.info(`Plugin started. Listening on port ${this.options.port}`);
+        await this.logger.info(`Plugin started. Listening on ${this.getListeningAddress()}`);
+    }
+
+    private getListeningAddress(): string {
+        const address = this.adapter.getHttpServer()?.address();
+        if (!address || typeof address === 'string') return address ?? `port ${this.options.port}`;
+        const host = address.family === 'IPv6' ? `[${address.address}]` : address.address;
+        return `${host}:${address.port}`;
     }
 
     async onStop(): Promise<void> {

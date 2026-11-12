@@ -381,7 +381,7 @@ describe('ExecutionPlanner', () => {
             expect(timeoutGenerator.generate).toHaveBeenCalledTimes(2);
         });
 
-        it('should use the target name and property key as cache key', async () => {
+        it('should use the target class and property key as cache key', async () => {
             const firstContext = createContext();
 
             const secondContext = {
@@ -393,6 +393,25 @@ describe('ExecutionPlanner', () => {
             await planner.plan(secondContext);
 
             expect(stepGenerator.generate).toHaveBeenCalledTimes(2);
+        });
+
+        it('should generate different plans for two classes with the same name', async () => {
+            const createController = () => class Controller {};
+            const FirstController = createController();
+            const SecondController = createController();
+
+            const firstContext = { ...createContext(), target: FirstController } as ExecutionContext;
+            const secondContext = { ...createContext(), target: SecondController } as ExecutionContext;
+
+            const firstPlan = await planner.plan(firstContext);
+            const secondPlan = await planner.plan(secondContext);
+
+            expect(FirstController.name).toBe(SecondController.name);
+            expect(firstPlan).not.toBe(secondPlan);
+            expect(firstPlan.context.target).toBe(FirstController);
+            expect(secondPlan.context.target).toBe(SecondController);
+            await expect(planner.plan(firstContext)).resolves.toBe(firstPlan);
+            await expect(planner.plan(secondContext)).resolves.toBe(secondPlan);
         });
     });
 });
