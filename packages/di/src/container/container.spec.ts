@@ -6,6 +6,7 @@ import { ProviderNotFoundError, DecoratorNotIncludedError, ScopedContainerNotPro
 import { Constructable } from '../decorators/constructable';
 import { ClassRegistry } from '../registry/class-registry';
 import { InjectableScopes } from '../types';
+import { ResolutionChain } from './resolution-chain';
 
 jest.mock('@axisparkjs/common', () => {
     const originalModule = jest.requireActual('@axisparkjs/common');
@@ -327,7 +328,8 @@ describe('Container', () => {
                 scope: InjectableScopes.Singleton
             },
             container,
-            undefined
+            undefined,
+            expect.any(ResolutionChain)
         );
     });
 
@@ -389,7 +391,8 @@ describe('Container', () => {
                 scope: InjectableScopes.Scoped
             },
             container,
-            scopedContainer
+            scopedContainer,
+            expect.any(ResolutionChain)
         );
     });
 

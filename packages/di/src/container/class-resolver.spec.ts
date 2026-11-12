@@ -5,6 +5,7 @@ import { InjectionToken } from '../token';
 import { CircularDependencyError, ScopeDependencyError } from '../errors';
 import { Injectable, Inject } from '../decorators';
 import { InjectableScopes } from '../types';
+import { ResolutionChain } from './resolution-chain';
 
 jest.mock('@axisparkjs/common', () => {
     const originalModule = jest.requireActual('@axisparkjs/common');
@@ -48,7 +49,7 @@ class ClassWithTokenDependencies {
 
 describe('Resolver', () => {
     let resolver: ClassResolver;
-    let container: { resolve: jest.Mock };
+    let container: { resolveInChain: jest.Mock };
     let metadataMock: { get: jest.Mock };
 
     beforeAll(() => {
@@ -61,7 +62,7 @@ describe('Resolver', () => {
         resolver = new ClassResolver();
 
         container = {
-            resolve: jest.fn()
+            resolveInChain: jest.fn()
         };
 
         jest.clearAllMocks();
@@ -80,13 +81,13 @@ describe('Resolver', () => {
         );
 
         expect(instance).toBeInstanceOf(ClassWithoutDependencies);
-        expect(container.resolve).not.toHaveBeenCalled();
+        expect(container.resolveInChain).not.toHaveBeenCalled();
     });
 
     it('should resolve constructor dependencies', async () => {
         const dependency = new Dependency();
 
-        container.resolve.mockResolvedValue(dependency);
+        container.resolveInChain.mockResolvedValue(dependency);
 
         metadataMock.get.mockImplementation((key) => {
             if (key === MetadataKeys.DESIGN_PARAM_TYPES) {
@@ -109,14 +110,14 @@ describe('Resolver', () => {
             container as unknown as Container
         );
 
-        expect(container.resolve).toHaveBeenCalledWith(Dependency, undefined);
+        expect(container.resolveInChain).toHaveBeenCalledWith(Dependency, undefined, expect.any(ResolutionChain));
         expect(instance.dependency).toBe(dependency);
     });
 
     it('should use injection token when present', async () => {
         const dependency = new Dependency();
 
-        container.resolve.mockResolvedValue(dependency);
+        container.resolveInChain.mockResolvedValue(dependency);
 
         metadataMock.get.mockImplementation((key) => {
             if (key === MetadataKeys.DESIGN_PARAM_TYPES) {
@@ -139,7 +140,7 @@ describe('Resolver', () => {
             container as unknown as Container
         );
 
-        expect(container.resolve).toHaveBeenCalledWith(token, undefined);
+        expect(container.resolveInChain).toHaveBeenCalledWith(token, undefined, expect.any(ResolutionChain));
         expect(instance.dependency).toBe(dependency);
     });
 
@@ -147,7 +148,7 @@ describe('Resolver', () => {
         const dependency1 = new Dependency();
         const dependency2 = new Dependency();
 
-        container.resolve.mockImplementation(async (type) => {
+        container.resolveInChain.mockImplementation(async (type) => {
             if (type === token) {
                 return dependency1;
             }
@@ -185,16 +186,16 @@ describe('Resolver', () => {
             container as unknown as Container
         );
 
-        expect(container.resolve).toHaveBeenNthCalledWith(1, token, undefined);
+        expect(container.resolveInChain).toHaveBeenNthCalledWith(1, token, undefined, expect.any(ResolutionChain));
 
-        expect(container.resolve).toHaveBeenNthCalledWith(2, token2, undefined);
+        expect(container.resolveInChain).toHaveBeenNthCalledWith(2, token2, undefined, expect.any(ResolutionChain));
 
         expect(instance.dependency).toBe(dependency1);
         expect(instance.dependency2).toBe(dependency2);
     });
 
     it('should resolve a factory provider', async () => {
-        container.resolve.mockResolvedValue('dependency');
+        container.resolveInChain.mockResolvedValue('dependency');
 
         const instance = await resolver.resolve(
             {
@@ -207,7 +208,7 @@ describe('Resolver', () => {
             container as unknown as Container
         );
 
-        expect(container.resolve).toHaveBeenCalledWith(token2, undefined);
+        expect(container.resolveInChain).toHaveBeenCalledWith(token2, undefined, expect.any(ResolutionChain));
 
         expect(instance).toBe('dependency-factory');
     });
@@ -223,14 +224,14 @@ describe('Resolver', () => {
             container as unknown as Container
         );
 
-        expect(container.resolve).not.toHaveBeenCalled();
+        expect(container.resolveInChain).not.toHaveBeenCalled();
         expect(instance).toBe('factory');
     });
 
     it('should throw CircularDependencyError on circular dependency', async () => {
         metadataMock.get = jest.fn().mockReturnValueOnce([ClassWithDependency]);
 
-        container.resolve.mockImplementation((type) => {
+        container.resolveInChain.mockImplementation((type, scopedContainer, chain) => {
             if (type === ClassWithDependency) {
                 return resolver.resolve(
                     {
@@ -238,7 +239,9 @@ describe('Resolver', () => {
                         useClass: ClassWithDependency,
                         scope: InjectableScopes.Singleton
                     },
-                    container as unknown as Container
+                    container as unknown as Container,
+                    scopedContainer,
+                    chain
                 );
             }
 
@@ -254,13 +257,13 @@ describe('Resolver', () => {
                 },
                 container as unknown as Container
             )
-        ).rejects.toThrow(CircularDependencyError);
+        ).rejects.toThrow(new CircularDependencyError('ClassWithDependency -> ClassWithDependency'));
     });
 
     it('should throw ScopeDependencyError when singleton depends on scoped service', async () => {
         metadataMock.get = jest.fn().mockReturnValueOnce([Dependency]);
 
-        container.resolve.mockImplementation((type) => {
+        container.resolveInChain.mockImplementation((type, scopedContainer, chain) => {
             if (type === Dependency) {
                 return resolver.resolve(
                     {
@@ -268,7 +271,9 @@ describe('Resolver', () => {
                         useClass: Dependency,
                         scope: InjectableScopes.Scoped
                     },
-                    container as unknown as Container
+                    container as unknown as Container,
+                    scopedContainer,
+                    chain
                 );
             }
 
@@ -284,6 +289,6 @@ describe('Resolver', () => {
                 },
                 container as unknown as Container
             )
-        ).rejects.toThrow(ScopeDependencyError);
+        ).rejects.toThrow(new ScopeDependencyError('ClassWithDependency (singleton) -> Dependency (scoped)'));
     });
 });
