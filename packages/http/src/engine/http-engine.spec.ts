@@ -13,13 +13,17 @@ describe('HttpEngine', () => {
     let hostMatcher: jest.Mocked<HostMatcher>;
     let versionMatcher: jest.Mocked<VersionMatcher>;
     let scopedContainerManager: { create: jest.Mock };
+    let logger: { error: jest.Mock };
+    let options: { logErrors?: boolean };
 
     class UsersController {}
     class AdminController {}
 
+    let response: { isCommitted: jest.Mock; status: jest.Mock; json: jest.Mock };
+
     const createContext = (): Pick<HttpContext, 'request' | 'response' | 'session'> => ({
         request: {} as any,
-        response: {} as any,
+        response: response as any,
         session: {} as any
     });
 
@@ -34,7 +38,61 @@ describe('HttpEngine', () => {
         versionMatcher = { match: jest.fn() } as unknown as jest.Mocked<VersionMatcher>;
         scopedContainerManager = { create: jest.fn().mockReturnValue({ scoped: true }) };
 
-        httpEngine = new HttpEngine(executionEngine, hostProcessor, versionProcessor, hostMatcher, versionMatcher, scopedContainerManager as any);
+        logger = { error: jest.fn().mockResolvedValue(undefined) };
+        response = { isCommitted: jest.fn().mockReturnValue(true), status: jest.fn(), json: jest.fn() };
+        options = { logErrors: true };
+
+        httpEngine = new HttpEngine(
+            executionEngine,
+            hostProcessor,
+            versionProcessor,
+            hostMatcher,
+            versionMatcher,
+            scopedContainerManager as any,
+            logger as any,
+            options as any
+        );
+    });
+
+    describe('errors while sending the response', () => {
+        const error = new Error('upstream failed');
+
+        beforeEach(() => {
+            const route = createRoute(UsersController, 'download');
+            hostMatcher.match.mockReturnValue([route]);
+            versionMatcher.match.mockReturnValue(route);
+            executionEngine.execute.mockRejectedValue(error);
+        });
+
+        it('should log the error with the route instead of throwing it', async () => {
+            await expect(httpEngine.execute(createContext(), [])).resolves.toBeUndefined();
+
+            expect(logger.error).toHaveBeenCalledWith('Error while sending the response of UsersController.download: Error -> upstream failed', error);
+        });
+
+        it('should not answer again a response that has started', async () => {
+            await httpEngine.execute(createContext(), []);
+
+            expect(response.status).not.toHaveBeenCalled();
+            expect(response.json).not.toHaveBeenCalled();
+        });
+
+        it('should answer 500 in the format of the framework when the response has not started', async () => {
+            response.isCommitted.mockReturnValue(false);
+
+            await httpEngine.execute(createContext(), []);
+
+            expect(response.status).toHaveBeenCalledWith(500);
+            expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Internal server error', status: 500 }));
+        });
+
+        it('should not log the error when logErrors is disabled', async () => {
+            options.logErrors = false;
+
+            await expect(httpEngine.execute(createContext(), [])).resolves.toBeUndefined();
+
+            expect(logger.error).not.toHaveBeenCalled();
+        });
     });
 
     describe('execute', () => {
@@ -177,16 +235,6 @@ describe('HttpEngine', () => {
 
             expect(versionMatcher.match).not.toHaveBeenCalled();
             expect(executionEngine.execute).not.toHaveBeenCalled();
-        });
-
-        it('should propagate an error when execution fails', async () => {
-            const error = new Error('Execution failed');
-            const route = createRoute(UsersController, 'list');
-            hostMatcher.match.mockReturnValue([route]);
-            versionMatcher.match.mockReturnValue(route);
-            executionEngine.execute.mockRejectedValue(error);
-
-            await expect(httpEngine.execute(createContext(), [route])).rejects.toThrow(error);
         });
     });
 });

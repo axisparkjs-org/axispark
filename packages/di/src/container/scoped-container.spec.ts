@@ -125,4 +125,34 @@ describe('ScopedContainer', () => {
 
         expect(resolver.resolve).toHaveBeenCalledTimes(1);
     });
+
+    it.each([0, '', false, null, undefined])('should cache a falsy scoped instance (%p)', async (value) => {
+        (resolver.resolve as jest.Mock).mockResolvedValue(value);
+
+        const provider = {
+            token: new InjectionToken('falsy'),
+            useFactory: jest.fn(),
+            scope: InjectableScopes.Scoped,
+            forClass: Object
+        };
+
+        expect(await scopedContainer.resolve(provider)).toBe(value);
+        expect(await scopedContainer.resolve(provider)).toBe(value);
+
+        expect(resolver.resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it('should cache two tokens with the same description independently', async () => {
+        const instance1 = { id: 1 };
+        const instance2 = { id: 2 };
+
+        (resolver.resolve as jest.Mock).mockResolvedValueOnce(instance1).mockResolvedValueOnce(instance2);
+
+        const provider1 = { token: new InjectionToken('service'), useClass: class Service {}, scope: InjectableScopes.Scoped };
+        const provider2 = { token: new InjectionToken('service'), useClass: class Service {}, scope: InjectableScopes.Scoped };
+
+        expect(await scopedContainer.resolve(provider1)).toBe(instance1);
+        expect(await scopedContainer.resolve(provider2)).toBe(instance2);
+        expect(await scopedContainer.resolve(provider1)).toBe(instance1);
+    });
 });

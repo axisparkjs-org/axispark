@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { Readable } from 'stream';
+import { Readable, Writable } from 'stream';
 import { ExpressHttpResponse } from './express-http-response';
 
 describe('ExpressHttpResponse', () => {
@@ -103,22 +103,74 @@ describe('ExpressHttpResponse', () => {
     });
 
     describe('file', () => {
-        it('should send a file', () => {
-            httpResponse.file('/tmp/file.txt');
+        const sendFileCalling = (error?: Error) =>
+            (response.sendFile as jest.Mock).mockImplementation((_path: string, _options: unknown, callback: (error?: Error) => void) => callback(error));
 
-            expect(response.sendFile).toHaveBeenCalledWith('/tmp/file.txt');
+        it('should send a file, allowing the folders that start with a dot', async () => {
+            sendFileCalling();
+
+            await expect(httpResponse.file('/tmp/.folder/file.txt')).resolves.toBeUndefined();
+
+            expect(response.sendFile).toHaveBeenCalledWith('/tmp/.folder/file.txt', { dotfiles: 'allow' }, expect.any(Function));
+        });
+
+        it('should reject when the file can not be sent before the response starts', async () => {
+            const error = new Error('EACCES');
+            sendFileCalling(error);
+
+            await expect(httpResponse.file('/tmp/file.txt')).rejects.toBe(error);
+        });
+
+        it('should resolve when the error happens after the response has started', async () => {
+            (response as { headersSent: boolean }).headersSent = true;
+            sendFileCalling(new Error('ECONNRESET'));
+
+            await expect(httpResponse.file('/tmp/file.txt')).resolves.toBeUndefined();
         });
     });
 
     describe('stream', () => {
-        it('should pipe the stream to the response', () => {
-            const stream = {
-                pipe: jest.fn()
-            } as unknown as Readable;
+        const collector = () => {
+            const chunks: Buffer[] = [];
+            const destination = new Writable({
+                write(chunk: Buffer, _encoding, callback) {
+                    chunks.push(chunk);
+                    callback();
+                }
+            });
+            return { destination, text: () => Buffer.concat(chunks).toString() };
+        };
 
-            httpResponse.stream(stream);
+        it('should send the stream and resolve at the end of the transfer', async () => {
+            const { destination, text } = collector();
 
-            expect(stream.pipe).toHaveBeenCalledWith(response);
+            await new ExpressHttpResponse(destination as unknown as Response).stream(Readable.from(['Hello ', 'world']));
+
+            expect(text()).toBe('Hello world');
+        });
+
+        it('should reject with the error of the source and destroy the response', async () => {
+            const { destination } = collector();
+            const error = new Error('upstream failed');
+            const source = new Readable({
+                read() {
+                    this.destroy(error);
+                }
+            });
+
+            await expect(new ExpressHttpResponse(destination as unknown as Response).stream(source)).rejects.toBe(error);
+            expect(destination.destroyed).toBe(true);
+        });
+
+        it('should destroy the source when the response is closed before the end', async () => {
+            const { destination } = collector();
+            const source = new Readable({ read() {} });
+
+            const streaming = new ExpressHttpResponse(destination as unknown as Response).stream(source);
+            destination.destroy();
+
+            await expect(streaming).rejects.toMatchObject({ code: 'ERR_STREAM_PREMATURE_CLOSE' });
+            expect(source.destroyed).toBe(true);
         });
     });
 

@@ -128,7 +128,8 @@ describe('HttpPlugin', () => {
             registerRoutes: jest.fn().mockResolvedValue(undefined),
             start: jest.fn().mockResolvedValue(undefined),
             stop: jest.fn().mockResolvedValue(undefined),
-            initialize: jest.fn().mockResolvedValue(undefined)
+            initialize: jest.fn().mockResolvedValue(undefined),
+            getHttpServer: jest.fn().mockReturnValue(undefined)
         };
 
         container = {
@@ -554,10 +555,24 @@ describe('HttpPlugin', () => {
             expect(adapter.start).toHaveBeenCalledTimes(1);
         });
 
-        it('should log the start message', async () => {
+        it('should log the start message with the port when the adapter has no server', async () => {
             await plugin.onStart();
 
             expect(logger.info).toHaveBeenCalledWith('Plugin started. Listening on port 3000');
+        });
+
+        it.each([
+            [{ address: '0.0.0.0', family: 'IPv4', port: 3000 }, '0.0.0.0:3000'],
+            [{ address: '127.0.0.1', family: 'IPv4', port: 4000 }, '127.0.0.1:4000'],
+            [{ address: '::', family: 'IPv6', port: 3000 }, '[::]:3000'],
+            ['/tmp/app.sock', '/tmp/app.sock'],
+            [null, 'port 3000']
+        ])('should log the address returned by the server (%p)', async (address, expected) => {
+            adapter.getHttpServer = jest.fn().mockReturnValue({ address: () => address });
+
+            await plugin.onStart();
+
+            expect(logger.info).toHaveBeenCalledWith(`Plugin started. Listening on ${expected}`);
         });
 
         it('should not register a rate limit store when the rate limit is disabled', async () => {
