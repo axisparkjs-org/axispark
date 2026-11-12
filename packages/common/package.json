@@ -1,18 +1,39 @@
 {
     "name": "@axisparkjs/common",
     "version": "1.5.1",
-    "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/core",
+    "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/common",
     "author": "Pablo Gálvez Ortuño",
     "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/axisparkjs-org/axispark.git",
+        "directory": "packages/common"
+    },
+    "homepage": "https://axisparkjs.com",
+    "bugs": "https://github.com/axisparkjs-org/axispark/issues",
+    "keywords": [
+        "axispark",
+        "nodejs",
+        "typescript",
+        "framework",
+        "common",
+        "utilities"
+    ],
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./lib/index.d.ts",
+            "default": "./lib/index.js"
+        },
+        "./package.json": "./package.json"
+    },
     "files": [
         "lib",
         "package.json",
         "PACKAGE.md",
         "README.md",
-        "LICENSE",
-        "tsconfig.build.json"
+        "LICENSE"
     ],
     "scripts": {
         "build": "tsc -b tsconfig.build.json",

@@ -4,6 +4,22 @@
     "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/cli",
     "author": "Pablo Gálvez Ortuño",
     "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/axisparkjs-org/axispark.git",
+        "directory": "packages/cli"
+    },
+    "homepage": "https://axisparkjs.com",
+    "bugs": "https://github.com/axisparkjs-org/axispark/issues",
+    "keywords": [
+        "axispark",
+        "nodejs",
+        "typescript",
+        "framework",
+        "cli",
+        "scaffolding",
+        "generator"
+    ],
     "bin": {
         "axispark": "./lib/index.js"
     },
@@ -12,8 +28,7 @@
         "package.json",
         "PACKAGE.md",
         "README.md",
-        "LICENSE",
-        "tsconfig.build.json"
+        "LICENSE"
     ],
     "scripts": {
         "build": "tsc -b tsconfig.build.json",

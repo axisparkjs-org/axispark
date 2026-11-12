@@ -65,7 +65,7 @@ export class FastifyHttpRequest implements HttpRequest {
         ).cookies;
     }
 
-    get files() {
+    get files(): readonly UploadedFile[] | undefined {
         return this.uploadedFiles;
     }
 
