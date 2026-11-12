@@ -1,8 +1,8 @@
 import { AxiSparkContext, HealthEngine, PluginNotConfiguredError } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
-import { Injector, InjectionToken } from '@axisparkjs/di';
+import { Injector } from '@axisparkjs/di';
 import { RedisConnectionManager } from '../connections';
-import { REDIS_LOGGER, REDIS_OPTIONS } from '../di';
+import { REDIS_LOGGER, REDIS_OPTIONS, redisConnectionToken } from '../di';
 import { RedisPlugin } from './redis-plugin';
 import { RedisPluginOptions } from './redis-plugin-options';
 import { RedisHealthIndicator } from '../health';
@@ -66,11 +66,11 @@ describe('RedisPlugin', () => {
         expect(injector.get).toHaveBeenCalledWith(RedisConnectionManager);
         expect(connectionManager.createConnections).toHaveBeenCalledTimes(1);
         expect(context.container.bind).toHaveBeenCalledWith({
-            token: new InjectionToken('REDIS_CONNECTION_PRIMARY'),
+            token: redisConnectionToken('PRIMARY'),
             useValue: primary
         });
         expect(context.container.bind).toHaveBeenCalledWith({
-            token: new InjectionToken('REDIS_CONNECTION_REPORTS'),
+            token: redisConnectionToken('REPORTS'),
             useValue: reports
         });
         expect(injector.get).toHaveBeenCalledWith(HealthEngine);

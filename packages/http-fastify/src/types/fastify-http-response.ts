@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { HttpResponse } from '@axisparkjs/http';
 import { SerializeOptions } from '@fastify/cookie';
 import { FastifyReply } from 'fastify';
@@ -53,8 +55,22 @@ export class FastifyHttpResponse implements HttpResponse {
         });
     }
 
-    stream(stream: NodeJS.ReadableStream): void {
-        this.response.send(stream);
+    async stream(stream: NodeJS.ReadableStream): Promise<void> {
+        const raw = this.response.raw;
+        const sent = new Promise<void>((resolve) => {
+            const done = () => {
+                raw.off('finish', done);
+                raw.off('close', done);
+                resolve();
+            };
+            raw.once('finish', done);
+            raw.once('close', done);
+        });
+        // Fastify sends the PassThrough: pipeline() destroys it, and so the connection, when the source fails,
+        // and destroys the source when the client closes the connection.
+        const body = new PassThrough();
+        this.response.send(body);
+        await Promise.all([pipeline(stream, body), sent]);
     }
 
     end(): void {

@@ -1,3 +1,4 @@
+import { pipeline } from 'node:stream/promises';
 import { HttpResponse } from '@axisparkjs/http';
 import { CookieOptions, Response } from 'express';
 
@@ -42,8 +43,9 @@ export class ExpressHttpResponse implements HttpResponse {
         });
     }
 
-    stream(stream: NodeJS.ReadableStream): void {
-        stream.pipe(this.response);
+    async stream(stream: NodeJS.ReadableStream): Promise<void> {
+        // pipeline() destroys the response when the source fails, and the source when the client closes the connection.
+        await pipeline(stream, this.response);
     }
 
     end(): void {

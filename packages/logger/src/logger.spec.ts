@@ -294,4 +294,110 @@ describe('Logger', () => {
             expect(transport1.write.mock.calls[1][0].metadata).toBeUndefined();
         });
     });
+
+    describe('transport errors', () => {
+        const config = (options: Partial<LogTransportOptions> = {}): LogTransportOptions => ({
+            minLevel: LogLevel.Trace,
+            formatter: { format: jest.fn() },
+            ...options
+        });
+
+        class FailingTransport extends LogTransport {
+            write = jest.fn().mockRejectedValue(new Error('log endpoint down'));
+        }
+
+        let stderr: jest.SpyInstance;
+
+        beforeEach(() => {
+            stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        });
+
+        afterEach(() => {
+            stderr.mockRestore();
+            jest.useRealTimers();
+        });
+
+        it.each(['info', 'warn', 'error', 'debug', 'trace', 'fatal'] as const)('should not reject %s() when a transport fails', async (method) => {
+            const failingLogger = new Logger([new FailingTransport(config())]);
+
+            await expect(failingLogger[method]('hello')).resolves.toBeUndefined();
+        });
+
+        it('should still send the entry to the other transports', async () => {
+            const working = new MockTransport(config());
+            const failingLogger = new Logger([new FailingTransport(config()), working]);
+
+            await failingLogger.info('hello');
+
+            expect(working.write).toHaveBeenCalledWith(expect.objectContaining({ message: 'hello' }));
+        });
+
+        it('should convert a rejection that is not an error', async () => {
+            const transport = new MockTransport(config());
+            transport.write.mockRejectedValue('timeout');
+
+            await new Logger([transport]).info('hello');
+
+            expect(stderr).toHaveBeenCalledWith(expect.stringContaining('MockTransport failed to write an entry: Error -> timeout'));
+        });
+
+        it('should report the failure on stderr at most once per transport every minute', async () => {
+            jest.useFakeTimers({ now: 0 });
+            const failing = new FailingTransport(config());
+            const other = new FailingTransport(config());
+            const failingLogger = new Logger([failing]);
+
+            await failingLogger.info('first');
+            await failingLogger.child('scope').info('second');
+            await new Logger([other]).info('other transport');
+
+            expect(stderr).toHaveBeenCalledTimes(2);
+            expect(stderr).toHaveBeenCalledWith(
+                '[AxiSpark] The log transport FailingTransport failed to write an entry: Error -> log endpoint down. Its next failures are not reported for 60 seconds.\n'
+            );
+
+            jest.setSystemTime(60_000);
+            await failingLogger.info('third');
+
+            expect(stderr).toHaveBeenCalledTimes(3);
+        });
+
+        it('should call onError instead of writing to stderr', async () => {
+            const onError = jest.fn();
+            const failing = new FailingTransport(config({ onError }));
+
+            await new Logger([failing]).info('hello');
+            await new Logger([failing]).info('again');
+
+            expect(onError).toHaveBeenCalledTimes(2);
+            expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'log endpoint down' }), expect.objectContaining({ message: 'hello' }));
+            expect(stderr).not.toHaveBeenCalled();
+        });
+
+        it('should not reject when onError throws', async () => {
+            const failing = new FailingTransport(
+                config({
+                    onError: () => {
+                        throw new Error('callback failed');
+                    }
+                })
+            );
+
+            await expect(new Logger([failing]).info('hello')).resolves.toBeUndefined();
+        });
+
+        it('should reject with the error of a transport with failOnError, after writing to the other transports', async () => {
+            const working = new MockTransport(config());
+            const strict = new FailingTransport(config({ failOnError: true, onError: jest.fn() }));
+
+            await expect(new Logger([strict, working]).info('audit')).rejects.toThrow('log endpoint down');
+            expect(working.write).toHaveBeenCalled();
+        });
+
+        it('should handle transports that do not extend LogTransport', async () => {
+            const duckTyped = { write: jest.fn().mockRejectedValue(new Error('down')) } as unknown as LogTransport;
+
+            await expect(new Logger([duckTyped]).info('hello')).resolves.toBeUndefined();
+        });
+    });
 });

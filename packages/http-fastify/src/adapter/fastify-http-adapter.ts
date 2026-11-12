@@ -15,6 +15,7 @@ import formbody from '@fastify/formbody';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import path from 'node:path';
+import os from 'node:os';
 
 /**
  * An HTTP adapter for integrating Fastify with the HTTP Plugin.
@@ -77,10 +78,21 @@ export class FastifyHttpAdapter implements HttpAdapter {
         return { request: req, response: res, session: ses };
     }
 
+    /**
+     * Starts listening on the configured port and host. Without a host, the server listens on every network interface, as the Express adapter and Node.js do: `::` when IPv6 is available, and `0.0.0.0` otherwise.
+     * @returns A promise that resolves when the server is listening, and rejects with the `listen` error, such as `EADDRINUSE`.
+     */
     async start(): Promise<void> {
-        await this.app.listen({
-            port: this.options.port
-        });
+        await this.app.listen({ port: this.options.port, host: this.options.host ?? FastifyHttpAdapter.getDefaultHost() });
+    }
+
+    /**
+     * Returns the unspecified address used when no host is configured: `::` when a network interface has an IPv6 address, and `0.0.0.0` otherwise.
+     * @returns The default host.
+     */
+    static getDefaultHost(): string {
+        const hasIPv6 = Object.values(os.networkInterfaces()).some((addresses) => addresses?.some((address) => address.family === 'IPv6'));
+        return hasIPv6 ? '::' : '0.0.0.0';
     }
 
     async stop(): Promise<void> {

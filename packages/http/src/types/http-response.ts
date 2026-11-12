@@ -21,7 +21,12 @@ export interface HttpResponse {
      * @returns A promise that resolves when the file is sent, and rejects when it can not be sent before any byte of the response is written.
      */
     file(filePath: string): Promise<void>;
-    stream(stream: NodeJS.ReadableStream): void;
+    /**
+     * Sends a stream. The source is destroyed when the client closes the connection, and the connection is destroyed when the source fails.
+     * @param stream The stream to send.
+     * @returns A promise that resolves when the transfer ends, and rejects with the error of the source.
+     */
+    stream(stream: NodeJS.ReadableStream): Promise<void>;
     end(): void;
     isCommitted(): boolean;
 }
