@@ -1,5 +1,6 @@
 import { FastifyReply } from 'fastify';
-import { Readable } from 'stream';
+import { PassThrough, Readable } from 'stream';
+import { EventEmitter } from 'node:events';
 import { FastifyHttpResponse } from './fastify-http-response';
 
 describe('FastifyHttpResponse', () => {
@@ -14,6 +15,7 @@ describe('FastifyHttpResponse', () => {
             clearCookie: jest.fn(),
             send: jest.fn(),
             sendFile: jest.fn(),
+            raw: new EventEmitter(),
             sent: false
         } as unknown as jest.Mocked<Partial<FastifyReply>>;
 
@@ -113,14 +115,39 @@ describe('FastifyHttpResponse', () => {
     });
 
     describe('stream', () => {
-        it('should send the stream', () => {
-            const stream = new Readable({
-                read() {}
+        const sendCollecting = () => {
+            const chunks: Buffer[] = [];
+            let body: PassThrough | undefined;
+            (response.send as jest.Mock).mockImplementation((sent: PassThrough) => {
+                body = sent;
+                sent.on('data', (chunk: Buffer) => chunks.push(chunk));
+                sent.on('end', () => (response.raw as EventEmitter).emit('finish'));
+            });
+            return { text: () => Buffer.concat(chunks).toString(), body: () => body };
+        };
+
+        it('should send the stream and resolve when the reply is sent', async () => {
+            const { text } = sendCollecting();
+
+            await httpResponse.stream(Readable.from(['Hello ', 'world']));
+
+            expect(response.send).toHaveBeenCalledWith(expect.any(PassThrough));
+            expect(text()).toBe('Hello world');
+            expect((response.raw as EventEmitter).listenerCount('finish')).toBe(0);
+            expect((response.raw as EventEmitter).listenerCount('close')).toBe(0);
+        });
+
+        it('should reject with the error of the source and destroy the body of the reply', async () => {
+            const { body } = sendCollecting();
+            const error = new Error('upstream failed');
+            const source = new Readable({
+                read() {
+                    this.destroy(error);
+                }
             });
 
-            httpResponse.stream(stream);
-
-            expect(response.send).toHaveBeenCalledWith(stream);
+            await expect(httpResponse.stream(source)).rejects.toBe(error);
+            expect(body()?.destroyed).toBe(true);
         });
     });
 
