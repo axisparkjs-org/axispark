@@ -2,7 +2,7 @@ import { Metadata, MetadataKeys } from '@axisparkjs/common';
 import { Container } from './container';
 import { ClassResolver } from './class-resolver';
 import { InjectionToken } from '../token';
-import { ProviderNotFoundError, DecoratorNotIncludedError, ScopedContainerNotProvidedError } from '../errors';
+import { ProviderNotFoundError, DecoratorNotIncludedError, ScopedContainerNotProvidedError, CircularDependencyError } from '../errors';
 import { Constructable } from '../decorators/constructable';
 import { ClassRegistry } from '../registry/class-registry';
 import { InjectableScopes } from '../types';
@@ -191,6 +191,83 @@ describe('Container', () => {
         });
 
         await expect(container.resolve(token2)).resolves.toBe(10);
+    });
+
+    describe('existing providers', () => {
+        const alias = new InjectionToken('SERVICE_ALIAS');
+
+        beforeEach(() => {
+            metadataMock.has.mockReturnValue(true);
+            jest.spyOn(ClassResolver.prototype, 'resolve').mockImplementation(async () => new Service());
+        });
+
+        it.each([InjectableScopes.Singleton, InjectableScopes.Transient])('should resolve an alias of a %s class', async (scope) => {
+            container.bind({ token: Service, useClass: Service, scope });
+            container.bind({ token: alias, useExisting: Service });
+
+            await expect(container.resolve(alias)).resolves.toBeInstanceOf(Service);
+        });
+
+        it('should resolve an alias of a singleton class to the same instance as the class', async () => {
+            container.bind({ token: Service, useClass: Service, scope: InjectableScopes.Singleton });
+            container.bind({ token: alias, useExisting: Service });
+
+            const fromAlias = await container.resolve(alias);
+
+            await expect(container.resolve(Service)).resolves.toBe(fromAlias);
+        });
+
+        it('should pass the scoped container to the target of an alias', async () => {
+            container.bind({ token: Service, useClass: Service, scope: InjectableScopes.Scoped });
+            container.bind({ token: alias, useExisting: Service });
+
+            const scopedContainer = container.createScopedContainer();
+            const fromAlias = await container.resolve(alias, scopedContainer);
+
+            expect(fromAlias).toBeInstanceOf(Service);
+            await expect(container.resolve(Service, scopedContainer)).resolves.toBe(fromAlias);
+            await expect(container.resolve(alias, container.createScopedContainer())).resolves.not.toBe(fromAlias);
+        });
+
+        it('should throw ScopedContainerNotProvidedError for an alias of a scoped class without a scoped container', async () => {
+            container.bind({ token: Service, useClass: Service, scope: InjectableScopes.Scoped });
+            container.bind({ token: alias, useExisting: Service });
+
+            await expect(container.resolve(alias)).rejects.toThrow(ScopedContainerNotProvidedError);
+        });
+
+        it('should resolve a chain of aliases', async () => {
+            const second = new InjectionToken('SECOND_ALIAS');
+            container.bind({ token: Service, useClass: Service, scope: InjectableScopes.Scoped });
+            container.bind({ token: alias, useExisting: Service });
+            container.bind({ token: second, useExisting: alias });
+
+            const scopedContainer = container.createScopedContainer();
+
+            const fromAlias = await container.resolve(second, scopedContainer);
+
+            await expect(container.resolve(Service, scopedContainer)).resolves.toBe(fromAlias);
+        });
+
+        it('should throw CircularDependencyError for an alias that points to itself', async () => {
+            container.bind({ token: alias, useExisting: alias });
+
+            await expect(container.resolve(alias)).rejects.toThrow(new CircularDependencyError('SERVICE_ALIAS -> SERVICE_ALIAS'));
+        });
+
+        it('should throw CircularDependencyError for two aliases that point to each other', async () => {
+            const other = new InjectionToken('OTHER_ALIAS');
+            container.bind({ token: alias, useExisting: other });
+            container.bind({ token: other, useExisting: alias });
+
+            await expect(container.resolve(alias)).rejects.toThrow(new CircularDependencyError('SERVICE_ALIAS -> OTHER_ALIAS -> SERVICE_ALIAS'));
+        });
+
+        it('should throw ProviderNotFoundError when the target of an alias is not bound', async () => {
+            container.bind({ token: alias, useExisting: new InjectionToken('MISSING') });
+
+            await expect(container.resolve(alias)).rejects.toThrow(ProviderNotFoundError);
+        });
     });
 
     it('should resolve a factory provider', async () => {
