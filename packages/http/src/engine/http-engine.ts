@@ -1,6 +1,11 @@
 import { Executable } from '@axisparkjs/common';
 import { HttpContext } from '../types';
-import { Injectable, ScopedContainerManager } from '@axisparkjs/di';
+import { Inject, Injectable, ScopedContainerManager } from '@axisparkjs/di';
+import { Logger } from '@axisparkjs/logger';
+import { HTTP_LOGGER, HTTP_OPTIONS } from '../di/tokens';
+import { HttpPluginOptions } from '../plugin/http-plugin-options';
+import { ErrorHttpResult } from '../implementations/results/http-result';
+import { InternalServerError } from '../implementations/errors';
 import { ExecutionEngine } from '@axisparkjs/engine';
 import { VersionProcessor, VersionMatcher, VersionDefinition } from '../version';
 import { RouteDefinition } from '../routes';
@@ -18,13 +23,16 @@ export class HttpEngine implements Executable {
         private readonly versionProcessor: VersionProcessor,
         private readonly hostMatcher: HostMatcher,
         private readonly versionMatcher: VersionMatcher,
-        private readonly scopedContainerManager: ScopedContainerManager
+        private readonly scopedContainerManager: ScopedContainerManager,
+        @Inject(HTTP_LOGGER) private readonly logger: Logger,
+        @Inject(HTTP_OPTIONS) private readonly options: HttpPluginOptions
     ) {}
 
     /**
      * Executes the HTTP engine with the provided context.
      * @param context The HTTP context for execution.
      * @param routes The routes to map which will be executed.
+     * The errors that happen after the handler and the filters, while the response is sent (such as a stream that fails), are logged with the route instead of being thrown to the adapter. When the response has not started yet, it is answered with `500`.
      */
     public async execute(context: Pick<HttpContext, 'request' | 'response' | 'session'>, routes: RouteDefinition[]): Promise<void> {
         const hostDefinition = new HostDefinition();
@@ -50,6 +58,16 @@ export class HttpEngine implements Executable {
             error: undefined
         };
 
-        await this.executionEngine.execute(filledContext);
+        try {
+            await this.executionEngine.execute(filledContext);
+        } catch (error) {
+            if (!filledContext.response.isCommitted()) {
+                await new ErrorHttpResult(new InternalServerError('Internal server error')).process(filledContext);
+            }
+            if (this.options.logErrors === false) return;
+            const route = `${versionRoute.target.name}.${String(versionRoute.propertyKey)}`;
+            const { name, message } = error as Error;
+            await this.logger.error(`Error while sending the response of ${route}: ${name} -> ${message}`, error as Error);
+        }
     }
 }

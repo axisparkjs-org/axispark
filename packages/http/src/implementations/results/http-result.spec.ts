@@ -1,6 +1,8 @@
 import { HttpContext, HttpStatusCode } from '../../types';
 import { BodyHttpResult, ErrorHttpResult, FileHttpResult, RedirectHttpResult, StreamHttpResult } from './http-result';
 import { BadRequestError, RateLimitExceededError } from '../errors';
+import { Readable } from 'node:stream';
+import { EventEmitter } from 'node:events';
 
 const response = {
     status: jest.fn(),
@@ -97,18 +99,22 @@ describe('FileHttpResult', () => {
 });
 
 describe('StreamHttpResult', () => {
-    it('should stream the response', async () => {
-        const stream = {} as NodeJS.ReadableStream;
+    it('should stream the response and wait for the end of the transfer', async () => {
+        const stream = Readable.from(['data']);
+        let ended = false;
+        response.stream.mockImplementationOnce(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            ended = true;
+        });
 
         await new StreamHttpResult(stream).process(context);
 
         expect(response.stream).toHaveBeenCalledWith(stream);
+        expect(ended).toBe(true);
     });
 
     it('should set headers', async () => {
-        const stream = {} as NodeJS.ReadableStream;
-
-        await new StreamHttpResult(stream, {
+        await new StreamHttpResult(Readable.from(['data']), {
             filename: 'file.txt',
             contentType: 'text/plain'
         }).process(context);
@@ -116,6 +122,46 @@ describe('StreamHttpResult', () => {
         expect(response.header).toHaveBeenCalledWith('Content-Type', 'text/plain');
 
         expect(response.header).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="file.txt"');
+    });
+
+    it('should wrap a stream of the old API', async () => {
+        const old = new EventEmitter() as unknown as NodeJS.ReadableStream;
+        Object.assign(old, { pause: jest.fn(), resume: jest.fn() });
+        setTimeout(() => (old as unknown as EventEmitter).emit('data', Buffer.from('data')), 1);
+
+        await new StreamHttpResult(old).process(context);
+
+        expect(response.stream).toHaveBeenCalledWith(expect.any(Readable));
+    });
+
+    it('should answer 500 in the format of the framework and throw when the stream fails before the first chunk', async () => {
+        const error = new Error('upstream failed');
+        const stream = new Readable({
+            read() {
+                this.destroy(error);
+            }
+        });
+
+        await expect(new StreamHttpResult(stream, { filename: 'file.txt', contentType: 'text/plain' }).process(context)).rejects.toBe(error);
+
+        expect(response.status).toHaveBeenCalledWith(HttpStatusCode.InternalServerError);
+        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Stream failed', status: HttpStatusCode.InternalServerError }));
+        expect(response.header).not.toHaveBeenCalled();
+        expect(response.stream).not.toHaveBeenCalled();
+        expect(stream.destroyed).toBe(true);
+    });
+
+    it('should throw the error of a stream that fails during the transfer', async () => {
+        const error = new Error('failed in the middle');
+        response.stream.mockRejectedValueOnce(error);
+
+        await expect(new StreamHttpResult(Readable.from(['data'])).process(context)).rejects.toBe(error);
+    });
+
+    it('should ignore a client that closes the connection before the end', async () => {
+        response.stream.mockRejectedValueOnce(Object.assign(new Error('Premature close'), { code: 'ERR_STREAM_PREMATURE_CLOSE' }));
+
+        await expect(new StreamHttpResult(Readable.from(['data'])).process(context)).resolves.toBeUndefined();
     });
 });
 
