@@ -56,7 +56,7 @@ import {
 @Injectable()
 export class HttpPlugin extends Plugin {
     private context: AxiSparkContext;
-    protected options: HttpPluginOptions;
+    declare protected options: HttpPluginOptions;
     private adapter: HttpAdapter;
 
     constructor(
