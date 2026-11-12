@@ -1,9 +1,9 @@
 import { AxiSparkContext, HealthEngine, Plugin } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
 import { DataPluginOptions } from './data-plugin-options';
-import { DATA_LOGGER, DATA_OPTIONS } from '../di';
+import { DATA_LOGGER, DATA_OPTIONS, dataRepositoryToken, dataSourceToken } from '../di';
 import { PluginNotConfiguredError } from '@axisparkjs/core';
-import { Injectable, InjectionToken, Injector } from '@axisparkjs/di';
+import { Injectable, Injector } from '@axisparkjs/di';
 import { DataSourceConnectionManager } from '../connections';
 import { RepositoryGenerator } from '../repository/repository-generator';
 import { DataSourceHealthIndicator } from '../health';
@@ -58,7 +58,7 @@ export class DataPlugin extends Plugin {
         const dataSources = this.dataSourceConnectionManager.getAllConnections();
         for (const [name, dataSource] of dataSources.entries()) {
             this.context.container.bind({
-                token: new InjectionToken(`DATA_SOURCE_${name.toLocaleUpperCase()}`),
+                token: dataSourceToken(name),
                 useValue: dataSource
             });
         }
@@ -71,7 +71,7 @@ export class DataPlugin extends Plugin {
                 useValue: repoDef.implementation
             });
             this.context.container.bind({
-                token: new InjectionToken(`DATA_REPOSITORY_${repoDef.target.name.toLocaleUpperCase()}`),
+                token: dataRepositoryToken(repoDef.target),
                 useValue: repoDef.implementation
             });
         }

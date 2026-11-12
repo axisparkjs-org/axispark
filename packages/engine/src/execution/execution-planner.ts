@@ -1,3 +1,4 @@
+import { ClassType } from '@axisparkjs/common';
 import { ExecutionContext } from './execution-context';
 import {
     StepGenerator,
@@ -17,11 +18,11 @@ import { TimeoutGenerator } from '../timeout';
 import { CacheGenerator } from '../cache';
 
 /**
- * A class responsible for generating execution plans based on the provided execution context. It utilizes the `StepGenerator` to generate steps and the `TimeoutGenerator` to generate timeout definitions and the `CacheGenerator` to generate cache definitions. The generated execution plan includes before, after, catch, and context steps, as well as an optional timeout definition and an optional cache definition. The class also caches registered plans for efficient reuse.
+ * A class responsible for generating execution plans based on the provided execution context. It utilizes the `StepGenerator` to generate steps and the `TimeoutGenerator` to generate timeout definitions and the `CacheGenerator` to generate cache definitions. The generated execution plan includes before, after, catch, and context steps, as well as an optional timeout definition and an optional cache definition. The class also caches registered plans for efficient reuse, by the identity of the target class and the property key, so two classes with the same name never share a plan.
  */
 @Injectable()
 export class ExecutionPlanner {
-    private readonly registeredPlans = new Map<string, ExecutionPlan>();
+    private readonly registeredPlans = new Map<ClassType, Map<PropertyKey, ExecutionPlan>>();
 
     constructor(
         private readonly timeoutGenerator: TimeoutGenerator,
@@ -35,12 +36,17 @@ export class ExecutionPlanner {
      * @returns A promise resolving to the generated execution plan.
      */
     public async plan(context: ExecutionContext): Promise<ExecutionPlan> {
-        const key = `${context.target.name}.${String(context.propertyKey)}`;
-        let plan = this.registeredPlans.get(key);
+        let plansOfTarget = this.registeredPlans.get(context.target);
+        if (!plansOfTarget) {
+            plansOfTarget = new Map<PropertyKey, ExecutionPlan>();
+            this.registeredPlans.set(context.target, plansOfTarget);
+        }
+
+        let plan = plansOfTarget.get(context.propertyKey);
         if (!plan) {
             const steps = await this.stepGenerator.generate(context);
             plan = this.generatePlan(context, steps);
-            this.registeredPlans.set(key, plan);
+            plansOfTarget.set(context.propertyKey, plan);
         }
 
         return plan;

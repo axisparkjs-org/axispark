@@ -1,8 +1,8 @@
 import { AxiSparkContext, HealthEngine, PluginNotConfiguredError } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
-import { Injector, InjectionToken } from '@axisparkjs/di';
+import { Injector } from '@axisparkjs/di';
 import { RabbitMQConnectionManager } from '../connections';
-import { RABBITMQ_LOGGER, RABBITMQ_OPTIONS } from '../di';
+import { RABBITMQ_LOGGER, RABBITMQ_OPTIONS, rabbitMQConnectionToken } from '../di';
 import { RabbitMQPlugin } from './rabbitmq-plugin';
 import { RabbitMQPluginOptions } from './rabbitmq-plugin-options';
 import { RabbitMQHealthIndicator } from '../health';
@@ -66,11 +66,11 @@ describe('RabbitMQPlugin', () => {
         expect(injector.get).toHaveBeenCalledWith(RabbitMQConnectionManager);
         expect(connectionManager.createConnections).toHaveBeenCalledTimes(1);
         expect(context.container.bind).toHaveBeenCalledWith({
-            token: new InjectionToken('RABBITMQ_CONNECTION_PRIMARY'),
+            token: rabbitMQConnectionToken('PRIMARY'),
             useValue: primary
         });
         expect(context.container.bind).toHaveBeenCalledWith({
-            token: new InjectionToken('RABBITMQ_CONNECTION_REPORTS'),
+            token: rabbitMQConnectionToken('REPORTS'),
             useValue: reports
         });
         expect(injector.get).toHaveBeenCalledWith(HealthEngine);

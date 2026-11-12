@@ -12,7 +12,7 @@ import { InjectableScopeMetadata, InjectableTokenMetadata } from '../metadata';
  * Container is a dependency injection container that manages the registration and resolution of providers. It allows for binding providers, resolving instances, and managing scopes. The container supports singleton, scoped, and transient lifetimes for providers, enabling flexible dependency management in applications.
  */
 export class Container implements Initializable {
-    private readonly providers = new Map<string, Provider>();
+    private readonly providers = new Map<Token, Provider>();
     private readonly resolver = new ClassResolver();
 
     /**
@@ -27,7 +27,7 @@ export class Container implements Initializable {
             };
             if (injectableTokenMetadata) this.bind({ token: injectableTokenMetadata.injectionToken, useClass: entry, scope: injectableScopeMetadata.scope });
 
-            if (!this.providers.has(TokenUtils.getName(entry))) this.bind({ token: entry, useClass: entry, scope: injectableScopeMetadata.scope });
+            if (!this.providers.has(entry)) this.bind({ token: entry, useClass: entry, scope: injectableScopeMetadata.scope });
         });
     }
 
@@ -45,7 +45,7 @@ export class Container implements Initializable {
         if ('useClass' in provider && !Metadata.has(MetadataKeys.INJECTABLE, provider.useClass))
             throw new DecoratorNotIncludedError(TokenUtils.getName(provider.useClass), Injectable.name);
 
-        this.providers.set(TokenUtils.getName(provider.token), provider);
+        this.providers.set(provider.token, provider);
     }
 
     /**
@@ -54,7 +54,7 @@ export class Container implements Initializable {
      * @param token - The token for the provider to unbind.
      */
     unbind<T>(token: Token<T>): void {
-        this.providers.delete(TokenUtils.getName(token));
+        this.providers.delete(token);
     }
 
     /**
@@ -75,7 +75,7 @@ export class Container implements Initializable {
      * @throws {ScopedContainerNotProvidedError} If a scoped provider is being resolved but no scoped container is provided.
      */
     async resolve<T>(token: Token<T>, scopedContainer?: ScopedContainer): Promise<T> {
-        const provider = this.providers.get(TokenUtils.getName(token)) as Provider<T> | undefined;
+        const provider = this.providers.get(token) as Provider<T> | undefined;
         if (!provider) throw new ProviderNotFoundError(token);
 
         if ('useValue' in provider) return provider.useValue;
