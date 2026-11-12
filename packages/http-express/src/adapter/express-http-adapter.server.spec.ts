@@ -84,6 +84,28 @@ describe('ExpressHttpAdapter with a real server', () => {
         expect(await getIp(started.port, { 'X-Forwarded-For': '198.51.100.1, 203.0.113.7' })).toBe('203.0.113.7');
     });
 
+    it('should listen on every network interface by default', async () => {
+        const started = new ExpressHttpAdapter(options(0));
+        await started.initialize();
+        await started.start();
+        try {
+            expect(['::', '0.0.0.0']).toContain((started.getHttpServer().address() as AddressInfo).address);
+        } finally {
+            await started.stop();
+        }
+    });
+
+    it('should listen only on the configured host', async () => {
+        const started = new ExpressHttpAdapter({ ...options(0), host: '127.0.0.1' });
+        await started.initialize();
+        await started.start();
+        try {
+            expect(started.getHttpServer().address()).toEqual(expect.objectContaining({ address: '127.0.0.1', family: 'IPv4' }));
+        } finally {
+            await started.stop();
+        }
+    });
+
     it('should reject the start when the port is already in use', async () => {
         const netServer = createNetServer();
         occupied = netServer;

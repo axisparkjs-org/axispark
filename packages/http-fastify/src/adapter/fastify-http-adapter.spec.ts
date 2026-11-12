@@ -1,4 +1,5 @@
 import fastify from 'fastify';
+import os from 'node:os';
 import cookie from '@fastify/cookie';
 import session from '@fastify/session';
 import compress from '@fastify/compress';
@@ -289,8 +290,40 @@ describe('FastifyHttpAdapter', () => {
             await adapter.start();
 
             expect(app.listen).toHaveBeenCalledWith({
-                port: 8080
+                port: 8080,
+                host: FastifyHttpAdapter.getDefaultHost()
             });
+        });
+
+        it('should listen on the configured host', async () => {
+            const adapter = new FastifyHttpAdapter({ ...baseConfig, host: '127.0.0.1' } as any, axisparkConfig as any);
+
+            await adapter.start();
+
+            expect(app.listen).toHaveBeenCalledWith({ port: 8080, host: '127.0.0.1' });
+        });
+    });
+
+    describe('getDefaultHost', () => {
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        it('should return :: when a network interface has an IPv6 address', () => {
+            jest.spyOn(os, 'networkInterfaces').mockReturnValue({
+                lo: [{ address: '::1', family: 'IPv6' } as os.NetworkInterfaceInfo]
+            });
+
+            expect(FastifyHttpAdapter.getDefaultHost()).toBe('::');
+        });
+
+        it('should return 0.0.0.0 when no network interface has an IPv6 address', () => {
+            jest.spyOn(os, 'networkInterfaces').mockReturnValue({
+                lo: [{ address: '127.0.0.1', family: 'IPv4' } as os.NetworkInterfaceInfo],
+                eth0: undefined
+            });
+
+            expect(FastifyHttpAdapter.getDefaultHost()).toBe('0.0.0.0');
         });
     });
 
