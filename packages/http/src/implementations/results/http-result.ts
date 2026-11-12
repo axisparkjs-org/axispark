@@ -1,6 +1,7 @@
 import { ResultDefinition } from '@axisparkjs/engine';
 import { HttpStatusCode, HttpContext } from '../../types';
 import { HttpError, RateLimitExceededError } from '../errors';
+import { contentDisposition } from './content-disposition';
 
 /**
  * An abstract class for representing HTTP results.
@@ -80,7 +81,7 @@ export class FileHttpResult extends HttpResult<undefined> {
             context.response.header('Content-Type', contentType);
         }
         if (filename) {
-            context.response.header('Content-Disposition', `attachment; filename="${filename}"`);
+            context.response.header('Content-Disposition', contentDisposition(filename));
         }
         context.response.file(this.filePath);
     }
@@ -102,7 +103,7 @@ export class StreamHttpResult extends HttpResult<undefined> {
             context.response.header('Content-Type', contentType);
         }
         if (filename) {
-            context.response.header('Content-Disposition', `attachment; filename="${filename}"`);
+            context.response.header('Content-Disposition', contentDisposition(filename));
         }
         context.response.stream(this.stream);
     }
