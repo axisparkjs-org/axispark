@@ -1,9 +1,9 @@
-import { Kafka } from 'kafkajs';
+import { KafkaJS } from '@confluentinc/kafka-javascript';
 import { KafkaConnectionManager } from './kafka-connection-manager';
 
-jest.mock('kafkajs', () => ({ Kafka: jest.fn() }));
+jest.mock('@confluentinc/kafka-javascript', () => ({ KafkaJS: { Kafka: jest.fn() } }));
 
-const kafkaMock = jest.mocked(Kafka);
+const kafkaMock = jest.mocked(KafkaJS.Kafka);
 
 describe('KafkaConnectionManager', () => {
     const logger = { info: jest.fn(), error: jest.fn() };
@@ -33,12 +33,12 @@ describe('KafkaConnectionManager', () => {
 
         await manager.createConnections();
 
-        expect(kafkaMock).toHaveBeenNthCalledWith(1, configs[0].config);
-        expect(kafkaMock).toHaveBeenNthCalledWith(2, configs[1].config);
-        expect(primary.producer).toHaveBeenCalledWith(undefined);
-        expect(primary.consumer).toHaveBeenCalledWith({ groupId: 'primary-group' });
-        expect(reporting.producer).toHaveBeenCalledWith(undefined);
-        expect(reporting.consumer).toHaveBeenCalledWith({ groupId: 'reporting-group' });
+        expect(kafkaMock).toHaveBeenNthCalledWith(1, { kafkaJS: configs[0].config });
+        expect(kafkaMock).toHaveBeenNthCalledWith(2, { kafkaJS: configs[1].config });
+        expect(primary.producer).toHaveBeenCalledWith({ kafkaJS: {} });
+        expect(primary.consumer).toHaveBeenCalledWith({ kafkaJS: { groupId: 'primary-group' } });
+        expect(reporting.producer).toHaveBeenCalledWith({ kafkaJS: {} });
+        expect(reporting.consumer).toHaveBeenCalledWith({ kafkaJS: { groupId: 'reporting-group' } });
         expect(primaryProducer.connect).toHaveBeenCalledTimes(1);
         expect(primaryConsumer.connect).toHaveBeenCalledTimes(1);
         expect(manager.getConnection('PRIMARY')).toBe(primary);
@@ -46,7 +46,17 @@ describe('KafkaConnectionManager', () => {
         expect(manager.getConsumer('PRIMARY')).toBe(primaryConsumer);
     });
 
-    it('passes producer and consumer configurations to KafkaJS', async () => {
+    it('passes the librdkafka properties next to the KafkaJS-compatible configuration', async () => {
+        kafkaMock.mockReturnValue(connection() as any);
+        const config = { brokers: ['localhost:9092'] };
+        const manager = createManager([{ name: 'NATIVE', config, librdkafkaConfig: { 'statistics.interval.ms': 1000 }, autoInitialize: false }]);
+
+        await manager.createConnections();
+
+        expect(kafkaMock).toHaveBeenCalledWith({ 'statistics.interval.ms': 1000, kafkaJS: config });
+    });
+
+    it('passes producer and consumer configurations to the client in their kafkaJS block', async () => {
         const producerClient = producer();
         const consumerClient = consumer();
         const kafka = connection(producerClient, consumerClient);
@@ -61,8 +71,8 @@ describe('KafkaConnectionManager', () => {
 
         await manager.createConnections();
 
-        expect(kafka.producer).toHaveBeenCalledWith(config.producerConfig);
-        expect(kafka.consumer).toHaveBeenCalledWith({ ...config.consumerConfig });
+        expect(kafka.producer).toHaveBeenCalledWith({ kafkaJS: { ...config.producerConfig } });
+        expect(kafka.consumer).toHaveBeenCalledWith({ kafkaJS: { ...config.consumerConfig } });
     });
 
     it('supports disabling automatic initialization and creating clients on demand', async () => {
@@ -184,7 +194,7 @@ describe('KafkaConnectionManager', () => {
         expect(manager.getConsumer('CONSUMER')).toBeUndefined();
     });
 
-    it('catches synchronous KafkaJS client creation errors', async () => {
+    it('catches synchronous client creation errors', async () => {
         const producerFailure = new Error('producer creation failed');
         const consumerFailure = new Error('consumer creation failed');
         const kafka = connection();

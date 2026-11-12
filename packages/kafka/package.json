@@ -29,6 +29,6 @@
         "@axisparkjs/core": "1.5.1",
         "@axisparkjs/di": "1.5.1",
         "@axisparkjs/logger": "1.5.1",
-        "kafkajs": "2.2.4"
+        "@confluentinc/kafka-javascript": "1.11.0"
     }
 }

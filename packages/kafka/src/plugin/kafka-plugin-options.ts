@@ -1,5 +1,5 @@
 import { PluginOptions } from '@axisparkjs/core';
-import { ConsumerConfig, KafkaConfig, ProducerConfig } from 'kafkajs';
+import { ConsumerConfig, KafkaConfig, LibrdkafkaConfig, ProducerConfig } from '../client';
 
 /**
  * Interface representing the options for configuring the Kafka plugin.
@@ -16,9 +16,15 @@ export interface KafkaPluginOptions extends PluginOptions {
         name: string;
         /**
          * The connection configuration for Kafka, which includes the necessary settings to establish a connection to the Kafka broker(s).
-         * This configuration is passed to the Kafka constructor from the kafkajs library.
+         * It is the KafkaJS-compatible configuration of `@confluentinc/kafka-javascript` (brokers, client ID, SSL, SASL, timeouts, retries and logging),
+         * passed to the client in its `kafkaJS` block.
          */
         config: KafkaConfig;
+        /**
+         * Optional librdkafka properties of the client (for example `'statistics.interval.ms'`), passed next to the `kafkaJS` block.
+         * Do not repeat here a property that `config` already sets.
+         */
+        librdkafkaConfig?: LibrdkafkaConfig;
         /**
          * Controls whether consumers and producers are connected automatically. A boolean applies to both; an object selects each independently.
          * When omitted, both are initialized. Set false to create them on demand.
@@ -30,11 +36,12 @@ export interface KafkaPluginOptions extends PluginOptions {
                   autoInitializeProducers?: boolean;
               };
         /**
-         * The configuration for the Kafka consumer.
+         * The KafkaJS-compatible configuration of the consumer, passed in its `kafkaJS` block. The group ID defaults to `<name-lowercase>-group`.
+         * `fromBeginning`, `autoCommit` and `autoCommitInterval` are set here, not in `subscribe()` or `run()`.
          */
         consumerConfig?: Partial<ConsumerConfig>;
         /**
-         * The configuration for the Kafka producer.
+         * The KafkaJS-compatible configuration of the producer, passed in its `kafkaJS` block. `acks`, `compression` and `timeout` are set here, not in `send()`.
          */
         producerConfig?: ProducerConfig;
     }[];

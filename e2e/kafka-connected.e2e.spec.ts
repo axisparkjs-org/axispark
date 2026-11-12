@@ -24,7 +24,8 @@ describe('Kafka Connected App', () => {
         });
         await axiSparkCore.init();
         await axiSparkCore.run();
-    });
+        // The producer and the consumer of the unreachable connection wait for the connection setup timeout.
+    }, 20000);
 
     it('should create an instance of AxiSparkTestCore', () => {
         expect(axiSparkCore).toBeInstanceOf(AxiSparkCore);
@@ -47,7 +48,12 @@ describe('Kafka Connected App', () => {
     });
 
     it('should log the connection status info', async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        // The job resolves the lazy producer and consumer of the unreachable connection, which wait for the connection setup timeout.
+        const lastMessage = 'Producer 1 compared to Manager';
+        for (let elapsed = 0; elapsed < 15000; elapsed += 250) {
+            if (mockLogger.info.mock.calls.some(([message]) => String(message).includes(lastMessage))) break;
+            await new Promise((resolve) => setTimeout(resolve, 250));
+        }
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Kafka Connection 1 defined: true'));
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Kafka Connection 2 defined: true'));
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Kafka Connection 3 defined: true'));
@@ -64,7 +70,7 @@ describe('Kafka Connected App', () => {
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Connection 1 compared to Manager: true'));
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Consumer 1 compared to Manager: true'));
         expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Producer 1 compared to Manager: true'));
-    });
+    }, 20000);
 
     it('should report the broken connection as unhealthy', async () => {
         const healthEngine = await axiSparkCore.get(HealthEngine);
