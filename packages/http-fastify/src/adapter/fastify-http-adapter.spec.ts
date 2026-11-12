@@ -218,6 +218,15 @@ describe('FastifyHttpAdapter', () => {
             });
         });
 
+        it('should return the reply, so Fastify waits for the replies that are sent after the handler ends', async () => {
+            const adapter = new FastifyHttpAdapter(baseConfig, axisparkConfig as any);
+            adapter.registerRoutes([route(class {}, '/', jest.fn(), 'test')]);
+            const callback = app.route.mock.calls[0][0].handler;
+            const reply = {};
+
+            await expect(callback({}, reply)).resolves.toBe(reply);
+        });
+
         it('should include session when available', async () => {
             const adapter = new FastifyHttpAdapter(
                 {

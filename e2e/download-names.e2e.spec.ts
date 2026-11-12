@@ -23,8 +23,7 @@ describe.each<[AdapterName, number]>([
 
     const download = (route: string, name: string) => fetch(`http://localhost:${port}/api/downloads/${route}?name=${encodeURIComponent(name)}`);
 
-    // The Fastify adapter sends the file results with an empty body until #165, so only the stream route is checked with it.
-    const routes = adapter === 'express' ? ['stream', 'file'] : ['stream'];
+    const routes = ['stream', 'file'];
     const expectContent = async (response: Response) => {
         expect(await response.text()).toBe('Quarterly report\n');
     };

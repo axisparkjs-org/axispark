@@ -33,8 +33,14 @@ export class ExpressHttpResponse implements HttpResponse {
         this.response.send(body);
     }
 
-    file(filePath: string): void {
-        this.response.sendFile(filePath);
+    file(filePath: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.response.sendFile(filePath, { dotfiles: 'allow' }, (error?: Error) => {
+                // Once the response has started, the error (such as a client that disconnects) can not be answered.
+                if (error && !this.response.headersSent) reject(error);
+                else resolve();
+            });
+        });
     }
 
     async stream(stream: NodeJS.ReadableStream): Promise<void> {

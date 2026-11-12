@@ -15,6 +15,7 @@ describe('FastifyHttpResponse', () => {
             clearCookie: jest.fn(),
             send: jest.fn(),
             sendFile: jest.fn(),
+            hasHeader: jest.fn().mockReturnValue(false),
             raw: new EventEmitter(),
             sent: false
         } as unknown as jest.Mocked<Partial<FastifyReply>>;
@@ -107,10 +108,30 @@ describe('FastifyHttpResponse', () => {
     });
 
     describe('file', () => {
-        it('should send a file', () => {
-            httpResponse.file('/tmp/file.txt');
+        it('should send the file from its own folder, allowing the folders that start with a dot', async () => {
+            (response.sendFile as jest.Mock).mockImplementation(() => (response.raw as EventEmitter).emit('finish'));
 
-            expect(response.sendFile).toHaveBeenCalledWith('/tmp/file.txt');
+            await expect(httpResponse.file('/tmp/.folder/file.txt')).resolves.toBeUndefined();
+
+            expect(response.sendFile).toHaveBeenCalledWith('file.txt', '/tmp/.folder', { dotfiles: 'allow', contentType: true });
+        });
+
+        it('should keep the Content-Type set before sending the file', async () => {
+            (response.hasHeader as jest.Mock).mockReturnValue(true);
+            (response.sendFile as jest.Mock).mockImplementation(() => (response.raw as EventEmitter).emit('finish'));
+
+            await httpResponse.file('/tmp/file.txt');
+
+            expect(response.hasHeader).toHaveBeenCalledWith('content-type');
+            expect(response.sendFile).toHaveBeenCalledWith('file.txt', '/tmp', { dotfiles: 'allow', contentType: false });
+        });
+
+        it('should resolve when the connection is closed before the file is sent', async () => {
+            (response.sendFile as jest.Mock).mockImplementation(() => (response.raw as EventEmitter).emit('close'));
+
+            await expect(httpResponse.file('/tmp/file.txt')).resolves.toBeUndefined();
+            expect((response.raw as EventEmitter).listenerCount('finish')).toBe(0);
+            expect((response.raw as EventEmitter).listenerCount('close')).toBe(0);
         });
     });
 

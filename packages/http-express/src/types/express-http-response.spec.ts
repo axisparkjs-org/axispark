@@ -103,10 +103,29 @@ describe('ExpressHttpResponse', () => {
     });
 
     describe('file', () => {
-        it('should send a file', () => {
-            httpResponse.file('/tmp/file.txt');
+        const sendFileCalling = (error?: Error) =>
+            (response.sendFile as jest.Mock).mockImplementation((_path: string, _options: unknown, callback: (error?: Error) => void) => callback(error));
 
-            expect(response.sendFile).toHaveBeenCalledWith('/tmp/file.txt');
+        it('should send a file, allowing the folders that start with a dot', async () => {
+            sendFileCalling();
+
+            await expect(httpResponse.file('/tmp/.folder/file.txt')).resolves.toBeUndefined();
+
+            expect(response.sendFile).toHaveBeenCalledWith('/tmp/.folder/file.txt', { dotfiles: 'allow' }, expect.any(Function));
+        });
+
+        it('should reject when the file can not be sent before the response starts', async () => {
+            const error = new Error('EACCES');
+            sendFileCalling(error);
+
+            await expect(httpResponse.file('/tmp/file.txt')).rejects.toBe(error);
+        });
+
+        it('should resolve when the error happens after the response has started', async () => {
+            (response as { headersSent: boolean }).headersSent = true;
+            sendFileCalling(new Error('ECONNRESET'));
+
+            await expect(httpResponse.file('/tmp/file.txt')).resolves.toBeUndefined();
         });
     });
 

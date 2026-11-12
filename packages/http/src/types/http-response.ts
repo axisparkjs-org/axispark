@@ -15,7 +15,12 @@ export interface HttpResponse {
     ): this;
     json(body?: any): void;
     send(body?: any): void;
-    file(filePath: string): void;
+    /**
+     * Sends a file. The headers that are already set, such as `Content-Type` and `Content-Disposition`, are kept.
+     * @param filePath The absolute path of the file.
+     * @returns A promise that resolves when the file is sent, and rejects when it can not be sent before any byte of the response is written.
+     */
+    file(filePath: string): Promise<void>;
     /**
      * Sends a stream. The source is destroyed when the client closes the connection, and the connection is destroyed when the source fails.
      * @param stream The stream to send.

@@ -64,6 +64,8 @@ export class FastifyHttpAdapter implements HttpAdapter {
                 url: path,
                 handler: async (request, reply) => {
                     await route.handler(this.createContext(request, reply));
+                    // Some replies, such as files and streams, are sent after the handler ends: returning the reply makes Fastify wait for them instead of sending an empty reply.
+                    return reply;
                 }
             });
         }
