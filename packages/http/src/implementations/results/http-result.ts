@@ -1,6 +1,7 @@
 import { ResultDefinition } from '@axisparkjs/engine';
 import { HttpStatusCode, HttpContext } from '../../types';
 import { HttpError, InternalServerError, RateLimitExceededError } from '../errors';
+import { contentDisposition } from './content-disposition';
 import { toReadable, waitForFirstChunk } from './stream-start';
 
 /**
@@ -81,7 +82,7 @@ export class FileHttpResult extends HttpResult<undefined> {
             context.response.header('Content-Type', contentType);
         }
         if (filename) {
-            context.response.header('Content-Disposition', `attachment; filename="${filename}"`);
+            context.response.header('Content-Disposition', contentDisposition(filename));
         }
         context.response.file(this.filePath);
     }
@@ -122,7 +123,7 @@ export class StreamHttpResult extends HttpResult<undefined> {
             context.response.header('Content-Type', contentType);
         }
         if (filename) {
-            context.response.header('Content-Disposition', `attachment; filename="${filename}"`);
+            context.response.header('Content-Disposition', contentDisposition(filename));
         }
 
         try {

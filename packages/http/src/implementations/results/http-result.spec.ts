@@ -96,6 +96,15 @@ describe('FileHttpResult', () => {
 
         expect(response.header).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="file.txt"');
     });
+
+    it('should encode a file name with quotes and characters outside ASCII', async () => {
+        await new FileHttpResult('/tmp/test.txt', { filename: 'informe "año".txt' }).process(context);
+
+        expect(response.header).toHaveBeenCalledWith(
+            'Content-Disposition',
+            'attachment; filename="informe \\"a?o\\".txt"; filename*=UTF-8\'\'informe%20%22a%C3%B1o%22.txt'
+        );
+    });
 });
 
 describe('StreamHttpResult', () => {
@@ -122,6 +131,12 @@ describe('StreamHttpResult', () => {
         expect(response.header).toHaveBeenCalledWith('Content-Type', 'text/plain');
 
         expect(response.header).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="file.txt"');
+    });
+
+    it('should encode a file name outside Latin-1', async () => {
+        await new StreamHttpResult(Readable.from(['data']), { filename: '報告.txt' }).process(context);
+
+        expect(response.header).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="??.txt"; filename*=UTF-8\'\'%E5%A0%B1%E5%91%8A.txt');
     });
 
     it('should wrap a stream of the old API', async () => {
