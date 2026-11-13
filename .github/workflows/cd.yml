@@ -238,3 +238,31 @@ jobs:
             -f "client_payload[version]=$VERSION"
 
           echo "Documentation workflow requested for $VERSION ($REF)"
+
+  benchmarks:
+    name: Trigger the benchmarks
+    runs-on: ubuntu-latest
+    needs: publish
+
+    # Same releases as the documentation. The benchmarks measure the packages just published on npm and tell the
+    # website when the report is ready. Nothing depends on them: if this job fails, the release goes on.
+    if: >
+      inputs.environment == 'pro' &&
+      startsWith(github.ref, 'refs/heads/release/') &&
+      needs.publish.outputs.release_version != ''
+    continue-on-error: true
+
+    steps:
+      - name: Dispatch the benchmarks workflow
+        env:
+          GH_TOKEN: ${{ secrets.BENCHMARKS_REPO_TOKEN }}
+          REF: ${{ needs.publish.outputs.release_sha }}
+          VERSION: ${{ needs.publish.outputs.release_version }}
+        run: |
+          gh api repos/axisparkjs-org/benchmarks/dispatches \
+            --method POST \
+            -f event_type=axispark-release \
+            -f "client_payload[ref]=$REF" \
+            -f "client_payload[version]=$VERSION"
+
+          echo "Benchmarks requested for $VERSION ($REF)"
