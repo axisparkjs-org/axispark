@@ -1,3 +1,4 @@
+export * from './client';
 export * from './connections';
 export * from './di';
 export * from './health';

@@ -1,8 +1,7 @@
 import { Logger } from '@axisparkjs/logger';
 import { Timeout, Scheduler } from '@axisparkjs/schedule';
-import { InjectKafkaConnection, InjectKafkaConsumer, InjectKafkaProducer, KafkaConnectionManager, kafkaConnectionToken } from '@axisparkjs/kafka';
+import { Consumer, InjectKafkaConnection, InjectKafkaConsumer, InjectKafkaProducer, Kafka, KafkaConnectionManager, kafkaConnectionToken, Producer } from '@axisparkjs/kafka';
 import { Inject } from '@axisparkjs/di';
-import { Consumer, Kafka, Producer } from 'kafkajs';
 
 @Scheduler()
 export class UsingKafkaExample {

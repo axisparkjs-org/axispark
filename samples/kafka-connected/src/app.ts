@@ -13,7 +13,8 @@ export const app = AxiSparkFactory.create({
         })
     ]
 });
-app.use(SchedulePlugin);
+// The Kafka plugin is registered first: it connects the clients during its registration, and the timeout job of the
+// scheduler is counted from the registration of the scheduler plugin.
 app.use(
     KafkaPlugin,
     KafkaPluginOptionsFactory.create({
@@ -49,9 +50,14 @@ app.use(
                 config: {
                     brokers: ['localhost:9093'],
                     logLevel: 0,
-                    retry: { retries: 0 }
+                    retry: { retries: 0 },
+                    // The unreachable broker fails each connection attempt after the setup timeout of the client
+                    // (connectionTimeout + authenticationTimeout).
+                    connectionTimeout: 500,
+                    authenticationTimeout: 500
                 }
             }
         ]
     })
 );
+app.use(SchedulePlugin);
