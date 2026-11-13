@@ -3,6 +3,7 @@ import { ClassResolver } from './class-resolver';
 import { Container } from './container';
 import { InjectionToken } from '../token';
 import { InjectableScopes } from '../types';
+import { ResolutionChain } from './resolution-chain';
 
 describe('ScopedContainer', () => {
     let container: Container;
@@ -34,7 +35,7 @@ describe('ScopedContainer', () => {
 
         await expect(scopedContainer.resolve(provider)).resolves.toBe(instance);
 
-        expect(resolver.resolve).toHaveBeenCalledWith(provider, container, scopedContainer);
+        expect(resolver.resolve).toHaveBeenCalledWith(provider, container, scopedContainer, expect.any(ResolutionChain));
     });
 
     it('should cache resolved scoped instances', async () => {

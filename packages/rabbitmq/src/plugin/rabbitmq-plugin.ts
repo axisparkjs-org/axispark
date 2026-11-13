@@ -13,7 +13,7 @@ import { RabbitMQHealthIndicator } from '../health';
 @Injectable()
 export class RabbitMQPlugin extends Plugin {
     private context: AxiSparkContext;
-    protected options: RabbitMQPluginOptions;
+    declare protected options: RabbitMQPluginOptions;
     private connectionManager: RabbitMQConnectionManager;
 
     constructor(

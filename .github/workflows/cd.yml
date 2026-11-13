@@ -34,6 +34,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+      # Needed by npm to sign the provenance statements of the production packages.
+      id-token: write
 
     steps:
       - name: Checkout
@@ -139,11 +141,14 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # The provenance links each version to the release commit and to this run. GitHub Packages does not
+      # support it, so the snapshots and the pre-releases are published without it.
       - name: Publish production packages
         if: inputs.environment == 'pro'
         run: npm run cd:publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
 
       # ------------------------------------------------------------
       # COMMIT
@@ -216,7 +221,7 @@ jobs:
       needs.publish.outputs.release_version != ''
 
     steps:
-      # The documentation lives in axisparkjs/website. Its workflow checks out this repository at the
+      # The documentation lives in axisparkjs-org/website. Its workflow checks out this repository at the
       # release commit, generates the API reference from the code and deploys the site.
       - name: Dispatch the documentation workflow
         env:

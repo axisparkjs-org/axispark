@@ -15,7 +15,7 @@ import { TransactionManager } from '../transactions/transaction-manager';
 @Injectable()
 export class DataPlugin extends Plugin {
     private context: AxiSparkContext;
-    protected options: DataPluginOptions;
+    declare protected options: DataPluginOptions;
     private dataSourceConnectionManager: DataSourceConnectionManager;
     private repositoryGenerator: RepositoryGenerator;
     private transactionManager: TransactionManager;

@@ -13,7 +13,7 @@ import { RedisHealthIndicator } from '../health';
 @Injectable()
 export class RedisPlugin extends Plugin {
     private context: AxiSparkContext;
-    protected options: RedisPluginOptions;
+    declare protected options: RedisPluginOptions;
     private connectionManager: RedisConnectionManager;
 
     constructor(

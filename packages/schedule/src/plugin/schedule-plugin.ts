@@ -13,7 +13,7 @@ import { DEFAULT_SHUTDOWN_TIMEOUT, SchedulePluginOptions } from './schedule-plug
 @Injectable()
 export class SchedulePlugin extends Plugin {
     private context: AxiSparkContext;
-    protected options?: SchedulePluginOptions;
+    declare protected options?: SchedulePluginOptions;
     private scheduler: SchedulerService;
 
     constructor(

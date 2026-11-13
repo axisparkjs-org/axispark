@@ -55,7 +55,7 @@ export class ExpressHttpRequest implements HttpRequest {
         return this.request.cookies;
     }
 
-    get files() {
+    get files(): readonly UploadedFile[] | undefined {
         return this.uploadedFiles;
     }
 
