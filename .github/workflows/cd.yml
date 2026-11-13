@@ -264,7 +264,7 @@ jobs:
           REF: ${{ needs.publish.outputs.release_sha }}
           VERSION: ${{ needs.publish.outputs.release_version }}
         run: |
-          gh api repos/axisparkjs-org/benchmarks/dispatches \
+          gh api repos/axisparkjs-org/benchmark/dispatches \
             --method POST \
             -f event_type=axispark-release \
             -f "client_payload[ref]=$REF" \
