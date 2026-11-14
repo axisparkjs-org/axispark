@@ -21,6 +21,15 @@ export class ParameterDefinition {
         return parameter;
     }
 
+    /**
+     * Creates a copy of the definition without its value. The definitions generated once per handler are copied for each invocation, because
+     * the pipes change the value of the parameter.
+     * @returns A new definition with the same metadata and no value.
+     */
+    clone(): ParameterDefinition {
+        return new ParameterDefinition(this.target, this.propertyKey, this.parameterIndex, this.parameter, this.field);
+    }
+
     get value(): any {
         return this.actualValue;
     }
