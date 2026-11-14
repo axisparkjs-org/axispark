@@ -1,3 +1,4 @@
+import { IncrementalCleanup } from '../incremental-cleanup';
 import { RateLimitDecision } from './rate-limit-decision';
 import { RateLimitPolicy, RateLimitStore } from './rate-limit-store';
 
@@ -7,14 +8,15 @@ interface RateLimitBucket {
 }
 
 /**
- * Keeps the rate limit buckets in memory with a sliding window. The buckets are local to the application process,
- * and the expired ones are removed every 256 checks.
+ * Keeps the rate limit buckets in memory with a sliding window. The buckets are local to the application process, and a few buckets are
+ * examined on each check to remove the expired ones, so the cleanup never scans the whole map at once.
  */
 export class InMemoryRateLimitStore implements RateLimitStore {
-    private static readonly CLEANUP_INTERVAL = 256;
-
     private readonly buckets = new Map<string, RateLimitBucket>();
-    private checkedRequests = 0;
+    private readonly cleanup = new IncrementalCleanup(this.buckets, (bucket: RateLimitBucket, now: number) => {
+        bucket.timestamps = bucket.timestamps.filter((timestamp) => timestamp > now - bucket.ttl);
+        return bucket.timestamps.length === 0;
+    });
 
     public consume(key: string, policy: RateLimitPolicy): RateLimitDecision {
         const now = Date.now();
@@ -38,8 +40,7 @@ export class InMemoryRateLimitStore implements RateLimitStore {
         if (bucket.timestamps.length) this.buckets.set(key, bucket);
         else this.buckets.delete(key);
 
-        this.checkedRequests++;
-        if (this.checkedRequests % InMemoryRateLimitStore.CLEANUP_INTERVAL === 0) this.removeExpiredBuckets(now);
+        this.cleanup.step(now);
 
         return decision;
     }
@@ -47,12 +48,5 @@ export class InMemoryRateLimitStore implements RateLimitStore {
     /** The number of buckets that are currently stored. */
     public get size(): number {
         return this.buckets.size;
-    }
-
-    private removeExpiredBuckets(now: number): void {
-        for (const [key, bucket] of this.buckets) {
-            bucket.timestamps = bucket.timestamps.filter((timestamp) => timestamp > now - bucket.ttl);
-            if (bucket.timestamps.length === 0) this.buckets.delete(key);
-        }
     }
 }
