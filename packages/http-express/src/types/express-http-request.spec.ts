@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+import { ClientDisconnectedError } from '@axisparkjs/engine';
 import { Request } from 'express';
 import { PassThrough } from 'node:stream';
 import { BadRequestError, FileUploadDefinition, FileUploadLimitError } from '@axisparkjs/http';
@@ -181,6 +183,24 @@ describe('ExpressHttpRequest', () => {
 
         it('should reject malformed multipart bodies', async () => {
             await expect(parse(multipartBody([{ name: 'name', value: 'Jane' }], false)).promise).rejects.toBeInstanceOf(BadRequestError);
+        });
+    });
+
+    describe('signal', () => {
+        it('should be aborted when the connection is closed before the response is sent', () => {
+            const response = Object.assign(new EventEmitter(), { writableFinished: false, destroyed: false });
+            const withResponse = new ExpressHttpRequest(request as unknown as Request, response);
+            const signal = withResponse.signal;
+
+            expect(withResponse.signal).toBe(signal);
+            response.emit('close');
+
+            expect(signal.aborted).toBe(true);
+            expect(signal.reason).toBeInstanceOf(ClientDisconnectedError);
+        });
+
+        it('should never be aborted without the response', () => {
+            expect(httpRequest.signal.aborted).toBe(false);
         });
     });
 });

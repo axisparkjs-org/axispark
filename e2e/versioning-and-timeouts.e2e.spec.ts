@@ -1,8 +1,10 @@
+import { request as httpRequest } from 'node:http';
 import { AxiSparkTestFactory } from '@axisparkjs/test';
 import { AxiSparkCore } from '@axisparkjs/core';
 import { HttpPlugin } from '@axisparkjs/http';
 import { app as appExpress } from '@axisparkjs/samples/versioning-and-timeouts/src/app-express';
 import { app as appFasitfy } from '@axisparkjs/samples/versioning-and-timeouts/src/app-fastify';
+import { reportRuns } from '@axisparkjs/samples/versioning-and-timeouts/src/controller';
 import { ExpressHttpAdapter } from '@axisparkjs/http-express';
 import { FastifyHttpAdapter } from '@axisparkjs/http-fastify';
 
@@ -134,6 +136,30 @@ describe.each([
         });
         expect(response2.status).toBe(200);
         expect(await response2.json()).toEqual({ message: 'This is a GET request example for no timeouts' });
+    });
+
+    it('should abort the signal of a handler that times out and stop its work', async () => {
+        const response = await fetch('http://localhost:3000/api/v1/reports/timed');
+
+        expect(response.status).toBe(408);
+        expect(await response.json()).toEqual(expect.objectContaining({ error: 'Request timeout after 200 ms' }));
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        expect(reportRuns.timed).toEqual(expect.objectContaining({ stopped: true, reason: 'ExecutionTimeoutError' }));
+        expect(reportRuns.timed.steps).toBeLessThan(5);
+    });
+
+    it('should abort the signal of a handler when the client disconnects', async () => {
+        // A dedicated connection, closed by the client while the handler is running.
+        const request = httpRequest('http://localhost:3000/api/v1/reports/long', { agent: false });
+        request.on('error', () => undefined);
+        request.end();
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        request.destroy();
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        expect(reportRuns.long).toEqual(expect.objectContaining({ stopped: true, reason: 'ClientDisconnectedError' }));
+        expect(reportRuns.long.steps).toBeLessThan(10);
     });
 
     afterAll(async () => {

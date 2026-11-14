@@ -15,6 +15,11 @@ export interface HttpRequest {
     ip: string | undefined;
     cookies: Readonly<Record<string, string | undefined>>;
     /**
+     * Optional signal aborted with a `ClientDisconnectedError` when the client closes the connection before the response is sent. The engine combines it with the signal of the execution (`@Signal()`). Adapters without it only abort the execution on timeouts.
+     */
+    readonly signal?: AbortSignal;
+
+    /**
      * The files received in a `multipart/form-data` request. Undefined until the request has been parsed with `parseMultipart`.
      */
     files?: readonly UploadedFile[];

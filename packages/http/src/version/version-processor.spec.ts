@@ -22,6 +22,7 @@ describe('VersionProcessor', () => {
         propertyKey: 'test',
         scopedContainer: {} as any,
         transport: {} as any,
+        signal: new AbortController().signal,
         host: undefined,
         version: undefined,
         error: undefined

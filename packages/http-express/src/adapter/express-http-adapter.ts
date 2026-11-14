@@ -59,7 +59,7 @@ export class ExpressHttpAdapter implements HttpAdapter {
     }
 
     private createContext(request: Request, response: Response) {
-        const req = new ExpressHttpRequest(request);
+        const req = new ExpressHttpRequest(request, response);
         const res = new ExpressHttpResponse(response);
         const ses = request.session ? new ExpressHttpSession(request.session) : undefined;
         return { request: req, response: res, session: ses };
