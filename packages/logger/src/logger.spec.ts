@@ -400,4 +400,20 @@ describe('Logger', () => {
             await expect(new Logger([duckTyped]).info('hello')).resolves.toBeUndefined();
         });
     });
+    describe('flush', () => {
+        it('should flush every transport and ignore the failures', async () => {
+            const failing = new MockTransport({ minLevel: LogLevel.Info, formatter: { format: jest.fn() } });
+            jest.spyOn(failing, 'flush').mockRejectedValue(new Error('closed'));
+            const working = new MockTransport({ minLevel: LogLevel.Info, formatter: { format: jest.fn() } });
+            const flush = jest.spyOn(working, 'flush');
+
+            await expect(new Logger([failing, working]).flush()).resolves.toBeUndefined();
+
+            expect(flush).toHaveBeenCalledTimes(1);
+        });
+
+        it('should do nothing for the transports that keep nothing in memory', async () => {
+            await expect(new MockTransport({ minLevel: LogLevel.Info, formatter: { format: jest.fn() } }).flush()).resolves.toBeUndefined();
+        });
+    });
 });

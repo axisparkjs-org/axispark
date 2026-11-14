@@ -118,6 +118,14 @@ export class Logger {
         return new Logger(this.transports, [...this.scopes, scope], this.mergeMetadata(this.metadata, metadata));
     }
 
+    /**
+     * Writes the entries kept in memory by the transports (buffered or batched transports) and waits for them. A failing transport does not
+     * stop the others, and its failure is ignored, so it never breaks the shutdown of the application.
+     */
+    public async flush(): Promise<void> {
+        await Promise.allSettled(this.transports.map((transport) => transport.flush?.()));
+    }
+
     /** Internal method to log data using the configured transports. */
     public async log(data: LogData) {
         const entry: LogEntry = {
