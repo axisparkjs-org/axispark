@@ -2,6 +2,7 @@
 
 import { Command } from 'commander';
 import { createCommand } from './commands/create';
+import { manifestCommand } from './commands/manifest';
 import { handleCliError } from './errors';
 
 const program = new Command();
@@ -9,4 +10,5 @@ const program = new Command();
 program.name('axispark').description('CLI for AxiSpark.js').option('--verbose', 'print the stack trace of the errors');
 
 program.addCommand(createCommand);
+program.addCommand(manifestCommand);
 program.parseAsync().catch((error: unknown) => handleCliError(error, Boolean(program.opts().verbose || process.env.DEBUG)));

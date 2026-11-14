@@ -79,7 +79,7 @@ describe('FileSystemScanner', () => {
         await scanner.scan();
 
         expect(logger.child).toHaveBeenCalledWith('Scanner');
-        expect(child.debug).toHaveBeenCalledWith('Loading 2 files from /project', { root: '/project', files: 2 });
+        expect(child.debug).toHaveBeenCalledWith('Loading 2 files from /project', { root: '/project', files: 2, manifest: false });
         expect(child.trace).toHaveBeenCalledTimes(2);
         expect(child.trace).toHaveBeenNthCalledWith(1, 'Loading /project/a.ts', { file: '/project/a.ts' });
         expect(child.trace).toHaveBeenNthCalledWith(2, 'Loading /project/b.js', { file: '/project/b.js' });
