@@ -23,6 +23,11 @@ describe('AxiSparkContext', () => {
             expect(context.plugins).toBeInstanceOf(PluginRegistry);
         });
 
+        it('should run the plugins in parallel unless pluginLifecycle is sequential', () => {
+            expect((new AxiSparkContext() as any).plugins.options).toEqual({ parallel: true });
+            expect((new AxiSparkContext({ pluginLifecycle: 'sequential' }) as any).plugins.options).toEqual({ parallel: false });
+        });
+
         it('should create a DI container', () => {
             expect(context.container).toBeInstanceOf(Container);
         });

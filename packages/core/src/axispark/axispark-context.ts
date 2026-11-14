@@ -36,7 +36,7 @@ export class AxiSparkContext<TSettings extends object = object> {
         };
         this.settings = this.loadSettings();
         this.logger = new Logger(this.config.logTransports as LogTransport[], [this.config.name as string]);
-        this.plugins = new PluginRegistry();
+        this.plugins = new PluginRegistry({ parallel: this.config.pluginLifecycle !== 'sequential' });
         this.container = new Container();
 
         this.scanner =

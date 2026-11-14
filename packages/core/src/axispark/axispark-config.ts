@@ -88,4 +88,11 @@ export interface AxiSparkConfig<TSettings extends object = object> {
      * When a variable is missing or invalid, the application is not created and an `InvalidSettingsError` lists every problem.
      */
     settings?: SettingsOptions<TSettings>;
+
+    /**
+     * How the plugins run their lifecycle methods. With `'parallel'` (the default), the plugins that do not depend on each other, such as
+     * the connections to Redis, Kafka and RabbitMQ, run `onRegister` and `onStart` at the same time, level by level of the dependency graph,
+     * and `onStop` in reverse order. With `'sequential'`, they run one by one in dependency order, for plugins with undeclared dependencies.
+     */
+    pluginLifecycle?: 'parallel' | 'sequential';
 }
