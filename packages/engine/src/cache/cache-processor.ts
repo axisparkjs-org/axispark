@@ -20,6 +20,10 @@ interface CacheEntry {
  * The generation of a handler is a counter kept in the store with the key `gen:<Class>.<method>`. `evict()` increments it, so the old
  * entries are never read again and expire with their time to live. It works with every `CacheStore`, without deleting keys by prefix.
  *
+ * When several requests of the same process miss the same key at the same time, only the first one invokes the handler, and the others
+ * wait for it and receive its result (single-flight), so a popular entry that expires does not run the handler once per request. When the
+ * first invocation fails or its result is not cached, the waiting requests invoke the handler themselves.
+ *
  * The cache is an optimization: when the store fails, the handler runs as if the result was not cached, and a warning is logged at most
  * once a minute for each transport.
  */
@@ -31,6 +35,7 @@ export class CacheProcessor implements Processable {
     private static readonly lastWarnings = new Map<ExecutionTransport, number>();
 
     private readonly logger: Logger;
+    private readonly pending = new Map<string, Promise<CacheEntry | undefined>>();
 
     constructor(logger: Logger) {
         this.logger = logger.child('CacheProcessor');
@@ -81,13 +86,37 @@ export class CacheProcessor implements Processable {
             return await invoke();
         }
 
-        const result = await invoke();
+        const pending = this.pending.get(key);
+        if (pending) {
+            const shared = await pending;
+            return shared ? shared.value : await invoke();
+        }
+
+        let result: unknown;
+        let share!: (entry: CacheEntry | undefined) => void;
+        this.pending.set(
+            key,
+            new Promise<CacheEntry | undefined>((resolve) => {
+                share = resolve;
+            })
+        );
+        try {
+            result = await invoke();
+        } catch (error) {
+            share(undefined);
+            throw error;
+        } finally {
+            this.pending.delete(key);
+        }
+
         if (result === undefined || result instanceof ResultDefinition) {
+            share(undefined);
             const reason = result === undefined ? 'it is undefined' : `it is a ${result.constructor.name}`;
             await this.logger.debug(`The result of ${handler} is not cached because ${reason}`);
             return result;
         }
 
+        share({ value: result });
         try {
             await store.set<CacheEntry>(key, { value: result }, definition.ttl);
         } catch (error) {
