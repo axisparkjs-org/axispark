@@ -66,6 +66,17 @@ describe('RateLimitProcessor', () => {
         expect((await processor.process(definition, context()))?.allowed).toBe(false);
     });
 
+    it('never shares counters between classes with the same name', async () => {
+        const First = { CatalogController: class {} }.CatalogController;
+        const Second = { CatalogController: class {} }.CatalogController;
+        const definition = new RateLimitDefinition(1_000, 1);
+        RateLimitProcessor.registerRateLimit(ExecutionTransport.Http, resolverOf('127.0.0.1'));
+
+        expect((await processor.process(definition, context(ExecutionTransport.Http, First)))?.allowed).toBe(true);
+        expect((await processor.process(definition, context(ExecutionTransport.Http, Second)))?.allowed).toBe(true);
+        expect((await processor.process(definition, context(ExecutionTransport.Http, First)))?.allowed).toBe(false);
+    });
+
     it('shares the counter of a handler whatever the requested URL', async () => {
         const definition = new RateLimitDefinition(1_000, 2);
         RateLimitProcessor.registerRateLimit(ExecutionTransport.Http, resolverOf('127.0.0.1'));

@@ -2,7 +2,7 @@ import { ClassType, Processable } from '@axisparkjs/common';
 import { Injectable } from '@axisparkjs/di';
 import { Logger } from '@axisparkjs/logger';
 import { CacheStore } from '@axisparkjs/store';
-import { ExecutionContext, ExecutionTransport } from '../execution';
+import { ClassIdentifier, ExecutionContext, ExecutionTransport } from '../execution';
 import { ResultDefinition } from '../result';
 import { CacheDefinition } from './cache-definition';
 import { CacheResolver } from './cache-resolver';
@@ -15,7 +15,8 @@ interface CacheEntry {
 /**
  * Caches the results of the handlers with the same algorithm for every transport. The resolver registered for the transport builds the key
  * of the request, and the results are kept in the `CacheStore` registered for the transport with the key
- * `<transport>:<Class>.<method>:<generation>:<key>`, so two handlers never share entries.
+ * `<transport>:<Class>.<method>:<generation>:<key>`, so two handlers never share entries. `<Class>` is the `ClassIdentifier` of the class, so
+ * two classes with the same name never share entries either.
  *
  * The generation of a handler is a counter kept in the store with the key `gen:<Class>.<method>`. `evict()` increments it, so the old
  * entries are never read again and expire with their time to live. It works with every `CacheStore`, without deleting keys by prefix.
@@ -146,7 +147,7 @@ export class CacheProcessor implements Processable {
     }
 
     private static handlerOf(target: ClassType, propertyKey: string | symbol): string {
-        return `${target.name}.${String(propertyKey)}`;
+        return `${ClassIdentifier.of(target)}.${String(propertyKey)}`;
     }
 
     private static isEntry(entry: unknown): entry is CacheEntry {
