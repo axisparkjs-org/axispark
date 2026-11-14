@@ -18,6 +18,6 @@ export class LogHttpErrorFilter {
      */
     @Catch(HttpError)
     public async httpError(@FilteredError() error: HttpError): Promise<void> {
-        this.logger.info(`HTTP Error: ${error.status} ${error.response}`);
+        this.logger.nonBlocking.info(`HTTP Error: ${error.status} ${error.response}`);
     }
 }

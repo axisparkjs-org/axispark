@@ -400,4 +400,44 @@ describe('Logger', () => {
             await expect(new Logger([duckTyped]).info('hello')).resolves.toBeUndefined();
         });
     });
+    describe('nonBlocking', () => {
+        it('should write every level without returning a promise', async () => {
+            const levels: [keyof Logger['nonBlocking'], LogLevel][] = [
+                ['trace', LogLevel.Trace],
+                ['debug', LogLevel.Debug],
+                ['info', LogLevel.Info],
+                ['warn', LogLevel.Warn],
+                ['error', LogLevel.Error],
+                ['fatal', LogLevel.Fatal]
+            ];
+            const error = new Error('cause');
+
+            for (const [method, level] of levels) {
+                const result = (logger.nonBlocking[method] as (message: string, ...args: unknown[]) => unknown)(`${method} message`, error);
+                expect(result).toBeUndefined();
+                await new Promise((resolve) => setImmediate(resolve));
+                expect(transport1.write).toHaveBeenLastCalledWith(expect.objectContaining({ level, message: `${method} message` }));
+            }
+        });
+
+        it('should reuse the same instance', () => {
+            expect(logger.nonBlocking).toBe(logger.nonBlocking);
+            expect(logger.child('scope').nonBlocking).not.toBe(logger.nonBlocking);
+        });
+
+        it('should not reject when a transport with failOnError fails, and still report the failure', async () => {
+            const onError = jest.fn();
+            const failing = new MockTransport({ minLevel: LogLevel.Trace, formatter: { format: jest.fn() }, failOnError: true, onError });
+            failing.write.mockRejectedValue(new Error('disk full'));
+            const unhandled = jest.fn();
+            process.on('unhandledRejection', unhandled);
+
+            new Logger([failing]).nonBlocking.info('audit');
+            await new Promise((resolve) => setImmediate(resolve));
+            process.off('unhandledRejection', unhandled);
+
+            expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'disk full' }), expect.objectContaining({ message: 'audit' }));
+            expect(unhandled).not.toHaveBeenCalled();
+        });
+    });
 });

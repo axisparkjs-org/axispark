@@ -8,6 +8,7 @@ class Target {}
 
 describe('McpServerBuilder', () => {
     const logger = { error: jest.fn() };
+    (logger as any).nonBlocking = logger;
     let client: Client;
 
     const connect = async (definitions: McpDefinitions, instructions?: string) => {

@@ -9,6 +9,7 @@ describe('LogHttpResponseInterceptor', () => {
         logger = {
             info: jest.fn()
         } as any;
+        (logger as any).nonBlocking = logger;
 
         interceptor = new LogHttpResponseInterceptor(logger);
     });

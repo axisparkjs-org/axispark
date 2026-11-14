@@ -18,6 +18,6 @@ export class LogHttpResponseInterceptor {
      */
     @After()
     public async log(@Context() context: HttpContext): Promise<void> {
-        this.logger.info(`HTTP Response: ${context.response.status} ${context.request.path}`);
+        this.logger.nonBlocking.info(`HTTP Response: ${context.response.status} ${context.request.path}`);
     }
 }

@@ -38,8 +38,53 @@ function reportTransportError(transport: LogTransport, error: Error, entry: LogE
     );
 }
 
+/**
+ * The level methods of a `Logger` that do not return a promise, for the code that must not wait for the transports, such as the request
+ * hot path of the framework. The entry is written as usual and the failures of the transports are reported as usual (with `onError`, or on
+ * `process.stderr`), but the call never waits for them, and a transport with `failOnError` never rejects it.
+ */
+export class NonBlockingLogger {
+    constructor(private readonly logger: Logger) {}
+
+    /** Logs an info message without waiting for the transports. */
+    info(message: string, metadata?: LogMetadata): void {
+        NonBlockingLogger.detach(this.logger.info(message, metadata));
+    }
+
+    /** Logs a warning message without waiting for the transports. */
+    warn(message: string, metadata?: LogMetadata): void {
+        NonBlockingLogger.detach(this.logger.warn(message, metadata));
+    }
+
+    /** Logs an error message without waiting for the transports. */
+    error(message: string, error?: Error, metadata?: LogMetadata): void {
+        NonBlockingLogger.detach(this.logger.error(message, error, metadata));
+    }
+
+    /** Logs a debug message without waiting for the transports. */
+    debug(message: string, metadata?: LogMetadata): void {
+        NonBlockingLogger.detach(this.logger.debug(message, metadata));
+    }
+
+    /** Logs a trace message without waiting for the transports. */
+    trace(message: string, metadata?: LogMetadata): void {
+        NonBlockingLogger.detach(this.logger.trace(message, metadata));
+    }
+
+    /** Logs a fatal message without waiting for the transports. */
+    fatal(message: string, error?: Error, metadata?: LogMetadata): void {
+        NonBlockingLogger.detach(this.logger.fatal(message, error, metadata));
+    }
+
+    // The failures were already reported by the logger before it rejected, so the rejection is only handled.
+    private static detach(promise: Promise<void>): void {
+        promise.catch(() => undefined);
+    }
+}
+
 @Injectable()
 export class Logger {
+    private nonBlockingLogger?: NonBlockingLogger;
     /**
      * Constructor for the Logger class.
      * @param transports An array of LogTransport instances that define how log entries are handled (e.g., written to console, file, etc.).
@@ -106,6 +151,15 @@ export class Logger {
      */
     async fatal(message: string, error?: Error, metadata?: LogMetadata) {
         await this.log({ level: LogLevel.Fatal, message, error, metadata });
+    }
+
+    /**
+     * The level methods of this logger that do not wait for the transports and never reject, for the hot paths that must not add the
+     * latency of the transports to the requests. Use the level methods of the logger itself when the code must wait for the entry, or must
+     * stop when a transport with `failOnError` fails.
+     */
+    public get nonBlocking(): NonBlockingLogger {
+        return (this.nonBlockingLogger ??= new NonBlockingLogger(this));
     }
 
     /**

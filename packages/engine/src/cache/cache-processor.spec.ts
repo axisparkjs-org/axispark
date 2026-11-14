@@ -31,6 +31,7 @@ describe('CacheProcessor', () => {
         now = 10_000;
         jest.spyOn(Date, 'now').mockImplementation(() => now);
         logger = { child: jest.fn().mockReturnThis(), debug: jest.fn(), warn: jest.fn() } as unknown as jest.Mocked<Logger>;
+        (logger as any).nonBlocking = logger;
         processor = new CacheProcessor(logger);
         (CacheProcessor as any).resolvers.clear();
         (CacheProcessor as any).stores.clear();
