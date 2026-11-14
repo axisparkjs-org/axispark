@@ -133,7 +133,7 @@ export class EnvReader {
         if (TRUE_VALUES.includes(normalized)) return true;
         if (FALSE_VALUES.includes(normalized)) return false;
 
-        this.problems.push(`${name} must be a boolean (${[...TRUE_VALUES, ...FALSE_VALUES].join(', ')}) (received ${received(value)})`);
+        this.problems.push(`${name} must be a boolean (${[...TRUE_VALUES, ...FALSE_VALUES].join(', ')}) (received ${this.received(value)})`);
         return defaultValue as boolean;
     }
 
@@ -149,7 +149,7 @@ export class EnvReader {
         if (value === undefined) return defaultValue as V[number];
 
         if (!values.includes(value)) {
-            this.problems.push(`${name} must be one of ${values.join(', ')} (received ${received(value)})`);
+            this.problems.push(`${name} must be one of ${values.join(', ')} (received ${this.received(value)})`);
             return defaultValue as V[number];
         }
 
@@ -174,7 +174,7 @@ export class EnvReader {
 
         const protocol = new URL(value).protocol.slice(0, -1);
         if (options.protocols && !options.protocols.includes(protocol)) {
-            this.problems.push(`${name} must use one of the protocols ${options.protocols.join(', ')} (received ${received(protocol)})`);
+            this.problems.push(`${name} must use one of the protocols ${options.protocols.join(', ')} (received ${this.received(protocol)})`);
         }
 
         return value;
@@ -223,18 +223,24 @@ export class EnvReader {
         const trimmed = value.trim();
         const parsed = Number(trimmed);
         if (!format.test(trimmed) || !Number.isFinite(parsed)) {
-            this.problems.push(`${name} must be ${kind} (received ${received(value)})`);
+            this.problems.push(`${name} must be ${kind} (received ${this.received(value)})`);
             return options.default as number;
         }
 
         if (options.min !== undefined && parsed < options.min) {
-            this.problems.push(`${name} must be at least ${options.min} (received ${received(value)})`);
+            this.problems.push(`${name} must be at least ${options.min} (received ${this.received(value)})`);
         }
         if (options.max !== undefined && parsed > options.max) {
-            this.problems.push(`${name} must be at most ${options.max} (received ${received(value)})`);
+            this.problems.push(`${name} must be at most ${options.max} (received ${this.received(value)})`);
         }
 
         return parsed;
+    }
+
+    // Shows a received value in the errors, truncated so long values are not printed in full.
+    private received(value: string): string {
+        const shown = value.length > MAX_RECEIVED_LENGTH ? `${value.slice(0, MAX_RECEIVED_LENGTH)}…` : value;
+        return JSON.stringify(shown);
     }
 
     private read(name: string, defaultValue: unknown): string | undefined {
@@ -244,9 +250,4 @@ export class EnvReader {
         if (defaultValue === undefined) this.problems.push(`${name} is required`);
         return undefined;
     }
-}
-
-function received(value: string): string {
-    const shown = value.length > MAX_RECEIVED_LENGTH ? `${value.slice(0, MAX_RECEIVED_LENGTH)}…` : value;
-    return JSON.stringify(shown);
 }

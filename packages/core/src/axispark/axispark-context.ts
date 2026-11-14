@@ -5,7 +5,7 @@ import { AxiSparkConfig, AXISPARK_CONFIG } from './axispark-config';
 import { Scanner, FileSystemScanner, NullScanner } from '../scanner';
 import { HealthEngine } from '../health';
 import { AxiSparkPrivateConfig } from './axispark-private-config';
-import { AXISPARK_ENV_SETTINGS, DeepReadonly, deepFreeze, loadSettings } from '../settings';
+import { AXISPARK_ENV_SETTINGS, DeepReadonly, SettingsLoader } from '../settings';
 
 /**
  * A class representing the context of the Axispark framework. It encapsulates various components and services that are essential for the operation of the framework, including logging, plugin management, dependency injection, configuration, and scanning capabilities.
@@ -77,8 +77,9 @@ export class AxiSparkContext<TSettings extends object = object> {
     }
 
     private loadSettings(): DeepReadonly<TSettings> {
-        if (this.privateConfig.settings) return deepFreeze(this.privateConfig.settings as TSettings);
-        if (this.config.settings) return loadSettings(this.config.settings);
-        return deepFreeze({} as TSettings);
+        const loader = new SettingsLoader();
+        if (this.privateConfig.settings) return loader.freeze(this.privateConfig.settings as TSettings);
+        if (this.config.settings) return loader.load(this.config.settings);
+        return loader.freeze({} as TSettings);
     }
 }

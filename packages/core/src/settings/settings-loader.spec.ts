@@ -1,10 +1,13 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deepFreeze, loadSettings } from './settings-loader';
+import { SettingsLoader } from './settings-loader';
+import { SettingsOptions } from './settings-options';
 import { InvalidSettingsError } from './invalid-settings-error';
 
-describe('loadSettings', () => {
+describe('SettingsLoader', () => {
+    const loadSettings = <T extends object>(options: SettingsOptions<T>, environment?: NodeJS.ProcessEnv, cwd?: string) =>
+        new SettingsLoader(environment, cwd).load(options);
     let directory: string;
 
     beforeEach(() => {
@@ -118,7 +121,7 @@ describe('loadSettings', () => {
     });
 
     it('should freeze primitive values and null without errors', () => {
-        expect(deepFreeze(null)).toBeNull();
-        expect(deepFreeze(1)).toBe(1);
+        expect(new SettingsLoader().freeze(null)).toBeNull();
+        expect(new SettingsLoader().freeze(1)).toBe(1);
     });
 });
