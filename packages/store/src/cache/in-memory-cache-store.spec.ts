@@ -62,4 +62,47 @@ describe('InMemoryCacheStore', () => {
         expect(store.size).toBe(255);
         await expect(store.get('key-0')).resolves.toBe(0);
     });
+    describe('maximum size', () => {
+        it('removes the least recently written value when a new value exceeds maxEntries', async () => {
+            const lru = new InMemoryCacheStore({ maxEntries: 2 });
+            await lru.set('a', 1);
+            await lru.set('b', 2);
+            await lru.set('c', 3);
+
+            expect(lru.size).toBe(2);
+            await expect(lru.get('a')).resolves.toBeUndefined();
+            await expect(lru.get('b')).resolves.toBe(2);
+            await expect(lru.get('c')).resolves.toBe(3);
+        });
+
+        it('keeps the values that are read and the values that are written again', async () => {
+            const lru = new InMemoryCacheStore({ maxEntries: 2 });
+            await lru.set('a', 1);
+            await lru.set('b', 2);
+            await lru.get('a');
+            await lru.set('c', 3);
+            await expect(lru.get('b')).resolves.toBeUndefined();
+
+            await lru.set('a', 10);
+            await lru.set('d', 4);
+            await expect(lru.get('a')).resolves.toBe(10);
+            await expect(lru.get('c')).resolves.toBeUndefined();
+        });
+
+        it('keeps 10 000 values by default, at least one value, and every value with Infinity', async () => {
+            const byDefault = new InMemoryCacheStore();
+            for (let index = 0; index <= 10_000; index++) await byDefault.set(`key-${index}`, index);
+            expect(byDefault.size).toBe(10_000);
+            await expect(byDefault.get('key-0')).resolves.toBeUndefined();
+
+            const one = new InMemoryCacheStore({ maxEntries: 0 });
+            await one.set('a', 1);
+            await one.set('b', 2);
+            expect(one.size).toBe(1);
+
+            const unbounded = new InMemoryCacheStore({ maxEntries: Infinity });
+            for (let index = 0; index < 10_050; index++) await unbounded.set(`key-${index}`, index);
+            expect(unbounded.size).toBe(10_050);
+        });
+    });
 });
