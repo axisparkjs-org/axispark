@@ -31,4 +31,9 @@ export interface WebSocketConnection {
 
     /** Whether the underlying transport connection is still open. */
     readonly connected: boolean;
+
+    /**
+     * Optional signal aborted with a `ClientDisconnectedError` when the connection is closed. The engine combines it with the signal of the execution (`@Signal()`), so the handlers of the events stop when the client disconnects. Adapters without it only abort the execution on timeouts.
+     */
+    readonly signal?: AbortSignal;
 }

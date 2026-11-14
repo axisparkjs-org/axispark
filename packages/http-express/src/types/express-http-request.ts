@@ -3,6 +3,8 @@ import {
     BadRequestError,
     FileUploadDefinition,
     FileUploadLimitError,
+    ClosableResponse,
+    clientDisconnectSignal,
     HttpRequest,
     MultipartFields,
     UploadedFile
@@ -12,8 +14,12 @@ import busboy from 'busboy';
 
 export class ExpressHttpRequest implements HttpRequest {
     private uploadedFiles?: readonly UploadedFile[];
+    private clientSignal?: AbortSignal;
 
-    constructor(private readonly request: Request) {}
+    constructor(
+        private readonly request: Request,
+        private readonly response?: ClosableResponse
+    ) {}
 
     get method() {
         return this.request.method;
@@ -57,6 +63,14 @@ export class ExpressHttpRequest implements HttpRequest {
 
     get files(): readonly UploadedFile[] | undefined {
         return this.uploadedFiles;
+    }
+
+    /**
+     * Aborted with a `ClientDisconnectedError` when the client closes the connection before the response is sent. Without the response of the request, the signal is never aborted.
+     */
+    get signal(): AbortSignal {
+        this.clientSignal ??= this.response ? clientDisconnectSignal(this.response) : new AbortController().signal;
+        return this.clientSignal;
     }
 
     getCookie(name: string): string | undefined {
