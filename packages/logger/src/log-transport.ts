@@ -37,6 +37,11 @@ export abstract class LogTransport {
         return { onError: this.config.onError, failOnError: this.config.failOnError };
     }
 
+    /** The minimum level of the entries that the transport writes. The `Logger` does not build the entries below the lowest one of its transports. */
+    get minLevel(): LogLevel {
+        return this.config.minLevel;
+    }
+
     /** Writes a log entry using the configured formatter and minimum level. */
     abstract write(entry: LogEntry): Promise<void>;
 }
