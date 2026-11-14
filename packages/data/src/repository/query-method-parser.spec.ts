@@ -92,7 +92,7 @@ describe('QueryMethodParser', () => {
     });
 
     it('rejects unsupported methods, empty predicates, and unknown properties or operators', () => {
-        expect(() => parser.parse(repository, 'deleteByStatus')).toThrow("Unsupported derived repository method 'deleteByStatus'.");
+        expect(() => parser.parse(repository, 'removeByStatus')).toThrow("Unsupported derived repository method 'removeByStatus'.");
         expect(() => parser.parse(repository, 'findByOrderByName')).toThrow('at least one property after');
         expect(() => parser.parse(repository, 'findByMissingField')).toThrow("Cannot parse 'MissingField'");
         expect(() => parser.parse(repository, 'findByNameUnsupported')).toThrow("Cannot parse 'NameUnsupported'");

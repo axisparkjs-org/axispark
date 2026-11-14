@@ -5,7 +5,7 @@ import { BaseRepository } from './base-repository';
 import { MongoQueryEngine } from './mongo-query-engine';
 import { SQLQueryEngine } from './sql-query-engine';
 
-export { PageRequest } from './query-method-parser';
+export { Page, PageRequest } from './query-method-parser';
 
 /**
  * Dispatches derived repository methods to the database-specific query engine.
