@@ -24,7 +24,8 @@ describe('PipeProcessor', () => {
 
     beforeEach(() => {
         injector = {
-            get: jest.fn()
+            get: jest.fn(),
+            isSingleton: jest.fn().mockReturnValue(false)
         } as unknown as jest.Mocked<Injector>;
 
         processor = new PipeProcessor(injector);
@@ -454,6 +455,31 @@ describe('PipeProcessor', () => {
             expect(result).toEqual([undefined, 'parsed']);
             expect(nextStep.execute).not.toHaveBeenCalled();
             expect(injector.get).toHaveBeenCalledTimes(2);
+        });
+    });
+    describe('pipe-step instances', () => {
+        const pipeOf = () => [new PipeDefinition(ParameterDefinition.fromMetadata({ parameterIndex: 0 } as any), [{ pipeStep: FirstPipeStep }])];
+
+        it('resolves a singleton pipe-step once and reuses it in the next executions', async () => {
+            injector.isSingleton.mockReturnValue(true);
+            injector.get.mockResolvedValue(new FirstPipeStep());
+
+            await processor.process(pipeOf(), context);
+            await processor.process(pipeOf(), { scopedContainer: {} } as ExecutionContext);
+
+            expect(injector.get).toHaveBeenCalledTimes(1);
+            expect(injector.isSingleton).toHaveBeenCalledWith(FirstPipeStep);
+        });
+
+        it('resolves the scoped and transient pipe-steps in every execution', async () => {
+            injector.get.mockResolvedValue(new FirstPipeStep());
+            const other = { scopedContainer: {} } as ExecutionContext;
+
+            await processor.process(pipeOf(), context);
+            await processor.process(pipeOf(), other);
+
+            expect(injector.get).toHaveBeenCalledTimes(2);
+            expect(injector.get).toHaveBeenLastCalledWith(FirstPipeStep, other.scopedContainer);
         });
     });
 });
