@@ -44,6 +44,16 @@ describe('CacheProcessor', () => {
         jest.restoreAllMocks();
     });
 
+    it('never shares entries between classes with the same name', async () => {
+        const First = { CatalogController: class {} }.CatalogController;
+        const Second = { CatalogController: class {} }.CatalogController;
+        const definition = new CacheDefinition(1_000);
+
+        await expect(processor.process(definition, context(ExecutionTransport.Http, First), async () => 'first')).resolves.toBe('first');
+        await expect(processor.process(definition, context(ExecutionTransport.Http, Second), async () => 'second')).resolves.toBe('second');
+        await expect(processor.process(definition, context(ExecutionTransport.Http, First), async () => 'other')).resolves.toBe('first');
+    });
+
     it('uses a child logger', () => {
         expect(logger.child).toHaveBeenCalledWith('CacheProcessor');
     });
