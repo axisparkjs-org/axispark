@@ -78,8 +78,30 @@ export class Container implements Initializable {
      * @throws {ScopedContainerNotProvidedError} If a scoped provider is being resolved but no scoped container is provided.
      * @throws {CircularDependencyError} If a chain of `useExisting` providers points back to one of its own tokens.
      */
-    async resolve<T>(token: Token<T>, scopedContainer?: ScopedContainer): Promise<T> {
-        return await this.resolveInChain(token, scopedContainer, ResolutionChain.start());
+    resolve<T>(token: Token<T>, scopedContainer?: ScopedContainer): Promise<T> {
+        // Fast path: a singleton that is already created (or a value) is returned without starting a resolution chain.
+        const provider = this.providers.get(token);
+        if (provider && 'useValue' in provider) return Promise.resolve(provider.useValue as T);
+
+        return this.resolveInChain(token, scopedContainer, ResolutionChain.start());
+    }
+
+    /**
+     * Returns the instance of a token synchronously when it is already available: a value provider, or a singleton that is already created,
+     * also through `useExisting` aliases. It never creates instances, so it can be used in hot paths before falling back to `resolve()`.
+     * @template T - The type of the instance.
+     * @param token - The token of the instance.
+     * @returns The instance, or `undefined` when the token is not bound, is scoped or transient, or is a singleton that is not created yet.
+     */
+    tryResolve<T>(token: Token<T>): T | undefined {
+        const aliases = new Set<Token>();
+        let provider = this.providers.get(token);
+        while (provider && 'useExisting' in provider && !aliases.has(provider.token)) {
+            aliases.add(provider.token);
+            provider = this.providers.get(provider.useExisting);
+        }
+
+        return provider && 'useValue' in provider ? (provider.useValue as T) : undefined;
     }
 
     /**
