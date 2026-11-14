@@ -42,8 +42,10 @@ describe('RepositoryGenerator implementation proxy', () => {
         const dataSource = {} as DataSource;
         const implementation = (generator as any).generateImplementation(TestRepository, [entityRepository, dataSource]);
 
-        await expect(implementation.findById(1)).resolves.toBe(result);
-        expect(queryEngine.execute).toHaveBeenCalledWith(expect.any(TestRepository), 'findById', [entityRepository, dataSource], [1]);
+        await expect(implementation.findByName('a')).resolves.toBe(result);
+        expect(queryEngine.execute).toHaveBeenCalledWith(expect.any(TestRepository), 'findByName', [entityRepository, dataSource], ['a']);
+        await implementation.deleteByName('a');
+        expect(queryEngine.execute).toHaveBeenCalledWith(expect.any(TestRepository), 'deleteByName', [entityRepository, dataSource], ['a']);
     });
 
     it('preserves existing members and does not synthesize non-query properties', () => {

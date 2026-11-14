@@ -1,5 +1,5 @@
 import { InjectDataSource } from '@axisparkjs/data';
-import { Body, Controller, Delete, Get, Post, Query } from '@axisparkjs/http';
+import { Body, Controller, Delete, Get, Path, Post, Query } from '@axisparkjs/http';
 import { DataSource, FindManyOptions } from 'typeorm';
 import { Customer } from '../entities/customer';
 import { CustomerRepository } from '../repositories/customer.repository';
@@ -50,6 +50,57 @@ export class CustomerController {
     @Get('page')
     page(@Query('status') status: string, @Query('page') page: string, @Query('size') size: string) {
         return this.customers.findByStatusOrderByAgeDesc(status, { page: Number(page), size: Number(size) });
+    }
+
+    @Get('named')
+    named(@Query('name') name: string) {
+        return this.customers.findByNameContainingIgnoreCaseOrderByNameAsc(name);
+    }
+
+    @Get('other-status')
+    otherStatus(@Query('status') status: string) {
+        return this.customers.findByStatusNotOrderByNameAsc(status);
+    }
+
+    @Get('adults-by-email')
+    adultsByEmail(@Query('prefix') prefix: string, @Query('age') age: string) {
+        return this.customers.findByEmailStartingWithAndAgeGreaterThanEqualOrderByNameAsc(prefix, Number(age));
+    }
+
+    @Get('excluding')
+    excluding(@Query('status') statuses: string | string[]) {
+        return this.customers.findByStatusNotInOrderByNameAsc(([] as string[]).concat(statuses ?? []));
+    }
+
+    @Get('by-id/:id')
+    async findById(@Path('id') id: string) {
+        return { customer: await this.customers.findById(id), exists: await this.customers.existsById(id) };
+    }
+
+    @Get('by-ids')
+    findByIds(@Query('id') ids: string | string[]) {
+        return this.customers.findByIds(([] as string[]).concat(ids ?? []));
+    }
+
+    // POST instead of DELETE, so the response includes the number of deleted customers (DELETE answers 204 without a body).
+    @Post('by-id/:id/delete')
+    async deleteById(@Path('id') id: string) {
+        return { deleted: await this.customers.deleteById(id) };
+    }
+
+    @Post('delete-by-status')
+    async deleteByStatus(@Query('status') status: string) {
+        return { deleted: await this.customers.deleteByStatus(status) };
+    }
+
+    @Post('purge')
+    purge(@Query('status') status: string, @Query('fail') fail?: string) {
+        return this.registration.purge(status, fail === 'true');
+    }
+
+    @Get('all-pages')
+    allPages(@Query('page') page: string, @Query('size') size: string) {
+        return this.customers.findPage({ order: { name: 'ASC' } }, { page: Number(page), size: Number(size) });
     }
 
     @Get('one')

@@ -122,11 +122,82 @@ describe.each([
         const firstPageResponse = await fetch(`${baseUrl}/customers/page?status=active&page=0&size=2`);
         const secondPageResponse = await fetch(`${baseUrl}/customers/page?status=active&page=1&size=2`);
 
-        expect((await responseJson<{ email: string }[]>(firstPageResponse)).map((customer) => customer.email)).toEqual([
-            'dave@example.com',
-            'alice@example.com'
-        ]);
-        expect((await responseJson<{ email: string }[]>(secondPageResponse)).map((customer) => customer.email)).toEqual(['bob@example.com']);
+        const firstPage = await responseJson<{ content: { email: string }[]; page: number; size: number; totalElements: number; totalPages: number }>(
+            firstPageResponse
+        );
+        const secondPage = await responseJson<{ content: { email: string }[]; page: number; totalElements: number }>(secondPageResponse);
+
+        expect(firstPage.content.map((customer) => customer.email)).toEqual(['dave@example.com', 'alice@example.com']);
+        expect(firstPage).toEqual(expect.objectContaining({ page: 0, size: 2, totalElements: 3, totalPages: 2 }));
+        expect(secondPage.content.map((customer) => customer.email)).toEqual(['bob@example.com']);
+        expect(secondPage).toEqual(expect.objectContaining({ page: 1, totalElements: 3 }));
+    });
+
+    it('finds pages of non-derived queries with the totals', async () => {
+        await seedCustomers();
+
+        const response = await fetch(`${baseUrl}/customers/all-pages?page=1&size=3`);
+        const page = await responseJson<{ content: { name: string }[]; totalElements: number; totalPages: number }>(response);
+
+        expect(page.content.map((customer) => customer.name)).toEqual(['Dave']);
+        expect(page).toEqual(expect.objectContaining({ totalElements: 4, totalPages: 2 }));
+    });
+
+    it('executes the Not, NotIn, Containing, StartingWith and IgnoreCase keywords', async () => {
+        await seedCustomers();
+        const names = async (path: string) =>
+            (await responseJson<{ name: string }[]>(await fetch(`${baseUrl}/customers${path}`))).map((customer) => customer.name);
+
+        expect(await names('/named?name=AR')).toEqual(['Carol']);
+        expect(await names('/named?name=a')).toEqual(['Alice', 'Carol', 'Dave']);
+        // The wildcards of the value are matched literally.
+        expect(await names('/named?name=%25')).toEqual([]);
+        expect(await names('/named?name=_')).toEqual([]);
+        expect(await names('/other-status?status=active')).toEqual(['Carol']);
+        expect(await names('/excluding?status=inactive&status=archived')).toEqual(['Alice', 'Bob', 'Dave']);
+        expect(await names('/adults-by-email?prefix=d&age=30')).toEqual(['Dave']);
+    });
+
+    it('finds, checks and deletes entities by primary key', async () => {
+        const saved = await seedCustomers();
+        const [alice, bob] = saved as { _id: string | number; email: string }[];
+
+        const found = await responseJson<{ customer: { email: string } | null; exists: boolean }>(await fetch(`${baseUrl}/customers/by-id/${alice._id}`));
+        expect(found.customer?.email).toBe('alice@example.com');
+        expect(found.exists).toBe(true);
+
+        const many = await responseJson<{ email: string }[]>(await fetch(`${baseUrl}/customers/by-ids?id=${alice._id}&id=${bob._id}`));
+        expect(many.map((customer) => customer.email).sort()).toEqual(['alice@example.com', 'bob@example.com']);
+
+        const deleted = await responseJson<{ deleted: number }>(await postJson(`/customers/by-id/${alice._id}/delete`, {}));
+        expect(deleted.deleted).toBe(1);
+
+        const missing = await responseJson<{ customer: unknown; exists: boolean }>(await fetch(`${baseUrl}/customers/by-id/${alice._id}`));
+        expect(missing).toEqual({ customer: null, exists: false });
+
+        const deletedAgain = await responseJson<{ deleted: number }>(await postJson(`/customers/by-id/${alice._id}/delete`, {}));
+        expect(deletedAgain.deleted).toBe(0);
+    });
+
+    it('deletes the entities that match a derived query', async () => {
+        await seedCustomers();
+
+        const response = await postJson('/customers/delete-by-status?status=active', {});
+
+        expect(await response.json()).toEqual({ deleted: 3 });
+        expect((await responseJson<{ email: string }[]>(await fetch(`${baseUrl}/customers`))).map((customer) => customer.email)).toEqual(['carol@example.com']);
+        expect(await (await postJson('/customers/delete-by-status?status=active', {})).json()).toEqual({ deleted: 0 });
+    });
+
+    it(transactional ? 'rolls back a derived delete when the transaction fails' : 'keeps a derived delete when the method throws', async () => {
+        await seedCustomers();
+
+        const committed = await postJson('/customers/purge?status=inactive', {});
+        expect(await committed.json()).toEqual({ deleted: 1 });
+
+        const failed = await postJson('/customers/purge?status=active&fail=true', {});
+        expect(failed.status).toBe(409);
+        expect(await (await fetch(`${baseUrl}/customers`)).json()).toHaveLength(transactional ? 3 : 0);
     });
 
     describe.each([

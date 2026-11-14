@@ -39,6 +39,14 @@ export class CustomerRegistrationService {
         );
     }
 
+    /** Deletes the customers with a status in one transaction. With `fail`, the deletion is rolled back. */
+    @Transactional({ dataSource: 'PRIMARY' })
+    async purge(status: string, fail: boolean): Promise<{ deleted: number }> {
+        const deleted = await this.customers.deleteByStatus(status);
+        if (fail) throw new ConflictError(`Purge of ${deleted} customer(s) failed after deleting them.`);
+        return { deleted };
+    }
+
     private async complete(customers: Customer[], fail: boolean): Promise<RegistrationResult> {
         // Derived query methods join the transaction, so they see the rows saved above.
         const active = await this.customers.countByStatus('active');

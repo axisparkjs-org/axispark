@@ -7,6 +7,7 @@ import { RepositoryMetadata } from '../metadata/repository-metadata';
 import { DataSource, ObjectLiteral, Repository } from 'typeorm';
 import { ClassType } from '@axisparkjs/common';
 import { BaseRepository } from './base-repository';
+import { DERIVED_METHOD_PREFIX } from './query-method-parser';
 
 /** Builds generated repository implementations for all classes decorated with `@Repository`. */
 @Injectable()
@@ -53,7 +54,7 @@ export class RepositoryGenerator implements Generator<RepositoryDefinition[]> {
                 // Promise resolution probes for `then`; never turn that probe into a query method.
                 if (property === 'then') return undefined;
 
-                if (typeof property === 'string' && /^(findOneBy|findBy|countBy|existsBy).+/.test(property)) {
+                if (typeof property === 'string' && DERIVED_METHOD_PREFIX.test(property)) {
                     return (...methodArgs: unknown[]) => queryEngine.execute(object, property, args, methodArgs);
                 }
 

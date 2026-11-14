@@ -2,10 +2,29 @@ import { Injectable } from '@axisparkjs/di';
 import { ObjectLiteral, Repository } from 'typeorm';
 
 /** Operation selected by a supported derived method prefix. */
-export type QueryOperation = 'findMany' | 'findOne' | 'count' | 'exists';
+export type QueryOperation = 'findMany' | 'findOne' | 'count' | 'exists' | 'delete';
 /** Recognized suffix for a derived predicate. */
 export type PredicateOperatorName =
-    'Equal' | 'IsNull' | 'IsNotNull' | 'GreaterThanEqual' | 'LessThanEqual' | 'GreaterThan' | 'LessThan' | 'Between' | 'In' | 'Like';
+    | 'Equal'
+    | 'Not'
+    | 'IsNull'
+    | 'IsNotNull'
+    | 'GreaterThanEqual'
+    | 'LessThanEqual'
+    | 'GreaterThan'
+    | 'LessThan'
+    | 'Between'
+    | 'In'
+    | 'NotIn'
+    | 'Like'
+    | 'Containing'
+    | 'StartingWith'
+    | 'EndingWith'
+    | 'True'
+    | 'False';
+
+/** Derived method prefixes and the operation that each one selects. */
+export const DERIVED_METHOD_PREFIX = /^(findOneBy|findBy|countBy|existsBy|deleteBy)(.+)$/;
 
 export interface ParsedPredicate {
     /** TypeORM metadata path of the entity property. */
@@ -14,6 +33,8 @@ export interface ParsedPredicate {
     operator: PredicateOperatorName;
     /** Number of method arguments consumed by this predicate. */
     arity: number;
+    /** Compare the strings without case, requested by the `IgnoreCase` suffix. */
+    ignoreCase?: boolean;
 }
 
 /** Normalized structure shared by SQL and Mongo query engines. */
@@ -30,25 +51,44 @@ export interface ParsedMethod {
 const OPERATORS: { suffix: PredicateOperatorName; arity: number }[] = [
     { suffix: 'IsNotNull', arity: 0 },
     { suffix: 'IsNull', arity: 0 },
+    { suffix: 'NotIn', arity: 1 },
+    { suffix: 'Not', arity: 1 },
     { suffix: 'GreaterThanEqual', arity: 1 },
     { suffix: 'LessThanEqual', arity: 1 },
     { suffix: 'GreaterThan', arity: 1 },
     { suffix: 'LessThan', arity: 1 },
     { suffix: 'Between', arity: 2 },
     { suffix: 'In', arity: 1 },
-    { suffix: 'Like', arity: 1 }
+    { suffix: 'Like', arity: 1 },
+    { suffix: 'Containing', arity: 1 },
+    { suffix: 'StartingWith', arity: 1 },
+    { suffix: 'EndingWith', arity: 1 },
+    { suffix: 'True', arity: 0 },
+    { suffix: 'False', arity: 0 }
 ];
+
+/** Operators that accept the `IgnoreCase` suffix. */
+const IGNORE_CASE_OPERATORS = new Set<PredicateOperatorName>(['Equal', 'Not', 'Like', 'Containing', 'StartingWith', 'EndingWith']);
+const IGNORE_CASE = 'IgnoreCase';
+
+const OPERATIONS: Record<string, QueryOperation> = {
+    findOneBy: 'findOne',
+    findBy: 'findMany',
+    countBy: 'count',
+    existsBy: 'exists',
+    deleteBy: 'delete'
+};
 
 @Injectable()
 /** Parses repository method names and page arguments into a database-neutral query description. */
 export class QueryMethodParser {
     /** Parses a supported derived method name against the entity's TypeORM metadata. */
     parse<T extends ObjectLiteral>(repository: Repository<T>, methodName: string): ParsedMethod {
-        const methodMatch = /^(findOneBy|findBy|countBy|existsBy)(.+)$/.exec(methodName);
+        const methodMatch = DERIVED_METHOD_PREFIX.exec(methodName);
         if (!methodMatch) throw new Error(`Unsupported derived repository method '${methodName}'.`);
 
         const [, prefix, methodBody] = methodMatch;
-        const operation: QueryOperation = prefix === 'findOneBy' ? 'findOne' : prefix === 'findBy' ? 'findMany' : prefix === 'countBy' ? 'count' : 'exists';
+        const operation = OPERATIONS[prefix];
         const columns = repository.metadata.columns
             .map((column) => {
                 const propertyPath = column.propertyPath ?? column.propertyName;
@@ -64,13 +104,10 @@ export class QueryMethodParser {
         const candidate = methodArgs[methodArgs.length - 1];
         if (!candidate || typeof candidate !== 'object' || !('page' in candidate) || !('size' in candidate)) return { methodArgs };
 
-        const { page, size } = candidate as PageRequest;
-        if (!Number.isInteger(page) || page < 0 || !Number.isInteger(size) || size < 1) {
-            throw new Error('PageRequest requires a non-negative integer page and a positive integer size.');
-        }
+        const pageRequest = validatePageRequest(candidate as PageRequest);
         if (operation !== 'findMany') throw new Error('PageRequest is only supported by findBy methods.');
 
-        return { methodArgs: methodArgs.slice(0, -1), pageRequest: { page, size } };
+        return { methodArgs: methodArgs.slice(0, -1), pageRequest };
     }
 
     /** Converts a metadata property path such as `profile.education` to `ProfileEducation`. */
@@ -113,17 +150,26 @@ export class QueryMethodParser {
         throw this.predicateError(context, position, previousKeyword);
     }
 
-    /** Lists the property and operator combinations that start at `position`, longest property first. */
+    /**
+     * Lists the property and operator combinations that start at `position`, longest property first. An operator followed by
+     * `IgnoreCase` is listed with and without it, so a property whose name ends with `IgnoreCase` can still be matched.
+     */
     private matchPredicates({ body, columns }: ParseContext, position: number): { predicate: ParsedPredicate; end: number }[] {
         return columns
             .filter(({ tag }) => body.startsWith(tag, position))
             .flatMap(({ propertyPath, tag }) => {
                 const operatorPosition = position + tag.length;
                 const operators = OPERATORS.filter(({ suffix }) => body.startsWith(suffix, operatorPosition)).map(({ suffix, arity }) => ({
-                    predicate: { propertyPath, operator: suffix, arity },
+                    predicate: { propertyPath, operator: suffix, arity } as ParsedPredicate,
                     end: operatorPosition + suffix.length
                 }));
-                return [...operators, { predicate: { propertyPath, operator: 'Equal' as const, arity: 1 }, end: operatorPosition }];
+                const candidates = [...operators, { predicate: { propertyPath, operator: 'Equal', arity: 1 } as ParsedPredicate, end: operatorPosition }];
+
+                return candidates.flatMap((candidate) =>
+                    IGNORE_CASE_OPERATORS.has(candidate.predicate.operator) && body.startsWith(IGNORE_CASE, candidate.end)
+                        ? [{ predicate: { ...candidate.predicate, ignoreCase: true }, end: candidate.end + IGNORE_CASE.length }, candidate]
+                        : [candidate]
+                );
             });
     }
 
@@ -201,4 +247,32 @@ export interface PageRequest {
     page: number;
     /** Number of entities to return per page. Must be greater than zero. */
     size: number;
+}
+
+/** A page of the results of a query, with the totals of every page. */
+export interface Page<T> {
+    /** The entities of the page. */
+    content: T[];
+    /** Zero-based page index. */
+    page: number;
+    /** Number of entities requested per page. */
+    size: number;
+    /** Number of entities that match the query in every page. */
+    totalElements: number;
+    /** Number of pages, `0` when no entity matches. */
+    totalPages: number;
+}
+
+/** Checks that a page request has a non-negative integer page and a positive integer size, and returns a copy of it. */
+export function validatePageRequest(pageRequest: PageRequest): PageRequest {
+    const { page, size } = pageRequest;
+    if (!Number.isInteger(page) || page < 0 || !Number.isInteger(size) || size < 1) {
+        throw new Error('PageRequest requires a non-negative integer page and a positive integer size.');
+    }
+    return { page, size };
+}
+
+/** Builds a `Page` from the entities of the page, the total number of matching entities and the page request. */
+export function toPage<T>(content: T[], totalElements: number, { page, size }: PageRequest): Page<T> {
+    return { content, page, size, totalElements, totalPages: Math.ceil(totalElements / size) };
 }

@@ -1,5 +1,6 @@
-import { DataSource, EntityManager, FindManyOptions, ObjectLiteral, RemoveOptions, Repository } from 'typeorm';
+import { DataSource, EntityManager, FindManyOptions, In, MongoRepository, ObjectLiteral, RemoveOptions, Repository } from 'typeorm';
 import { TransactionContext } from '../transactions/transaction-context';
+import { Page, PageRequest, toPage, validatePageRequest } from './query-method-parser';
 
 /**
  * Shared TypeORM-backed repository operations. Extend this class from a class
@@ -73,5 +74,76 @@ export abstract class BaseRepository<T extends ObjectLiteral> {
         }
 
         return this.entityRepository.remove(entityOrEntities, options);
+    }
+
+    /**
+     * Finds one page of the entities matching TypeORM find options, with the total of every page. The `skip` and `take`
+     * of the options are replaced by the page request.
+     */
+    async findPage(options: FindManyOptions<T> | undefined, pageRequest: PageRequest): Promise<Page<T>> {
+        const { page, size } = validatePageRequest(pageRequest);
+        const [content, total] = await this.entityRepository.findAndCount({ ...options, skip: page * size, take: size });
+        return toPage(content, total, { page, size });
+    }
+
+    /**
+     * Finds the entity with a primary key, or resolves with `null` when it does not exist. With a composite primary key,
+     * give an object with every primary column. In MongoDB, a string with the hexadecimal form of an `ObjectId` is
+     * converted to an `ObjectId`.
+     */
+    async findById(id: unknown): Promise<T | null> {
+        if (this.isMongo()) return (this.entityRepository as MongoRepository<T>).findOne({ where: this.mongoIdFilter(id) } as any);
+        return this.entityRepository.findOne({ where: this.idCriteria(id) });
+    }
+
+    /** Finds the entities with any of the primary keys. Missing keys are ignored, and the order of the result is not guaranteed. */
+    async findByIds(ids: unknown[]): Promise<T[]> {
+        if (ids.length === 0) return [];
+        if (this.isMongo()) {
+            const column = this.objectIdColumnName();
+            return (this.entityRepository as MongoRepository<T>).find({ where: { [column]: { $in: ids.map((id) => this.toObjectId(id)) } } } as any);
+        }
+
+        const primaryColumns = this.entityRepository.metadata.primaryColumns;
+        const where = primaryColumns.length === 1 ? primaryColumns[0].createValueMap(In(ids)) : ids.map((id) => this.idCriteria(id));
+        return this.entityRepository.find({ where: where as any });
+    }
+
+    /** Returns whether an entity with the primary key exists. */
+    async existsById(id: unknown): Promise<boolean> {
+        if (this.isMongo()) return (await (this.entityRepository as MongoRepository<T>).countDocuments(this.mongoIdFilter(id))) > 0;
+        return this.entityRepository.exists({ where: this.idCriteria(id) });
+    }
+
+    /** Deletes the entity with the primary key and resolves with the number of deleted entities, `0` when it does not exist. */
+    async deleteById(id: unknown): Promise<number> {
+        if (this.isMongo()) return (await (this.entityRepository as MongoRepository<T>).deleteOne(this.mongoIdFilter(id))).deletedCount ?? 0;
+
+        const result = await this.entityRepository.delete(this.idCriteria(id) as any);
+        return result.affected ?? 0;
+    }
+
+    private isMongo(): boolean {
+        return this.dataSource.options.type === 'mongodb';
+    }
+
+    /** Builds the `where` of a primary key from the primary columns of the entity metadata, so it works with any column name. */
+    private idCriteria(id: unknown): any {
+        return this.entityRepository.metadata.ensureEntityIdMap(id);
+    }
+
+    private objectIdColumnName(): string {
+        const metadata = this.entityRepository.metadata;
+        return metadata.objectIdColumn?.databaseName ?? metadata.primaryColumns[0]?.databaseName ?? '_id';
+    }
+
+    private mongoIdFilter(id: unknown): Record<string, unknown> {
+        return { [this.objectIdColumnName()]: this.toObjectId(id) };
+    }
+
+    private toObjectId(id: unknown): unknown {
+        const ObjectId = (this.dataSource.driver as unknown as { mongodb?: { ObjectId?: new (id: string) => unknown } }).mongodb?.ObjectId;
+        if (ObjectId && this.entityRepository.metadata.objectIdColumn && typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id)) return new ObjectId(id);
+        return id;
     }
 }
