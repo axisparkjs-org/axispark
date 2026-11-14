@@ -45,8 +45,8 @@ describe('RateLimitProcessor', () => {
         now += 200;
         await expect(processor.process(definition, context())).resolves.toEqual({ allowed: true, retryAfterMs: 0 });
         now += 300;
-        await expect(processor.process(definition, context())).resolves.toEqual({ allowed: false, retryAfterMs: 500 });
-        now += 500;
+        await expect(processor.process(definition, context())).resolves.toEqual({ allowed: false, retryAfterMs: 1_000 });
+        now += 1_000;
         await expect(processor.process(definition, context())).resolves.toEqual({ allowed: true, retryAfterMs: 0 });
     });
 
