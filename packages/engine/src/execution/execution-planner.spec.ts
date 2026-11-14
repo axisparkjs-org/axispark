@@ -414,4 +414,28 @@ describe('ExecutionPlanner', () => {
             await expect(planner.plan(secondContext)).resolves.toBe(secondPlan);
         });
     });
+    describe('concurrent generation', () => {
+        it('should generate the plan of a handler once for concurrent first executions', async () => {
+            let release: (steps: unknown[]) => void = () => undefined;
+            stepGenerator.generate = jest.fn().mockReturnValue(new Promise((resolve) => (release = resolve)));
+            const context = createContext();
+
+            const plans = Promise.all([planner.plan(context), planner.plan(context), planner.plan(createContext())]);
+            release([]);
+            const [first, second] = await plans;
+
+            expect(stepGenerator.generate).toHaveBeenCalledTimes(1);
+            expect(first).toBe(second);
+        });
+
+        it('should generate the plan again after a failed generation', async () => {
+            const error = new Error('steps');
+            stepGenerator.generate = jest.fn().mockRejectedValueOnce(error).mockResolvedValueOnce([]);
+            const context = createContext();
+
+            await expect(planner.plan(context)).rejects.toBe(error);
+            await expect(planner.plan(context)).resolves.toBeDefined();
+            expect(stepGenerator.generate).toHaveBeenCalledTimes(2);
+        });
+    });
 });

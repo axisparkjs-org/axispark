@@ -22,7 +22,7 @@ import { CacheGenerator } from '../cache';
  */
 @Injectable()
 export class ExecutionPlanner {
-    private readonly registeredPlans = new Map<ClassType, Map<PropertyKey, ExecutionPlan>>();
+    private readonly registeredPlans = new Map<ClassType, Map<PropertyKey, Promise<ExecutionPlan>>>();
 
     constructor(
         private readonly timeoutGenerator: TimeoutGenerator,
@@ -31,25 +31,34 @@ export class ExecutionPlanner {
     ) {}
 
     /**
-     * Generates an execution plan for the provided execution context.
+     * Generates an execution plan for the provided execution context. The promise of the plan is cached, so concurrent first executions of
+     * a handler share the same generation and the plan is generated exactly once per handler. When the generation fails, it is removed from
+     * the cache, so the next execution generates the plan again.
      * @param context The execution context for which to generate a plan.
      * @returns A promise resolving to the generated execution plan.
      */
-    public async plan(context: ExecutionContext): Promise<ExecutionPlan> {
+    public plan(context: ExecutionContext): Promise<ExecutionPlan> {
         let plansOfTarget = this.registeredPlans.get(context.target);
         if (!plansOfTarget) {
-            plansOfTarget = new Map<PropertyKey, ExecutionPlan>();
+            plansOfTarget = new Map<PropertyKey, Promise<ExecutionPlan>>();
             this.registeredPlans.set(context.target, plansOfTarget);
         }
 
         let plan = plansOfTarget.get(context.propertyKey);
         if (!plan) {
-            const steps = await this.stepGenerator.generate(context);
-            plan = this.generatePlan(context, steps);
-            plansOfTarget.set(context.propertyKey, plan);
+            const plans = plansOfTarget;
+            const { propertyKey } = context;
+            plan = this.generate(context);
+            plan.catch(() => plans.delete(propertyKey));
+            plansOfTarget.set(propertyKey, plan);
         }
 
         return plan;
+    }
+
+    private async generate(context: ExecutionContext): Promise<ExecutionPlan> {
+        const steps = await this.stepGenerator.generate(context);
+        return this.generatePlan(context, steps);
     }
 
     private generatePlan(context: ExecutionContext, steps: StepDefinition[]): ExecutionPlan {
