@@ -39,4 +39,12 @@ export abstract class LogTransport {
 
     /** Writes a log entry using the configured formatter and minimum level. */
     abstract write(entry: LogEntry): Promise<void>;
+
+    /**
+     * Writes the entries that the transport keeps in memory, if any, and waits for them. The transports that write each entry at once do
+     * nothing. `Logger.flush()` calls it, and the application calls it when it is destroyed.
+     */
+    async flush(): Promise<void> {
+        /* Nothing is kept in memory by default. */
+    }
 }
