@@ -4,4 +4,4 @@ import { HealthCheckOptions } from './health-check-options';
 /**
  * An interface representing the metadata stored by the `@HealthCheck` decorator.
  */
-export interface HealthCheckMetadata extends MetadataFromClass, Required<HealthCheckOptions> {}
+export interface HealthCheckMetadata extends MetadataFromClass, Required<Omit<HealthCheckOptions, 'cacheTtl'>>, Pick<HealthCheckOptions, 'cacheTtl'> {}
