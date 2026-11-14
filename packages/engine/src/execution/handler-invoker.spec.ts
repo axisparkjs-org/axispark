@@ -40,7 +40,8 @@ describe('HandlerInvoker', () => {
         } as unknown as jest.Mocked<PipeProcessor>;
 
         injector = {
-            get: jest.fn()
+            get: jest.fn(),
+            isSingleton: jest.fn().mockReturnValue(false)
         } as unknown as jest.Mocked<Injector>;
 
         invoker = new HandlerInvoker(parameterGenerator, pipeGenerator, pipeProcessor, injector);
@@ -342,6 +343,34 @@ describe('HandlerInvoker', () => {
             await invoker.invoke(handler, context);
 
             expect(instance.execute).toHaveBeenCalledWith();
+        });
+    });
+    describe('target instances', () => {
+        beforeEach(() => {
+            parameterGenerator.generate.mockReturnValue([]);
+            pipeGenerator.generate.mockResolvedValue([]);
+            pipeProcessor.process.mockResolvedValue([]);
+            injector.get.mockResolvedValue({ execute: jest.fn().mockReturnValue('result') });
+        });
+
+        it('resolves a singleton target once and reuses it in the next invocations', async () => {
+            injector.isSingleton.mockReturnValue(true);
+
+            await expect(invoker.invoke(handler, context)).resolves.toBe('result');
+            await expect(invoker.invoke(handler, { ...context, scopedContainer: {} } as ExecutionContext)).resolves.toBe('result');
+
+            expect(injector.get).toHaveBeenCalledTimes(1);
+            expect(injector.isSingleton).toHaveBeenCalledWith(Handler);
+        });
+
+        it('resolves the scoped and transient targets in every invocation', async () => {
+            const other = { ...context, scopedContainer: {} } as ExecutionContext;
+
+            await invoker.invoke(handler, context);
+            await invoker.invoke(handler, other);
+
+            expect(injector.get).toHaveBeenCalledTimes(2);
+            expect(injector.get).toHaveBeenLastCalledWith(Handler, other.scopedContainer);
         });
     });
 });
