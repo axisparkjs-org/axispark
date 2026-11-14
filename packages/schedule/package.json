@@ -1,6 +1,6 @@
 {
     "name": "@axisparkjs/schedule",
-    "version": "1.5.1",
+    "version": "1.6.0",
     "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/schedule",
     "author": "Pablo Gálvez Ortuño",
     "license": "Apache-2.0",
@@ -47,11 +47,11 @@
         "node": ">= 24"
     },
     "dependencies": {
-        "@axisparkjs/common": "1.5.1",
-        "@axisparkjs/core": "1.5.1",
-        "@axisparkjs/di": "1.5.1",
-        "@axisparkjs/logger": "1.5.1",
-        "@axisparkjs/store": "1.5.1",
+        "@axisparkjs/common": "1.6.0",
+        "@axisparkjs/core": "1.6.0",
+        "@axisparkjs/di": "1.6.0",
+        "@axisparkjs/logger": "1.6.0",
+        "@axisparkjs/store": "1.6.0",
         "cron": "^4.4.0"
     }
 }
