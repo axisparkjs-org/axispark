@@ -2344,4 +2344,40 @@ describe('OpenApiDocumentGenerator', () => {
             expect(definition.paths['/test'].get.parameters[0].name).toBe('name');
         });
     });
+    describe('generateResponseSchemas', () => {
+        class ProductDto {}
+        class SchemaController {}
+        const route = { path: '/products', httpMethod: 'get', target: SchemaController, propertyKey: 'find' } as any;
+
+        it('should return the self-contained JSON schemas of the documented responses by status code', () => {
+            (Metadata.get as jest.Mock).mockImplementation((key: MetadataKey, target: unknown) => {
+                if (key === MetadataKeys.OPENAPI_RESPONSE && target === SchemaController) {
+                    return [
+                        { statusCode: 200, description: 'Product', type: ProductDto },
+                        { statusCode: 204, description: 'No content' }
+                    ];
+                }
+                return undefined;
+            });
+
+            generator.generate([route]);
+            const schemas = generator.generateResponseSchemas(route) as any;
+
+            expect(Object.keys(schemas)).toEqual(['200']);
+            expect(schemas[200].$ref).toBe('#/components/schemas/ProductDto');
+            expect(schemas[200].components.schemas.ProductDto).toEqual({ type: 'object' });
+        });
+
+        it('should return undefined for routes without documented JSON responses', () => {
+            (Metadata.get as jest.Mock).mockImplementation((key: MetadataKey) =>
+                key === MetadataKeys.OPENAPI_RESPONSE ? [{ statusCode: 204, description: 'No content' }] : undefined
+            );
+            const other = { ...route, path: '/other' };
+
+            generator.generate([route, other]);
+
+            expect(generator.generateResponseSchemas(route)).toBeUndefined();
+            expect(generator.generateResponseSchemas({ ...route } as any)).toBeUndefined();
+        });
+    });
 });

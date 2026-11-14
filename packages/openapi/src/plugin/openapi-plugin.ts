@@ -111,7 +111,22 @@ export class OpenApiPlugin extends Plugin {
 
     private async generateDocument(): Promise<void> {
         const openApiDocumentGenerator = await this.injector.get(OpenApiDocumentGenerator);
-        this.document = openApiDocumentGenerator.generate(this.httpAdapter.getRegisteredRoutes());
+        const routes = this.httpAdapter.getRegisteredRoutes();
+        this.document = openApiDocumentGenerator.generate(routes);
+        if (this.options.serializeResponses) this.registerResponseSchemas(openApiDocumentGenerator, routes);
+    }
+
+    /* Gives the adapter the schemas of the responses of the routes with one handler, so it can serialize them with the schemas. */
+    private registerResponseSchemas(generator: OpenApiDocumentGenerator, routes: readonly RouteDefinition[]): void {
+        const adapter = this.httpAdapter;
+        if (!adapter.registerResponseSchemas) return;
+
+        for (const route of routes) {
+            // A grouped route of several versions or hosts runs different handlers, which can return different responses.
+            if (route.candidates.length !== 1) continue;
+            const schemas = generator.generateResponseSchemas(route);
+            if (schemas) adapter.registerResponseSchemas(route, schemas);
+        }
     }
 
     async onStart(): Promise<void> {

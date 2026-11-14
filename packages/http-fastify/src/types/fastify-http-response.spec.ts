@@ -93,6 +93,64 @@ describe('FastifyHttpResponse', () => {
         });
     });
 
+    describe('json with response schemas', () => {
+        const product = { $ref: '#/components/schemas/Product', components: { schemas: {} } };
+        const list = { type: 'array', items: { type: 'string' } };
+        const text = { type: 'string' };
+        const serializer = () => 'serialized';
+        let reply: any;
+
+        const withSchemas = (schemas: Record<string, object>, statusCode = 200) => {
+            reply = {
+                ...response,
+                statusCode,
+                type: jest.fn(),
+                serializer: jest.fn(),
+                compileSerializationSchema: jest.fn().mockReturnValue(serializer)
+            };
+            return new FastifyHttpResponse(reply as FastifyReply, schemas);
+        };
+
+        it('should serialize an object with the schema of the status code', () => {
+            withSchemas({ 200: product }).json({ id: 1 });
+
+            expect(reply.compileSerializationSchema).toHaveBeenCalledWith(product, '200');
+            expect(reply.serializer).toHaveBeenCalledWith(serializer);
+            expect(reply.type).toHaveBeenCalledWith('application/json; charset=utf-8');
+            expect(reply.send).toHaveBeenCalledWith({ id: 1 });
+        });
+
+        it('should use the default schema and keep a content type set by the handler', () => {
+            const http = withSchemas({ default: list }, 201);
+            reply.hasHeader.mockReturnValue(true);
+
+            http.json(['a']);
+
+            expect(reply.compileSerializationSchema).toHaveBeenCalledWith(list, '201');
+            expect(reply.type).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['null', null, { 200: product }],
+            ['a primitive', 'text', { 200: text }],
+            ['an object with an array schema', { id: 1 }, { 200: list }],
+            ['an array with an object schema', ['a'], { 200: product }],
+            ['an object with a primitive schema', { id: 1 }, { 200: text }],
+            ['a status without schema', { id: 1 }, { 404: product }]
+        ])('should serialize %s with JSON.stringify', (_case, body, schemas) => {
+            withSchemas(schemas).json(body);
+
+            expect(reply.serializer).not.toHaveBeenCalled();
+            expect(reply.send).toHaveBeenCalledWith(body);
+        });
+
+        it('should accept an object schema with type object', () => {
+            withSchemas({ 200: { type: 'object', properties: {} } }).json({ id: 1 });
+
+            expect(reply.serializer).toHaveBeenCalled();
+        });
+    });
+
     describe('send', () => {
         it('should send the response body', () => {
             httpResponse.send('hello');

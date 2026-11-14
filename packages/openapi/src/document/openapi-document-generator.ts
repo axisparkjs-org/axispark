@@ -17,6 +17,8 @@ export class OpenApiDocumentGenerator implements Generator<OpenApiDocumentDefini
     private readonly schemasToGenerate = new Set<ClassType>();
     private readonly shcemasAlreadyGenerated = new Set<ClassType>();
     private routes: RouteDefinition[];
+    private readonly responsesByRoute = new Map<RouteDefinition, any>();
+    private components: any;
 
     constructor(
         @Inject(OPENAPI_OPTIONS) private readonly options: OpenApiPluginOptions,
@@ -51,7 +53,28 @@ export class OpenApiDocumentGenerator implements Generator<OpenApiDocumentDefini
                 schemas: this.generateSchemas()
             }
         };
+        this.components = (data as { components: unknown }).components;
         return new OpenApiDocumentDefinition(data);
+    }
+
+    /**
+     * Returns the JSON schemas of the `application/json` responses of a route of the last generated document, by status code. Each schema is
+     * self-contained: it includes the `components` of the document, so its `#/components/schemas/...` references can be resolved.
+     * @param route A route of the last call to `generate()`.
+     * @returns The schemas by status code, or `undefined` when the route has no documented JSON response.
+     */
+    generateResponseSchemas(route: RouteDefinition): Record<string, object> | undefined {
+        const responses = this.responsesByRoute.get(route);
+        if (!responses) return undefined;
+
+        // The undefined values of the generated objects are removed, as in the JSON document.
+        const components = JSON.parse(JSON.stringify(this.components ?? {}));
+        const schemas: Record<string, object> = {};
+        for (const [status, response] of Object.entries<any>(responses)) {
+            const schema = response?.content?.['application/json']?.schema;
+            if (schema) schemas[status] = { ...JSON.parse(JSON.stringify(schema)), components };
+        }
+        return Object.keys(schemas).length > 0 ? schemas : undefined;
     }
 
     private generateSchemas(): any {
@@ -106,9 +129,11 @@ export class OpenApiDocumentGenerator implements Generator<OpenApiDocumentDefini
 
             if (!acc[openApiPath]) acc[openApiPath] = {};
 
+            const responses = this.isSpecialCaseRoute(route) ? this.generateSpecialCaseResponses(route) : this.generateResponses(route);
+            if (responses) this.responsesByRoute.set(route, responses);
             acc[openApiPath][httpMethod] = {
                 operationId: this.generateOperationId(target, propertyKey),
-                responses: this.isSpecialCaseRoute(route) ? this.generateSpecialCaseResponses(route) : this.generateResponses(route),
+                responses,
                 parameters: this.generateParameters(route),
                 requestBody: this.generateRequestBody(route),
                 summary: `${httpMethod.toUpperCase()} ${openApiPath} ${target.name}.${propertyKey.toString()}`

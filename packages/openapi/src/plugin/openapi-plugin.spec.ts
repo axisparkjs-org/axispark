@@ -36,6 +36,7 @@ describe('OpenApiPlugin', () => {
 
     let documentGenerator: {
         generate: jest.Mock;
+        generateResponseSchemas: jest.Mock;
     };
 
     let document: {
@@ -80,7 +81,8 @@ describe('OpenApiPlugin', () => {
         };
 
         documentGenerator = {
-            generate: jest.fn()
+            generate: jest.fn(),
+            generateResponseSchemas: jest.fn()
         };
 
         document = {
@@ -745,6 +747,38 @@ describe('OpenApiPlugin', () => {
             expect(logger.info).toHaveBeenCalledWith('Plugin stopped');
 
             expect(logger.info).toHaveBeenCalledTimes(1);
+        });
+    });
+    describe('serializeResponses', () => {
+        const single = { candidates: [{}] };
+        const grouped = { candidates: [{}, {}] };
+        const undocumented = { candidates: [{}] };
+        const schemas = { 200: { type: 'object' } };
+
+        beforeEach(() => {
+            (httpAdapter as any).registerResponseSchemas = jest.fn();
+            httpAdapter.getRegisteredRoutes.mockReturnValue([single, grouped, undocumented]);
+            (documentGenerator as any).generateResponseSchemas.mockImplementation((route: unknown) => (route === undocumented ? undefined : schemas));
+        });
+
+        it('should give the adapter the response schemas of the routes with one handler', async () => {
+            await plugin.onRegister(createContext(), { ...createOptions(), serializeResponses: true });
+
+            expect((httpAdapter as any).registerResponseSchemas).toHaveBeenCalledTimes(1);
+            expect((httpAdapter as any).registerResponseSchemas).toHaveBeenCalledWith(single, schemas);
+        });
+
+        it('should not register the schemas when the option is disabled', async () => {
+            await plugin.onRegister(createContext(), createOptions());
+
+            expect((httpAdapter as any).registerResponseSchemas).not.toHaveBeenCalled();
+        });
+
+        it('should support adapters that do not serialize with schemas', async () => {
+            delete (httpAdapter as any).registerResponseSchemas;
+
+            await expect(plugin.onRegister(createContext(), { ...createOptions(), serializeResponses: true })).resolves.toBeUndefined();
+            expect((documentGenerator as any).generateResponseSchemas).not.toHaveBeenCalled();
         });
     });
 });

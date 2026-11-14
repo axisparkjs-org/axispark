@@ -23,6 +23,14 @@ export interface HttpAdapter {
      */
     getHttpServer(): HttpServer;
     /**
+     * Registers the JSON schemas of the responses of a route, by status code (`'default'` for any other status), so the adapter can
+     * serialize the responses with them. Optional: the adapters that do not support it serialize every response with `JSON.stringify`.
+     * The OpenAPI plugin calls it with the schemas of the document when its `serializeResponses` option is enabled.
+     * @param route A route returned by `getRegisteredRoutes()`.
+     * @param schemas The self-contained JSON schemas of the responses of the route, by status code.
+     */
+    registerResponseSchemas?(route: RouteDefinition, schemas: Readonly<Record<string, object>>): void;
+    /**
      * Initializes the HTTP adapter.
      * @returns A promise that resolves when the adapter has been initialized, or void if the operation is synchronous.
      */
