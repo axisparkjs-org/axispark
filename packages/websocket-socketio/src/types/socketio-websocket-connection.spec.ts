@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+import { ClientDisconnectedError } from '@axisparkjs/engine';
 import { SocketIOWebSocketConnection } from './socketio-websocket-connection';
 
 describe('SocketIOWebSocketConnection', () => {
@@ -37,5 +39,25 @@ describe('SocketIOWebSocketConnection', () => {
         expect(new SocketIOWebSocketConnection(socket, () => true).remoteAddress).toBe('203.0.113.7');
         expect(new SocketIOWebSocketConnection({ handshake: { address: '' } } as any).remoteAddress).toBeUndefined();
         expect(new SocketIOWebSocketConnection({} as any).remoteAddress).toBeUndefined();
+    });
+
+    it('should share one signal per socket, aborted when the socket is disconnected', () => {
+        const socket: any = Object.assign(new EventEmitter(), { disconnected: false });
+        const first = new SocketIOWebSocketConnection(socket).signal;
+        const second = new SocketIOWebSocketConnection(socket).signal;
+
+        expect(second).toBe(first);
+        expect(socket.listenerCount('disconnect')).toBe(1);
+
+        socket.emit('disconnect');
+
+        expect(first.aborted).toBe(true);
+        expect(first.reason).toBeInstanceOf(ClientDisconnectedError);
+    });
+
+    it('should return an aborted signal for a disconnected socket', () => {
+        const socket: any = Object.assign(new EventEmitter(), { disconnected: true });
+
+        expect(new SocketIOWebSocketConnection(socket).signal.aborted).toBe(true);
     });
 });

@@ -127,6 +127,8 @@ export class McpDefinitionGenerator implements Generator<McpDefinitions> {
                 propertyKey: metadata.propertyKey,
                 scopedContainer: this.scopedContainerManager.create(),
                 transport: ExecutionTransport.Mcp,
+                // The engine replaces it with the signal of the execution, aborted when the client cancels the request.
+                signal: input.request.signal ?? new AbortController().signal,
                 error: undefined,
                 response: undefined
             };

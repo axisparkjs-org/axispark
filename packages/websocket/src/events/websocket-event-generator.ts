@@ -56,6 +56,8 @@ export class WebSocketEventGenerator implements Generator<WebSocketEventDefiniti
             propertyKey: eventMetadata.propertyKey,
             scopedContainer: this.scopedContainerManager.create(),
             transport: ExecutionTransport.WebSocket,
+            // The engine replaces it with the signal of the execution, aborted when this one is.
+            signal: context.connection.signal ?? new AbortController().signal,
             error: undefined
         };
     }

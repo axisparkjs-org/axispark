@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+import { ClientDisconnectedError } from '@axisparkjs/engine';
 import { FastifyRequest } from 'fastify';
 import { BadRequestError, FileUploadDefinition, FileUploadLimitError } from '@axisparkjs/http';
 import { FastifyHttpRequest } from './fastify-http-request';
@@ -191,6 +193,24 @@ describe('FastifyHttpRequest', () => {
             withParts(Object.assign(new Error('bad'), { code: 'FST_PROTO_VIOLATION' }));
 
             await expect(httpRequest.parseMultipart(definition)).rejects.toBeInstanceOf(BadRequestError);
+        });
+    });
+
+    describe('signal', () => {
+        it('should be aborted when the connection is closed before the response is sent', () => {
+            const response = Object.assign(new EventEmitter(), { writableFinished: false, destroyed: false });
+            const withResponse = new FastifyHttpRequest(request as unknown as FastifyRequest, response);
+            const signal = withResponse.signal;
+
+            expect(withResponse.signal).toBe(signal);
+            response.emit('close');
+
+            expect(signal.aborted).toBe(true);
+            expect(signal.reason).toBeInstanceOf(ClientDisconnectedError);
+        });
+
+        it('should never be aborted without the response', () => {
+            expect(httpRequest.signal.aborted).toBe(false);
         });
     });
 });

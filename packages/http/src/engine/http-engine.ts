@@ -51,6 +51,8 @@ export class HttpEngine implements Executable {
             ...context,
             scopedContainer: this.scopedContainerManager.create(),
             transport: ExecutionTransport.Http,
+            // The engine replaces it with the signal of the execution, aborted when this one is.
+            signal: context.request.signal ?? new AbortController().signal,
             target: versionRoute.target,
             propertyKey: versionRoute.propertyKey,
             host: hostDefinition,

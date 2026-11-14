@@ -72,7 +72,7 @@ export class FastifyHttpAdapter implements HttpAdapter {
     }
 
     private createContext(request: FastifyRequest, reply: FastifyReply) {
-        const req = new FastifyHttpRequest(request);
+        const req = new FastifyHttpRequest(request, reply.raw);
         const res = new FastifyHttpResponse(reply);
         const ses = request.session ? new FastifyHttpSession(request.session) : undefined;
         return { request: req, response: res, session: ses };

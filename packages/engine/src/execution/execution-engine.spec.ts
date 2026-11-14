@@ -1,10 +1,11 @@
 import { ResultProcessor } from '../result';
-import { TimeoutDefinition, TimeoutProcessor } from '../timeout';
+import { ExecutionTimeoutError, TimeoutDefinition, TimeoutProcessor } from '../timeout';
 import { CacheDefinition, CacheProcessor } from '../cache';
 import { ExecutionContext } from './execution-context';
 import { ExecutionEngine } from './execution-engine';
 import { HandlerInvoker } from './handler-invoker';
 import { ExecutionPlanner } from './execution-planner';
+import { ClientDisconnectedError } from './client-disconnected-error';
 
 describe('ExecutionEngine', () => {
     let engine: ExecutionEngine;
@@ -806,6 +807,180 @@ describe('ExecutionEngine', () => {
             await expect(engine.execute(context)).rejects.toBe(error);
 
             expect(resultProcessor.process).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('signal', () => {
+        const plan = (overrides: Record<string, unknown> = {}) => ({ before: [], context: {}, catch: [], after: [], ...overrides }) as any;
+        const abortable = (signal: AbortSignal) =>
+            new Promise((_resolve, reject) => {
+                signal.addEventListener('abort', () => reject(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })));
+            });
+
+        it('should give a signal of its own to every execution', async () => {
+            planGenerator.plan.mockResolvedValue(plan());
+            let received: AbortSignal | undefined;
+            handlerInvoker.invoke.mockImplementation(async (_step, ctx) => {
+                received = ctx.signal;
+                return 'result';
+            });
+
+            await engine.execute(context);
+
+            expect(received).toBeInstanceOf(AbortSignal);
+            expect(received?.aborted).toBe(false);
+            expect(context.signal).toBe(received);
+        });
+
+        it('should abort the signal with an ExecutionTimeoutError before running the timeout resolver', async () => {
+            planGenerator.plan.mockResolvedValue(plan({ timeout: new TimeoutDefinition(10), catch: [{ acceptedErrors: [Error] }] }));
+            const timeoutError = new Error('timeout');
+            let abortedBeforeResolver = false;
+            timeoutProcessor.process.mockImplementation(async (_timeout, ctx) => {
+                abortedBeforeResolver = ctx.signal.aborted;
+                throw timeoutError;
+            });
+            handlerInvoker.invoke.mockImplementationOnce(async (_step, ctx) => await abortable(ctx.signal)).mockResolvedValueOnce('timeout response');
+
+            await engine.execute(context);
+
+            expect(abortedBeforeResolver).toBe(true);
+            expect(context.signal.reason).toBeInstanceOf(ExecutionTimeoutError);
+            expect(context.signal.reason.time).toBe(10);
+            expect(context.error).toBe(timeoutError);
+            expect(resultProcessor.process).toHaveBeenCalledWith('timeout response', context);
+        });
+
+        it('should handle the errors of the handler that fails before the timeout', async () => {
+            const error = new Error('failed');
+            planGenerator.plan.mockResolvedValue(plan({ timeout: new TimeoutDefinition(1000), catch: [{ acceptedErrors: [Error] }] }));
+            handlerInvoker.invoke.mockRejectedValueOnce(error).mockResolvedValueOnce('error response');
+
+            await engine.execute(context);
+
+            expect(context.error).toBe(error);
+            expect(context.signal.aborted).toBe(false);
+            expect(timeoutProcessor.process).not.toHaveBeenCalled();
+            expect(resultProcessor.process).toHaveBeenCalledWith('error response', context);
+        });
+
+        it('should follow the timeout when the handler returns after the abort', async () => {
+            planGenerator.plan.mockResolvedValue(plan({ timeout: new TimeoutDefinition(10) }));
+            timeoutProcessor.process.mockImplementation(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            });
+            handlerInvoker.invoke.mockImplementationOnce(
+                async (_step, ctx) =>
+                    await new Promise((resolve) => {
+                        ctx.signal.addEventListener('abort', () => resolve('late result'));
+                    })
+            );
+
+            await engine.execute(context);
+
+            expect(resultProcessor.process).toHaveBeenCalledWith(undefined, context);
+        });
+
+        it('should abort the signal when the signal of the transport is aborted', async () => {
+            const transport = new AbortController();
+            context.signal = transport.signal;
+            planGenerator.plan.mockResolvedValue(plan());
+            handlerInvoker.invoke.mockImplementationOnce(async (_step, ctx) => {
+                transport.abort(new ClientDisconnectedError());
+                return ctx.signal.reason;
+            });
+
+            await engine.execute(context);
+
+            expect(context.signal).not.toBe(transport.signal);
+            expect(context.signal.reason).toBeInstanceOf(ClientDisconnectedError);
+        });
+
+        it('should start aborted when the signal of the transport is already aborted', async () => {
+            const transport = new AbortController();
+            transport.abort('cancelled');
+            context.signal = transport.signal;
+            planGenerator.plan.mockResolvedValue(plan());
+            handlerInvoker.invoke.mockResolvedValue('result');
+
+            await engine.execute(context);
+
+            expect(context.signal.aborted).toBe(true);
+            expect(context.signal.reason).toBe('cancelled');
+        });
+
+        it('should remove the listener of the signal of the transport when the execution ends', async () => {
+            const transport = new AbortController();
+            const removeSpy = jest.spyOn(transport.signal, 'removeEventListener');
+            context.signal = transport.signal;
+            planGenerator.plan.mockResolvedValue(plan());
+            handlerInvoker.invoke.mockResolvedValue('result');
+
+            await engine.execute(context);
+            transport.abort();
+
+            expect(removeSpy).toHaveBeenCalledWith('abort', expect.any(Function));
+            expect(context.signal.aborted).toBe(false);
+        });
+
+        it('should skip the catch steps when the client disconnected and the handler failed because of the abort', async () => {
+            const transport = new AbortController();
+            context.signal = transport.signal;
+            const after = {};
+            planGenerator.plan.mockResolvedValue(plan({ catch: [{ acceptedErrors: [Error] }], after: [after] }));
+            handlerInvoker.invoke.mockImplementationOnce(async (_step, ctx) => {
+                const pending = abortable(ctx.signal);
+                transport.abort(new ClientDisconnectedError());
+                return await pending;
+            });
+
+            await engine.execute(context);
+
+            expect(handlerInvoker.invoke).toHaveBeenCalledTimes(2);
+            expect(handlerInvoker.invoke).toHaveBeenLastCalledWith(after, context);
+            expect(resultProcessor.process).toHaveBeenCalledWith(undefined, context);
+        });
+
+        it('should skip the catch steps when the handler throws the reason of the abort', async () => {
+            const transport = new AbortController();
+            context.signal = transport.signal;
+            planGenerator.plan.mockResolvedValue(plan({ catch: [{ acceptedErrors: [Error] }] }));
+            handlerInvoker.invoke.mockImplementationOnce(async (_step, ctx) => {
+                transport.abort(new ClientDisconnectedError());
+                ctx.signal.throwIfAborted();
+            });
+
+            await engine.execute(context);
+
+            expect(handlerInvoker.invoke).toHaveBeenCalledTimes(1);
+            expect(resultProcessor.process).toHaveBeenCalledWith(undefined, context);
+        });
+
+        it('should handle other errors as usual after the client disconnected', async () => {
+            const transport = new AbortController();
+            context.signal = transport.signal;
+            const error = new Error('other');
+            planGenerator.plan.mockResolvedValue(plan({ catch: [{ acceptedErrors: [Error] }] }));
+            handlerInvoker.invoke
+                .mockImplementationOnce(async () => {
+                    transport.abort(new ClientDisconnectedError());
+                    throw error;
+                })
+                .mockResolvedValueOnce('error response');
+
+            await engine.execute(context);
+
+            expect(resultProcessor.process).toHaveBeenCalledWith('error response', context);
+        });
+
+        it('should handle the errors as usual when the signal is not aborted', async () => {
+            const error = Object.assign(new Error('aborted elsewhere'), { name: 'AbortError' });
+            planGenerator.plan.mockResolvedValue(plan({ catch: [{ acceptedErrors: [Error] }] }));
+            handlerInvoker.invoke.mockRejectedValueOnce(error).mockResolvedValueOnce('error response');
+
+            await engine.execute(context);
+
+            expect(resultProcessor.process).toHaveBeenCalledWith('error response', context);
         });
     });
 });

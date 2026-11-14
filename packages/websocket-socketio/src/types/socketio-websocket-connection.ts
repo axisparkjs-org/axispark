@@ -1,6 +1,9 @@
-import { WebSocketConnection } from '@axisparkjs/websocket';
+import { connectionCloseSignal, WebSocketConnection } from '@axisparkjs/websocket';
 import { Socket } from 'socket.io';
 import { resolveClientAddress, TrustProxyFunction } from '../adapter/trust-proxy';
+
+// One signal per socket: a connection object is created for each event, and the listener must be added only once to the socket.
+const signals = new WeakMap<Socket, AbortSignal>();
 
 export class SocketIOWebSocketConnection implements WebSocketConnection {
     /**
@@ -52,5 +55,17 @@ export class SocketIOWebSocketConnection implements WebSocketConnection {
 
     get connected(): boolean {
         return this.socket.connected;
+    }
+
+    /**
+     * Aborted with a `ClientDisconnectedError` when the socket is disconnected. The signal is shared by every event of the socket.
+     */
+    get signal(): AbortSignal {
+        let signal = signals.get(this.socket);
+        if (!signal) {
+            signal = connectionCloseSignal(this.socket.disconnected, (listener) => this.socket.once('disconnect', listener));
+            signals.set(this.socket, signal);
+        }
+        return signal;
     }
 }

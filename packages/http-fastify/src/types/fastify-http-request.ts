@@ -3,6 +3,8 @@ import {
     BadRequestError,
     FileUploadDefinition,
     FileUploadLimitError,
+    ClosableResponse,
+    clientDisconnectSignal,
     HttpRequest,
     MultipartFields,
     UploadedFile
@@ -12,8 +14,12 @@ import type {} from '@fastify/multipart';
 
 export class FastifyHttpRequest implements HttpRequest {
     private uploadedFiles?: readonly UploadedFile[];
+    private clientSignal?: AbortSignal;
 
-    constructor(private readonly request: FastifyRequest) {}
+    constructor(
+        private readonly request: FastifyRequest,
+        private readonly response?: ClosableResponse
+    ) {}
 
     get method() {
         return this.request.method;
@@ -67,6 +73,14 @@ export class FastifyHttpRequest implements HttpRequest {
 
     get files(): readonly UploadedFile[] | undefined {
         return this.uploadedFiles;
+    }
+
+    /**
+     * Aborted with a `ClientDisconnectedError` when the client closes the connection before the response is sent. Without the response of the request, the signal is never aborted.
+     */
+    get signal(): AbortSignal {
+        this.clientSignal ??= this.response ? clientDisconnectSignal(this.response) : new AbortController().signal;
+        return this.clientSignal;
     }
 
     getCookie(name: string): string | undefined {
