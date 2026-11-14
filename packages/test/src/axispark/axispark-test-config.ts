@@ -14,5 +14,10 @@ export interface AxiSparkTestConfig {
     /**
      * An optional instance of AxiSparkCore to be used as the application context.
      */
-    app?: AxiSparkCore;
+    app?: AxiSparkCore<any>;
+
+    /**
+     * An optional settings object that replaces the application settings, without reading the environment or the `.env` files. It is available in `app.settings` and by injection. When it is not provided, the test instance uses the settings already loaded by `app`.
+     */
+    settings?: object;
 }

@@ -15,4 +15,9 @@ export interface AxiSparkPrivateConfig {
      * An optional boolean indicating whether to wait for certain operations to complete before proceeding. If set to `true`, the AxiSpark instance will wait for asynchronous initialization tasks to finish before continuing. If set to `false`, the instance will proceed without waiting.
      */
     wait?: boolean;
+
+    /**
+     * An optional settings object used instead of loading the `settings` option of the configuration. The environment is not read. It is used by the test factory to replace the settings.
+     */
+    settings?: object;
 }

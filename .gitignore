@@ -4,4 +4,4 @@ dist
 lib
 **/*.tsbuildinfo
 .turbo
-.scannerwork
+.scannerwork.env
