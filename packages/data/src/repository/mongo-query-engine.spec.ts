@@ -22,11 +22,15 @@ describe('MongoQueryEngine', () => {
         engine = new MongoQueryEngine(new QueryMethodParser());
         repository = {
             metadata: {
-                columns: ['id', 'status', 'email', 'age', 'name', 'score', 'createdAt'].map((propertyName) => ({ propertyName, propertyPath: propertyName }))
+                columns: ['id', 'status', 'email', 'age', 'name', 'score', 'createdAt', 'active'].map((propertyName) => ({
+                    propertyName,
+                    propertyPath: propertyName
+                }))
             },
             find: jest.fn().mockResolvedValue([]),
             findOne: jest.fn().mockResolvedValue(null),
-            countDocuments: jest.fn().mockResolvedValue(0)
+            countDocuments: jest.fn().mockResolvedValue(0),
+            deleteMany: jest.fn().mockResolvedValue({ deletedCount: 2 })
         } as unknown as MongoRepository<TestDocument>;
     });
 
@@ -123,5 +127,49 @@ describe('MongoQueryEngine', () => {
         expect(result).toEqual([{ id: 1 }]);
         expect(manager.getMongoRepository).toHaveBeenCalledWith('TestDocument');
         expect(repository.find).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['findByStatusNot', ['archived'], { status: { $ne: 'archived' } }],
+        ['findByStatusNotIgnoreCase', ['Arch.ived'], { status: { $not: /^Arch\.ived$/i } }],
+        ['findByStatusNotIn', [['a', 'b']], { status: { $nin: ['a', 'b'] } }],
+        ['findByNameIgnoreCase', ['Phone'], { name: /^Phone$/i }],
+        ['findByNameLikeIgnoreCase', ['ph%'], { name: /^ph.*$/i }],
+        ['findByNameContaining', ['a.b'], { name: /a\.b/ }],
+        ['findByNameContainingIgnoreCase', ['ph'], { name: /ph/i }],
+        ['findByNameStartingWith', ['ph'], { name: /^ph/ }],
+        ['findByNameEndingWith', ['ph'], { name: /ph$/ }],
+        ['findByActiveTrue', [], { active: true }],
+        ['findByActiveFalse', [], { active: false }]
+    ])('builds the filter of %s', async (methodName, methodArgs, filter) => {
+        await execute(methodName, methodArgs);
+
+        expect(repository.find).toHaveBeenCalledWith({ where: { $and: [filter] } });
+    });
+
+    it('requires string arguments for the regular expression operators', async () => {
+        await expect(execute('findByNameStartingWith', [1])).rejects.toThrow('StartingWith operator requires a string argument.');
+    });
+
+    it('returns a page with the totals when a findBy method receives a PageRequest', async () => {
+        (repository.find as jest.Mock).mockResolvedValue([{ id: 1 }]);
+        (repository.countDocuments as jest.Mock).mockResolvedValue(3);
+
+        await expect(execute('findByStatus', ['active', { page: 0, size: 2 }])).resolves.toEqual({
+            content: [{ id: 1 }],
+            page: 0,
+            size: 2,
+            totalElements: 3,
+            totalPages: 2
+        });
+        expect(repository.countDocuments).toHaveBeenCalledWith({ $and: [{ status: 'active' }] });
+    });
+
+    it('deletes the matching documents with deleteBy methods', async () => {
+        await expect(execute('deleteByStatus', ['archived'])).resolves.toBe(2);
+        expect(repository.deleteMany).toHaveBeenCalledWith({ $and: [{ status: 'archived' }] });
+
+        (repository.deleteMany as jest.Mock).mockResolvedValue({});
+        await expect(execute('deleteByStatus', ['archived'])).resolves.toBe(0);
     });
 });

@@ -94,6 +94,67 @@ describe.each([
         expect(await errorOf(response)).toContain('requires a class-typed parameter');
     });
 
+    describe('built-in pipe-steps', () => {
+        const get = (path: string) => fetch(`http://localhost:3000/api/orders${path}`);
+
+        it('should use the default values of the missing query parameters', async () => {
+            const response = await get('');
+
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ page: 1, status: 'open', from: null, tags: [], ids: [] });
+        });
+
+        it('should parse every query parameter', async () => {
+            const response = await get('?page=3&status=SHIPPED&from=2026-03-01T10:30:00%2B02:00&tags=a,b&tags=c&ids=1,2');
+
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ page: 3, status: 'shipped', from: '2026-03-01T08:30:00.000Z', tags: ['a', 'b', 'c'], ids: [1, 2] });
+        });
+
+        it('should reject values that are not in the enum', async () => {
+            const response = await get('?status=pending');
+
+            expect(response.status).toBe(400);
+            expect(await errorOf(response)).toContain('is not one of the allowed values: open, shipped, cancelled');
+        });
+
+        it('should reject invalid dates', async () => {
+            const response = await get('?from=2026-02-30');
+
+            expect(response.status).toBe(400);
+            expect(await errorOf(response)).toContain('is not a valid ISO 8601 date');
+        });
+
+        it('should validate the items of the arrays', async () => {
+            const repeated = await get('?tags=a,a');
+            const invalid = await get('?ids=1,x');
+
+            expect(repeated.status).toBe(400);
+            expect(await errorOf(repeated)).toContain('Array items must be unique.');
+            expect(invalid.status).toBe(400);
+            expect(await errorOf(invalid)).toContain('is not a valid integer');
+        });
+
+        it('should accept UUIDs and return them in lower case', async () => {
+            const response = await get('/9B2F8F4E-3C1A-4D7E-9A6B-2F1C3D4E5F60');
+
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ id: '9b2f8f4e-3c1a-4d7e-9a6b-2f1c3d4e5f60' });
+        });
+
+        it('should reject values that are not UUIDs, or not of the expected version', async () => {
+            const invalid = await get('/123');
+            const wrongVersion = await get('/v7/9b2f8f4e-3c1a-4d7e-9a6b-2f1c3d4e5f60');
+            const v7 = await get('/v7/01890a5d-ac96-774b-bcce-b302099a8057');
+
+            expect(invalid.status).toBe(400);
+            expect(await errorOf(invalid)).toContain('is not a valid UUID');
+            expect(wrongVersion.status).toBe(400);
+            expect(await errorOf(wrongVersion)).toContain('is not a valid UUID v7');
+            expect(v7.status).toBe(200);
+        });
+    });
+
     afterAll(async () => {
         await axiSparkCore.destroy();
     });

@@ -30,7 +30,8 @@ describe('AxiSparkCore', () => {
             },
             scanner: {
                 scan: jest.fn()
-            }
+            },
+            settings: Object.freeze({ port: 3000 })
         } as unknown as jest.Mocked<AxiSparkContext>;
 
         core = new AxiSparkCore(context);
@@ -41,6 +42,12 @@ describe('AxiSparkCore', () => {
             const config = core.config;
 
             expect(config).toBe(context.config);
+        });
+    });
+
+    describe('settings', () => {
+        it('should return the context settings', () => {
+            expect(core.settings).toBe(context.settings);
         });
     });
 

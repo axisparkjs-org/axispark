@@ -2,7 +2,7 @@ import { Injectable } from '@axisparkjs/di';
 import { Brackets, DataSource, ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
 import { TransactionContext } from '../transactions/transaction-context';
 import { BaseRepository } from './base-repository';
-import { ParsedMethod, ParsedPredicate, QueryMethodParser } from './query-method-parser';
+import { ParsedMethod, ParsedPredicate, QueryMethodParser, toPage } from './query-method-parser';
 
 /** Executes derived repository methods by building TypeORM SQL `SelectQueryBuilder` queries. */
 @Injectable()
@@ -16,7 +16,8 @@ export class SQLQueryEngine {
      * @param property Derived method name, for example `findByStatus`.
      * @param classArgs Repository and owning data source constructor arguments. Inside a transaction of
      * that data source, the query runs on the transactional repository.
-     * @param methodArgs Predicate values, optionally followed by a `PageRequest`.
+     * @param methodArgs Predicate values, optionally followed by a `PageRequest`. A `findBy` method with a `PageRequest`
+     * resolves with a `Page`, and a `deleteBy` method with the number of deleted entities.
      */
     public async execute<T extends ObjectLiteral>(_object: BaseRepository<T>, property: string, classArgs: unknown[], methodArgs: unknown[]): Promise<unknown> {
         const [defaultEntityRepository, dataSource] = classArgs as [Repository<T>, DataSource];
@@ -28,7 +29,7 @@ export class SQLQueryEngine {
 
         const parsed = this.queryMethodParser.parse(entityRepository, property);
         const { methodArgs: predicateArgs, pageRequest } = this.queryMethodParser.extractPageRequest(parsed.operation, methodArgs);
-        if (parsed.order.length > 0 && (parsed.operation === 'count' || parsed.operation === 'exists')) {
+        if (parsed.order.length > 0 && (parsed.operation === 'count' || parsed.operation === 'exists' || parsed.operation === 'delete')) {
             throw new Error(`OrderBy is not supported for '${property}'.`);
         }
 
@@ -39,14 +40,30 @@ export class SQLQueryEngine {
 
         switch (parsed.operation) {
             case 'findMany':
-                return query.getMany();
+                if (!pageRequest) return query.getMany();
+                return toPage(...(await query.getManyAndCount()), pageRequest);
             case 'findOne':
                 return query.getOne();
             case 'count':
                 return query.getCount();
             case 'exists':
                 return (await query.getCount()) > 0;
+            case 'delete':
+                return this.deleteMatching(entityRepository, query);
         }
+    }
+
+    /**
+     * Deletes the entities that match the query. The primary keys are selected with the predicates of the method, and the
+     * entities are deleted by primary key, so the predicates can use any property path in every SQL driver.
+     */
+    private async deleteMatching<T extends ObjectLiteral>(repository: Repository<T>, query: SelectQueryBuilder<T>): Promise<number> {
+        query.select(repository.metadata.primaryColumns.map((column) => `entity.${column.propertyPath}`));
+        const entities = await query.getMany();
+        if (entities.length === 0) return 0;
+
+        const result = await repository.delete(entities.map((entity) => repository.getId(entity)));
+        return result.affected ?? entities.length;
     }
 
     private applyPredicates<T extends ObjectLiteral>(query: SelectQueryBuilder<T>, groups: ParsedPredicate[][], methodArgs: unknown[]): void {
@@ -56,17 +73,20 @@ export class SQLQueryEngine {
         }
 
         let argIndex = 0;
+        let constantIndex = 0;
         groups.forEach((group, groupIndex) => {
             const bracket = new Brackets((where) => {
-                group.forEach(({ propertyPath, operator, arity }, predicateIndex) => {
-                    const column = `entity.${propertyPath}`;
+                group.forEach((predicate, predicateIndex) => {
                     const parameters: Record<string, unknown> = {};
-                    const names = Array.from({ length: arity }, () => {
-                        const name = `queryArg${argIndex}`;
-                        parameters[name] = methodArgs[argIndex++];
-                        return name;
-                    });
-                    const expression = this.toSql(column, operator, names);
+                    // The predicates without arguments (True and False) bind their value with a name of their own.
+                    const names =
+                        predicate.arity === 0
+                            ? [`queryConst${constantIndex++}`]
+                            : Array.from({ length: predicate.arity }, (_, offset) => `queryArg${argIndex + offset}`);
+                    const values = methodArgs.slice(argIndex, argIndex + predicate.arity);
+                    argIndex += predicate.arity;
+
+                    const expression = this.toSql(`entity.${predicate.propertyPath}`, predicate, names, values, parameters);
                     if (predicateIndex === 0) where.where(expression, parameters);
                     else where.andWhere(expression, parameters);
                 });
@@ -77,28 +97,53 @@ export class SQLQueryEngine {
         });
     }
 
-    private toSql(column: string, operator: ParsedPredicate['operator'], args: string[]): string {
+    /** Builds the SQL expression of a predicate, and sets its parameters with the given names. */
+    private toSql(column: string, { operator, ignoreCase }: ParsedPredicate, names: string[], values: unknown[], parameters: Record<string, unknown>): string {
+        const [name] = names;
+        const value = values[0];
+        const parameter = (parameterValue: unknown = value, parameterName = name) => {
+            parameters[parameterName] = parameterValue;
+            return `:${parameterName}`;
+        };
+        const lower = (expression: string) => (ignoreCase ? `LOWER(${expression})` : expression);
+
         switch (operator) {
             case 'IsNotNull':
                 return `${column} IS NOT NULL`;
             case 'IsNull':
                 return `${column} IS NULL`;
+            case 'True':
+                return `${column} = ${parameter(true)}`;
+            case 'False':
+                return `${column} = ${parameter(false)}`;
             case 'GreaterThanEqual':
-                return `${column} >= :${args[0]}`;
+                return `${column} >= ${parameter()}`;
             case 'LessThanEqual':
-                return `${column} <= :${args[0]}`;
+                return `${column} <= ${parameter()}`;
             case 'GreaterThan':
-                return `${column} > :${args[0]}`;
+                return `${column} > ${parameter()}`;
             case 'LessThan':
-                return `${column} < :${args[0]}`;
+                return `${column} < ${parameter()}`;
             case 'Between':
-                return `${column} BETWEEN :${args[0]} AND :${args[1]}`;
+                return `${column} BETWEEN ${parameter()} AND ${parameter(values[1], names[1])}`;
             case 'In':
-                return `${column} IN (:...${args[0]})`;
+            case 'NotIn':
+                // An empty list matches nothing with In and everything with NotIn, instead of the invalid `IN ()`.
+                if (Array.isArray(value) && value.length === 0) return operator === 'In' ? '1 = 0' : '1 = 1';
+                parameters[name] = value;
+                return `${column} ${operator === 'In' ? 'IN' : 'NOT IN'} (:...${name})`;
             case 'Like':
-                return `${column} LIKE :${args[0]}`;
+                return `${lower(column)} LIKE ${lower(parameter())}`;
+            case 'Containing':
+                return `${lower(column)} LIKE ${lower(parameter(`%${escapeLike(value, operator)}%`))} ESCAPE '${LIKE_ESCAPE}'`;
+            case 'StartingWith':
+                return `${lower(column)} LIKE ${lower(parameter(`${escapeLike(value, operator)}%`))} ESCAPE '${LIKE_ESCAPE}'`;
+            case 'EndingWith':
+                return `${lower(column)} LIKE ${lower(parameter(`%${escapeLike(value, operator)}`))} ESCAPE '${LIKE_ESCAPE}'`;
+            case 'Not':
+                return `${lower(column)} <> ${lower(parameter())}`;
             default:
-                return `${column} = :${args[0]}`;
+                return `${lower(column)} = ${lower(parameter())}`;
         }
     }
 
@@ -109,4 +154,16 @@ export class SQLQueryEngine {
             else query.addOrderBy(column, direction);
         });
     }
+}
+
+/**
+ * The escape character of the `LIKE` patterns built for `Containing`, `StartingWith` and `EndingWith`. A character other
+ * than the backslash is used because the backslash is itself an escape character in the strings of MySQL.
+ */
+const LIKE_ESCAPE = '!';
+
+/** Escapes the wildcards of a `LIKE` pattern, so `%` and `_` in the value are matched literally. */
+function escapeLike(value: unknown, operator: string): string {
+    if (typeof value !== 'string') throw new Error(`${operator} operator requires a string argument.`);
+    return value.replace(/[!%_]/g, (character) => `${LIKE_ESCAPE}${character}`);
 }

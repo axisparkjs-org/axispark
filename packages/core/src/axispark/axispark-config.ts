@@ -1,6 +1,7 @@
 import { InjectionToken } from '@axisparkjs/di';
 import { LogTransport } from '@axisparkjs/logger';
 import { ScannerOptions } from '../scanner/scanner-options';
+import { SettingsOptions } from '../settings/settings-options';
 
 /**
  * An injection token used to provide configuration options for the Axispark framework. This token can be used to inject an instance of `AxiSparkConfig` into components or services that require access to the configuration settings.
@@ -31,6 +32,7 @@ export const AXISPARK_CONFIG = new InjectionToken('AXISPARK_CONFIG');
  * - `banner`: An optional boolean indicating whether to display a banner in the console when the application starts.
  * - `logTransports`: An optional array of `LogTransport` instances that define how logs should be handled and where they should be sent.
  * - `scanner`: Optional `include` and `exclude` glob patterns that select the files loaded from `basePath`.
+ * - `settings`: Optional application settings, read from the environment variables and the `.env` files and validated when the application is created.
  *
  * Example usage:
  *
@@ -47,7 +49,7 @@ export const AXISPARK_CONFIG = new InjectionToken('AXISPARK_CONFIG');
  * };
  * ```
  */
-export interface AxiSparkConfig {
+export interface AxiSparkConfig<TSettings extends object = object> {
     /**
      * An optional string representing the name of the application or module. This can be used for identification purposes in logs or other outputs.
      */
@@ -79,4 +81,11 @@ export interface AxiSparkConfig {
      * By default, every `.js` and `.ts` file is loaded, except the `node_modules`, `dist` and `coverage` folders, the declaration files, the bootstrap files (`*.bootstrap.{js,ts}`) and the test files (`*.spec.{js,ts}` and `*.test.{js,ts}`). The `exclude` patterns are added to these exclusions.
      */
     scanner?: ScannerOptions;
+
+    /**
+     * Optional application settings: values read from the environment variables and from `.env` files, converted to their types and validated when the application is created. The settings are available in `app.settings`, to build the plugin options, and by injection with `@EnvSettings()` or the `AXISPARK_ENV_SETTINGS` token.
+     *
+     * When a variable is missing or invalid, the application is not created and an `InvalidSettingsError` lists every problem.
+     */
+    settings?: SettingsOptions<TSettings>;
 }

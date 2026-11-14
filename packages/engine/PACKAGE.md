@@ -50,6 +50,17 @@ export class TodoController {
 }
 ```
 
+The built-in steps parse (`ParseInt`, `ParseFloat`, `ParseBoolean`, `ParseUuid`, `ParseEnum`, `ParseDate`, `ParseArray`), validate (`Min`, `Max`, `Range`, `MinLength`, `MaxLength`, `NotEmpty`, `Regex`, `ValidateSchema`) and transform (`Trim`, `LowerCase`, `UpperCase`) the parameters. `Default()` and `Optional()` handle the missing ones:
+
+```ts
+@Get()
+list(
+    @Query('page') @Pipe(Default(1), ParseInt()) page: number,
+    @Query('from') @Pipe(Optional(), ParseDate()) from: Date | undefined,
+    @Query('ids') @Pipe(Default([]), ParseArray({ items: ParseInt() })) ids: number[]
+) {}
+```
+
 Stop the work of a handler when it times out or the client disconnects:
 
 ```ts

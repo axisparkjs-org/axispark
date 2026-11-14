@@ -1,7 +1,7 @@
 import { createApp } from './app';
 
-const port = Number(process.env.PORT ?? 3000);
-const app = createApp(port, process.env.CACHE_STORE === 'redis' ? 'redis' : 'memory');
+// PORT, CACHE_STORE and REDIS_URL are read from the environment or from the .env file (see .env.example).
+const app = createApp();
 
 const bootstrap = async () => {
     try {

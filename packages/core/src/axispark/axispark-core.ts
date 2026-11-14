@@ -8,15 +8,22 @@ import { Token } from '@axisparkjs/di';
  *
  * The `AxiSparkCore` class provides methods to register plugins, retrieve used plugins, and resolve dependencies from the dependency injection container. It serves as the main entry point for managing the application's lifecycle and coordinating various components and services within the Axispark framework.
  */
-export class AxiSparkCore implements Lifecycle {
+export class AxiSparkCore<TSettings extends object = object> implements Lifecycle {
     private shutdown!: Promise<void>;
     private resolveShutdown!: () => void;
     private keepAlive!: NodeJS.Timeout;
 
-    public constructor(private readonly axisparkContext: AxiSparkContext) {}
+    public constructor(private readonly axisparkContext: AxiSparkContext<TSettings>) {}
 
     public get config() {
         return this.axisparkContext.config;
+    }
+
+    /**
+     * The application settings, loaded and validated when the application was created from the `settings` option. They are available before `init()`, to build the options of the plugins. The object is deeply frozen, and it is empty without the `settings` option.
+     */
+    public get settings() {
+        return this.axisparkContext.settings;
     }
 
     public async init() {

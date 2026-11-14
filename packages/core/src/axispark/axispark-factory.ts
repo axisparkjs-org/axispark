@@ -10,12 +10,13 @@ export class AxiSparkFactoryStatic implements Factory<AxiSparkCore> {
     /**
      * Creates a new instance of AxiSparkCore with the provided configuration. If no configuration is provided, a default configuration will be used. The method sets up the necessary context and returns a new instance of AxiSparkCore.
      * @param config Optional configuration object for customizing the AxiSparkCore instance. If not provided, default settings will be applied.
+     * The type of `app.settings` is inferred from the return type of the `load` function of the `settings` option. When the settings are not valid, an `InvalidSettingsError` listing every problem is thrown.
      * @returns A new instance of AxiSparkCore configured with the provided settings.
      */
-    public create(config?: AxiSparkConfig): AxiSparkCore {
+    public create<TSettings extends object = object>(config?: AxiSparkConfig<TSettings>): AxiSparkCore<TSettings> {
         // Perform any necessary setup or configuration here
-        const context = new AxiSparkContext(config);
-        return new AxiSparkCore(context);
+        const context = new AxiSparkContext<TSettings>(config);
+        return new AxiSparkCore<TSettings>(context);
     }
 }
 
