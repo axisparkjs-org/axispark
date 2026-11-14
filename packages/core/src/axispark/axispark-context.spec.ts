@@ -5,6 +5,7 @@ import { PluginRegistry } from '../plugin';
 import { NullScanner } from '../scanner';
 import { HealthEngine } from '../health';
 import { AXISPARK_CONFIG } from './axispark-config';
+import { AXISPARK_ENV_SETTINGS, InvalidSettingsError } from '../settings';
 
 describe('AxiSparkContext', () => {
     describe('constructor', () => {
@@ -123,6 +124,46 @@ describe('AxiSparkContext', () => {
             expect(await context.container.resolve(ScopedContainerManager)).toBeInstanceOf(ScopedContainerManager);
 
             expect(await context.container.resolve(HealthEngine)).toBeInstanceOf(HealthEngine);
+        });
+    });
+
+    describe('settings', () => {
+        afterEach(() => {
+            delete process.env.AXISPARK_CONTEXT_PORT;
+        });
+
+        it('should bind an empty frozen object without the settings option', async () => {
+            const context = new AxiSparkContext({}, { scanner: 'null' });
+
+            expect(context.settings).toEqual({});
+            expect(Object.isFrozen(context.settings)).toBe(true);
+            expect(await context.container.resolve(AXISPARK_ENV_SETTINGS)).toBe(context.settings);
+        });
+
+        it('should load the settings from the environment and bind them', async () => {
+            process.env.AXISPARK_CONTEXT_PORT = '4321';
+            const context = new AxiSparkContext({ settings: { load: (env) => ({ port: env.int('AXISPARK_CONTEXT_PORT', 3000) }) } }, { scanner: 'null' });
+
+            expect(context.settings).toEqual({ port: 4321 });
+            expect(Object.isFrozen(context.settings)).toBe(true);
+            expect(await context.container.resolve(AXISPARK_ENV_SETTINGS)).toBe(context.settings);
+        });
+
+        it('should throw an InvalidSettingsError when the settings are not valid', () => {
+            process.env.AXISPARK_CONTEXT_PORT = 'abc';
+
+            expect(() => new AxiSparkContext({ settings: { load: (env) => ({ port: env.int('AXISPARK_CONTEXT_PORT') }) } }, { scanner: 'null' })).toThrow(
+                InvalidSettingsError
+            );
+        });
+
+        it('should use the settings of the private configuration without reading the environment', () => {
+            const load = jest.fn();
+            const context = new AxiSparkContext({ settings: { load } }, { scanner: 'null', settings: { port: 1 } });
+
+            expect(load).not.toHaveBeenCalled();
+            expect(context.settings).toEqual({ port: 1 });
+            expect(Object.isFrozen(context.settings)).toBe(true);
         });
     });
 });

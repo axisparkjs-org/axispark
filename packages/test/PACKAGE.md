@@ -9,6 +9,7 @@ The complete guide is in the [Testing documentation](https://axisparkjs.com/docs
 - Creates an isolated application with `AxiSparkTestFactory.create()`, with logs disabled and the `test` environment.
 - Replaces dependencies with mocks through the `providers` option.
 - Reuses the plugins of an existing application through the `app` option to run end-to-end tests.
+- Replaces the application settings with the `settings` option, without reading the environment variables or the `.env` files.
 
 It works with any test runner, such as Jest, Mocha or Jasmine.
 

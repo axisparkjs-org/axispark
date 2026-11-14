@@ -2,11 +2,16 @@ import { AxiSparkFactory } from '@axisparkjs/core';
 import { HttpPlugin } from '@axisparkjs/http';
 import { HttpPluginOptionsFactory } from '@axisparkjs/http-express';
 import { ConsoleTransport, LogLevel, SimpleFormatter } from '@axisparkjs/logger';
+import { loadSettings } from './settings';
 import { OpenApiPlugin, OpenApiPluginOptionsFactory } from '@axisparkjs/openapi';
 
 export const app = AxiSparkFactory.create({
     name: 'HTTP OpenAPI Template',
     basePath: __dirname,
+    settings: {
+        envFiles: ['.env'],
+        load: loadSettings
+    },
     logTransports: [
         new ConsoleTransport({
             minLevel: LogLevel.Debug,
@@ -14,7 +19,7 @@ export const app = AxiSparkFactory.create({
         })
     ]
 });
-app.use(HttpPlugin, HttpPluginOptionsFactory.create({ basePath: '/api' }));
+app.use(HttpPlugin, HttpPluginOptionsFactory.create({ port: app.settings.port, basePath: '/api' }));
 app.use(
     OpenApiPlugin,
     OpenApiPluginOptionsFactory.create({

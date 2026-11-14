@@ -12,9 +12,9 @@ export class AxiSparkTestFactoryStatic implements Factory<AxiSparkCore> {
      * @param config Optional configuration for the test instance, including app settings and providers.
      * @returns A new instance of AxiSparkCore configured for testing.
      */
-    public create(config?: AxiSparkTestConfig): AxiSparkCore {
+    public create<TSettings extends object = object>(config?: AxiSparkTestConfig & { settings?: TSettings }): AxiSparkCore<TSettings> {
         // Perform any necessary setup or configuration here
-        const context = new AxiSparkContext(
+        const context = new AxiSparkContext<TSettings>(
             {
                 ...config?.app?.config,
                 banner: false,
@@ -24,7 +24,8 @@ export class AxiSparkTestFactoryStatic implements Factory<AxiSparkCore> {
             },
             {
                 scanner: 'file-system',
-                wait: false
+                wait: false,
+                settings: config?.settings ?? config?.app?.settings
             }
         );
 
@@ -33,7 +34,7 @@ export class AxiSparkTestFactoryStatic implements Factory<AxiSparkCore> {
         const providers = config?.providers || [];
         providers.forEach((provider) => context.container.bind(provider));
 
-        return new AxiSparkCore(context);
+        return new AxiSparkCore<TSettings>(context);
     }
 }
 
