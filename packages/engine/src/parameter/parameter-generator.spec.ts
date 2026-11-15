@@ -286,4 +286,30 @@ describe('ParameterGenerator', () => {
             expect(result[0].value).toBeUndefined();
         });
     });
+    describe('resolve', () => {
+        const definitionOf = (parameter: string) =>
+            ParameterDefinition.fromMetadata({ target: class Target {}, propertyKey: 'handle', parameterIndex: 1, parameter, field: 'id' } as any);
+
+        it('resolves the value of a copy of the definition with its resolver', () => {
+            const resolver = { resolve: jest.fn().mockReturnValue('value') };
+            ParameterGenerator.registerParameter('resolve-test', resolver);
+            const definition = definitionOf('resolve-test');
+            const context = {} as any;
+
+            const resolved = generator.resolve(context, definition);
+
+            expect(resolved).not.toBe(definition);
+            expect(resolved.value).toBe('value');
+            expect(resolved.parameterIndex).toBe(1);
+            expect(resolved.field).toBe('id');
+            expect(definition.value).toBeUndefined();
+            expect(resolver.resolve).toHaveBeenCalledWith(context, resolved);
+        });
+
+        it('returns a copy without value when the parameter has no resolver', () => {
+            const resolved = generator.resolve({} as any, definitionOf('without-resolver'));
+
+            expect(resolved.value).toBeUndefined();
+        });
+    });
 });

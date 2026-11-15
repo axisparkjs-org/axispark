@@ -1,3 +1,4 @@
+export * from './class-identifier';
 export * from './client-disconnected-error';
 export * from './execution-context';
 export * from './execution-engine';
