@@ -122,6 +122,14 @@ export class Logger {
     }
 
     /**
+     * Writes the entries kept in memory by the transports (buffered or batched transports) and waits for them. A failing transport does not
+     * stop the others, and its failure is ignored, so it never breaks the shutdown of the application.
+     */
+    public async flush(): Promise<void> {
+        await Promise.allSettled(this.transports.map((transport) => transport.flush?.()));
+    }
+
+    /**
      * Whether an entry of the level would be written by at least one transport. The level methods return at once, without building the
      * entry, when it is `false`, so the `debug` and `trace` calls cost almost nothing when no transport writes them.
      * @param level The level to check.
