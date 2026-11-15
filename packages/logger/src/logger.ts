@@ -40,6 +40,9 @@ function reportTransportError(transport: LogTransport, error: Error, entry: LogE
 
 @Injectable()
 export class Logger {
+    /* The lowest minimum level of the transports, computed again when transports are added to or removed from the array. */
+    private lowestLevel?: { transports: number; level: number };
+
     /**
      * Constructor for the Logger class.
      * @param transports An array of LogTransport instances that define how log entries are handled (e.g., written to console, file, etc.).
@@ -126,8 +129,23 @@ export class Logger {
         await Promise.allSettled(this.transports.map((transport) => transport.flush?.()));
     }
 
+    /**
+     * Whether an entry of the level would be written by at least one transport. The level methods return at once, without building the
+     * entry, when it is `false`, so the `debug` and `trace` calls cost almost nothing when no transport writes them.
+     * @param level The level to check.
+     */
+    public isLevelEnabled(level: LogLevel): boolean {
+        if (this.lowestLevel?.transports !== this.transports.length) {
+            const levels = this.transports.map((transport) => transport.minLevel ?? LogLevel.Trace);
+            this.lowestLevel = { transports: this.transports.length, level: Math.min(...levels) };
+        }
+        return level >= this.lowestLevel.level;
+    }
+
     /** Internal method to log data using the configured transports. */
     public async log(data: LogData) {
+        if (!this.isLevelEnabled(data.level)) return;
+
         const entry: LogEntry = {
             timestamp: new Date(),
             level: data.level,

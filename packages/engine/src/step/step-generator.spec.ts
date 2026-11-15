@@ -360,5 +360,12 @@ describe('StepGenerator', () => {
             expect(firstResult).toEqual(secondResult);
             expect(ClassRegistry.getWithMetadata).toHaveBeenCalledTimes(1);
         });
+        it('should scan the registry once also when there are no global steps', () => {
+            const context = { target: class Controller {}, propertyKey: 'find', transport: ExecutionTransport.Http } as ExecutionContext;
+
+            expect(generator.generate(context)).toEqual([]);
+            expect(generator.generate(context)).toEqual([]);
+            expect(ClassRegistry.getWithMetadata).toHaveBeenCalledTimes(1);
+        });
     });
 });

@@ -13,7 +13,7 @@ describe('Logger', () => {
 
     beforeEach(() => {
         const config: LogTransportOptions = {
-            minLevel: LogLevel.Info,
+            minLevel: LogLevel.Trace,
             formatter: {
                 format: jest.fn().mockReturnValue('formatted message')
             }
@@ -400,6 +400,7 @@ describe('Logger', () => {
             await expect(new Logger([duckTyped]).info('hello')).resolves.toBeUndefined();
         });
     });
+
     describe('flush', () => {
         it('should flush every transport and ignore the failures', async () => {
             const failing = new MockTransport({ minLevel: LogLevel.Info, formatter: { format: jest.fn() } });
@@ -414,6 +415,54 @@ describe('Logger', () => {
 
         it('should do nothing for the transports that keep nothing in memory', async () => {
             await expect(new MockTransport({ minLevel: LogLevel.Info, formatter: { format: jest.fn() } }).flush()).resolves.toBeUndefined();
+        });
+    });
+
+    describe('minimum level', () => {
+        const transportWith = (minLevel: LogLevel) => new MockTransport({ minLevel, formatter: { format: jest.fn() } });
+
+        it('should not build the entry nor call the transports below the lowest minimum level', async () => {
+            const info = transportWith(LogLevel.Info);
+            const warn = transportWith(LogLevel.Warn);
+            const filtered = new Logger([info, warn]);
+            const now = jest.spyOn(global, 'Date');
+
+            await filtered.debug('debug message');
+            await filtered.trace('trace message');
+
+            expect(info.write).not.toHaveBeenCalled();
+            expect(warn.write).not.toHaveBeenCalled();
+            expect(now).not.toHaveBeenCalled();
+            now.mockRestore();
+
+            await filtered.info('info message');
+            expect(info.write).toHaveBeenCalledTimes(1);
+            expect(warn.write).toHaveBeenCalledTimes(1);
+        });
+
+        it('should apply the lowest level of the transports to child loggers and to the transports added later', async () => {
+            const transports: LogTransport[] = [transportWith(LogLevel.Error)];
+            const parent = new Logger(transports);
+            const child = parent.child('scope');
+
+            expect(child.isLevelEnabled(LogLevel.Warn)).toBe(false);
+            expect(parent.isLevelEnabled(LogLevel.Fatal)).toBe(true);
+
+            const debug = transportWith(LogLevel.Debug);
+            transports.push(debug);
+            await child.debug('debug message');
+
+            expect(debug.write).toHaveBeenCalledTimes(1);
+            expect(child.isLevelEnabled(LogLevel.Trace)).toBe(false);
+        });
+
+        it('should write every level when the transports have no minimum level or there are no transports', async () => {
+            const custom = new MockTransport({ formatter: { format: jest.fn() } } as unknown as LogTransportOptions);
+
+            await new Logger([custom]).trace('trace message');
+
+            expect(custom.write).toHaveBeenCalledTimes(1);
+            expect(new Logger([]).isLevelEnabled(LogLevel.Fatal)).toBe(false);
         });
     });
 });
