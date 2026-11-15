@@ -69,6 +69,24 @@ export class Container implements Initializable {
     }
 
     /**
+     * Checks whether a token always resolves to the same instance: a value provider, or a class or factory provider with the singleton scope,
+     * also through `useExisting` aliases. The engine uses it to keep the instances that it can reuse between executions.
+     * @param token - The token to check.
+     * @returns `true` when the token is bound to a singleton, `false` when it is scoped, transient or not bound.
+     */
+    isSingleton(token: Token): boolean {
+        const aliases = new Set<Token>();
+        let provider = this.providers.get(token);
+        while (provider && 'useExisting' in provider && !aliases.has(provider.token)) {
+            aliases.add(provider.token);
+            provider = this.providers.get(provider.useExisting);
+        }
+
+        if (!provider || 'useExisting' in provider) return false;
+        return 'useValue' in provider || provider.scope === InjectableScopes.Singleton;
+    }
+
+    /**
      * Resolves a provider based on the provided token, returning an instance of the associated class or the result of a factory function. The method handles different scopes (singleton, scoped, transient) and manages the resolution process accordingly. If a scoped container is provided, it is used for resolving scoped instances. If the provider is not found, an error is thrown.
      * @template T - The type of the instance being resolved.
      * @param token - The token for the provider to resolve.

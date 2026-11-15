@@ -18,11 +18,11 @@ import { TimeoutGenerator } from '../timeout';
 import { CacheGenerator } from '../cache';
 
 /**
- * A class responsible for generating execution plans based on the provided execution context. It utilizes the `StepGenerator` to generate steps and the `TimeoutGenerator` to generate timeout definitions and the `CacheGenerator` to generate cache definitions. The generated execution plan includes before, after, catch, and context steps, as well as an optional timeout definition and an optional cache definition. The class also caches registered plans for efficient reuse, by the identity of the target class and the property key, so two classes with the same name never share a plan.
+ * A class responsible for generating execution plans based on the provided execution context. It utilizes the `StepGenerator` to generate steps and the `TimeoutGenerator` to generate timeout definitions and the `CacheGenerator` to generate cache definitions. The generated execution plan includes before, after and catch steps, the handler (only its class and property key, so the cached plan keeps no reference to the context of the first request), as well as an optional timeout definition and an optional cache definition. The class also caches registered plans for efficient reuse, by the identity of the target class and the property key, so two classes with the same name never share a plan.
  */
 @Injectable()
 export class ExecutionPlanner {
-    private readonly registeredPlans = new Map<ClassType, Map<PropertyKey, ExecutionPlan>>();
+    private readonly registeredPlans = new Map<ClassType, Map<PropertyKey, Promise<ExecutionPlan>>>();
 
     constructor(
         private readonly timeoutGenerator: TimeoutGenerator,
@@ -31,25 +31,34 @@ export class ExecutionPlanner {
     ) {}
 
     /**
-     * Generates an execution plan for the provided execution context.
+     * Generates an execution plan for the provided execution context. The promise of the plan is cached, so concurrent first executions of
+     * a handler share the same generation and the plan is generated exactly once per handler. When the generation fails, it is removed from
+     * the cache, so the next execution generates the plan again.
      * @param context The execution context for which to generate a plan.
      * @returns A promise resolving to the generated execution plan.
      */
-    public async plan(context: ExecutionContext): Promise<ExecutionPlan> {
+    public plan(context: ExecutionContext): Promise<ExecutionPlan> {
         let plansOfTarget = this.registeredPlans.get(context.target);
         if (!plansOfTarget) {
-            plansOfTarget = new Map<PropertyKey, ExecutionPlan>();
+            plansOfTarget = new Map<PropertyKey, Promise<ExecutionPlan>>();
             this.registeredPlans.set(context.target, plansOfTarget);
         }
 
         let plan = plansOfTarget.get(context.propertyKey);
         if (!plan) {
-            const steps = await this.stepGenerator.generate(context);
-            plan = this.generatePlan(context, steps);
-            plansOfTarget.set(context.propertyKey, plan);
+            const plans = plansOfTarget;
+            const { propertyKey } = context;
+            plan = this.generate(context);
+            plan.catch(() => plans.delete(propertyKey));
+            plansOfTarget.set(propertyKey, plan);
         }
 
         return plan;
+    }
+
+    private async generate(context: ExecutionContext): Promise<ExecutionPlan> {
+        const steps = await this.stepGenerator.generate(context);
+        return this.generatePlan(context, steps);
     }
 
     private generatePlan(context: ExecutionContext, steps: StepDefinition[]): ExecutionPlan {
@@ -60,7 +69,9 @@ export class ExecutionPlanner {
         const timeoutStep = this.timeoutGenerator.generate(context);
         const cache = this.cacheGenerator.generate(context);
 
-        return { before: beforeSteps, after: afterSteps, context, catch: catchSteps, timeout: timeoutStep, cache };
+        const handler = { target: context.target, propertyKey: context.propertyKey };
+
+        return { before: beforeSteps, after: afterSteps, handler, catch: catchSteps, timeout: timeoutStep, cache };
     }
 
     private getSteps(steps: StepDefinition[], type: StepType, global: boolean) {

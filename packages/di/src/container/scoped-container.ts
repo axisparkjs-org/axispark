@@ -7,10 +7,13 @@ import { PendingInstances } from './pending-instances';
 
 /**
  * ScopedContainer is a specialized container that manages scoped instances of providers. It allows for resolving dependencies within a specific scope, ensuring that instances are isolated and have a limited lifetime. The ScopedContainer works in conjunction with the main Container and the ClassResolver to provide scoped resolution of dependencies.
+ *
+ * The transports create one scoped container per execution, so it is cheap: its structures are created the first time a scoped provider is resolved.
  */
 export class ScopedContainer {
-    private readonly instances = new Map<Token, unknown>();
-    private readonly pendingInstances = new PendingInstances();
+    // Created on the first scoped resolution, so a scoped container that never resolves a scoped provider allocates nothing else.
+    private instances?: Map<Token, unknown>;
+    private pendingInstances?: PendingInstances;
 
     /**
      * Creates a new instance of ScopedContainer.
@@ -30,14 +33,16 @@ export class ScopedContainer {
      * @returns A promise that resolves to an instance of the class or the result of the factory function associated with the provided token.
      */
     async resolve<T>(provider: ClassProvider<T> | FactoryProvider<T>, chain: ResolutionChain = ResolutionChain.start()): Promise<T> {
-        if (this.instances.has(provider.token)) return this.instances.get(provider.token) as T;
+        const instances = (this.instances ??= new Map<Token, unknown>());
+        if (instances.has(provider.token)) return instances.get(provider.token) as T;
 
         const classType = 'useClass' in provider ? provider.useClass : provider.forClass;
         if (chain.includes(classType)) return await this.resolver.resolve(provider, this.container, this, chain);
 
+        this.pendingInstances ??= new PendingInstances();
         return await this.pendingInstances.getOrCreate(provider, classType, chain, async () => {
             const resolvedInstance = await this.resolver.resolve(provider, this.container, this, chain);
-            this.instances.set(provider.token, resolvedInstance);
+            instances.set(provider.token, resolvedInstance);
             return resolvedInstance;
         });
     }

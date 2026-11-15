@@ -3,6 +3,7 @@ import { ValidateSchema, ValidateSchemaPipeStep } from './validate-schema';
 import { PipeStepError, PipeStepValidationError } from '../../pipe';
 import { ParameterDefinition } from '../../parameter';
 import { Pipe } from '../../decorators';
+import { Metadata } from '@axisparkjs/common';
 
 class AddressDto {
     @IsString()
@@ -128,5 +129,21 @@ describe('ValidateSchemaPipeStep', () => {
         await expect(step.execute(parameterFor('handle', {}, 0, WithoutMetadata))).rejects.toThrow(
             /Schema validation for 'body' in WithoutMetadata.handle requires a class-typed parameter/
         );
+    });
+    it('should read the type metadata once per handler and parameter', async () => {
+        class Cached {
+            create(@Pipe(ValidateSchema()) _user: CreateUserDto, @Pipe(ValidateSchema()) _address: AddressDto): void {}
+        }
+        const get = jest.spyOn(Metadata, 'get');
+        const user = { email: 'user@example.com', age: 20 };
+
+        await step.execute(parameterFor('create', user, 0, Cached));
+        const reads = get.mock.calls.length;
+        await expect(step.execute(parameterFor('create', user, 0, Cached))).resolves.toBeInstanceOf(CreateUserDto);
+        expect(get.mock.calls.length).toBe(reads);
+
+        await expect(step.execute(parameterFor('create', { city: 'Madrid' }, 1, Cached))).resolves.toBeInstanceOf(AddressDto);
+        expect(get.mock.calls.length).toBeGreaterThan(reads);
+        get.mockRestore();
     });
 });

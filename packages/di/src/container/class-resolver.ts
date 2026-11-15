@@ -8,10 +8,12 @@ import { ScopedContainer } from './scoped-container';
 import { InjectMetadata } from '../metadata';
 
 /**
- * ClassResolver is responsible for resolving class providers and factory providers. It handles the instantiation of classes, resolving their dependencies in parallel, and managing scopes. It also detects circular dependencies and scope violations during the resolution process. The resolver has no state: the classes that are being resolved are kept in the resolution chain of each resolution, so concurrent resolutions never see the dependencies of each other.
+ * ClassResolver is responsible for resolving class providers and factory providers. It handles the instantiation of classes, resolving their dependencies in parallel, and managing scopes. It also detects circular dependencies and scope violations during the resolution process. The only state of the resolver is the cache of the constructor tokens of each class: the classes that are being resolved are kept in the resolution chain of each resolution, so concurrent resolutions never see the dependencies of each other.
  * @template T - The type of the instance being resolved.
  */
 export class ClassResolver<T = unknown> implements Resolver<T> {
+    private readonly constructorTokens = new WeakMap<ClassType, Token[]>();
+
     /**
      * Resolves a class provider or factory provider, instantiating the class and resolving its dependencies. It manages the resolution process, including handling scopes and detecting circular dependencies.
      * @param provider - The class provider or factory provider to resolve.
@@ -46,15 +48,30 @@ export class ClassResolver<T = unknown> implements Resolver<T> {
 
         let instance: T;
         if ('useClass' in provider) {
-            const paramTypes: Token[] = Metadata.get(MetadataKeys.DESIGN_PARAM_TYPES, classType) ?? [];
-            const metadata = Metadata.get<InjectMetadata>(MetadataKeys.INJECT, classType);
-            const tokens = paramTypes.map((paramType, index) => metadata?.params.get(index) ?? paramType);
-            instance = new classType(...(await ClassResolver.resolveAll(tokens, container, scopedContainer, next)));
+            instance = new classType(...(await ClassResolver.resolveAll(this.tokensOf(classType), container, scopedContainer, next)));
         } else {
             instance = await provider.useFactory(...(await ClassResolver.resolveAll(provider.inject ?? [], container, scopedContainer, next)));
         }
 
         return instance;
+    }
+
+    /**
+     * Returns the tokens of the constructor dependencies of a class: the `@Inject()` token of each parameter, or its `design:paramtypes`
+     * type. They are read from the metadata the first time and kept by class (in this resolver, so each container has its own
+     * cache), so instantiating a known class does not read metadata.
+     * @param classType - The class whose dependencies are returned.
+     * @returns The tokens, in the order of the constructor parameters.
+     */
+    tokensOf(classType: ClassType): Token[] {
+        let tokens = this.constructorTokens.get(classType);
+        if (!tokens) {
+            const paramTypes: Token[] = Metadata.get(MetadataKeys.DESIGN_PARAM_TYPES, classType) ?? [];
+            const metadata = Metadata.get<InjectMetadata>(MetadataKeys.INJECT, classType);
+            tokens = paramTypes.map((paramType, index) => metadata?.params.get(index) ?? paramType);
+            this.constructorTokens.set(classType, tokens);
+        }
+        return tokens;
     }
 
     /*
