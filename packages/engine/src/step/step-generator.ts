@@ -5,11 +5,12 @@ import { StepDefinition } from './step-definition';
 import { StepMethodMetadata, StepTargetMetadata, UseMetadata } from '../metadata';
 
 /**
- * A generator for creating step definitions based on metadata.
+ * A generator for creating step definitions based on metadata. The global steps are read from the `ClassRegistry` once, the first time a
+ * plan is generated, also when the application has no global steps.
  */
 @Injectable()
 export class StepGenerator implements Generator<StepDefinition[]> {
-    private readonly globalSteps: StepDefinition[] = [];
+    private globalSteps?: StepDefinition[];
 
     /**
      * Generates step definitions based on the provided execution context.
@@ -24,11 +25,7 @@ export class StepGenerator implements Generator<StepDefinition[]> {
     }
 
     private buildGlobalSteps(): StepDefinition[] {
-        if (this.globalSteps.length > 0) return this.globalSteps;
-
-        for (const target of ClassRegistry.getWithMetadata(MetadataKeys.STEP_TARGET)) {
-            this.globalSteps.push(...this.buildSteps(target, true));
-        }
+        this.globalSteps ??= ClassRegistry.getWithMetadata(MetadataKeys.STEP_TARGET).flatMap((target) => this.buildSteps(target, true));
         return this.globalSteps;
     }
 

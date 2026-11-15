@@ -5,6 +5,7 @@ import { PluginAlreadyRegisteredError } from './plugin-already-registered-error'
 import { PluginConfigMismatchError } from './plugin-config-mismatch-error';
 import { PluginCircularDependencyError } from './plugin-circular-dependency-error';
 import { PluginDependencyNotIncludedError } from './plugin-dependency-not-included-error';
+import { PluginDependencyFailedError } from './plugin-dependency-failed-error';
 import { Plugin, PluginLifecycle, PluginType, PluginOptions } from './plugin';
 
 interface RegisteredPlugin {
@@ -24,6 +25,7 @@ export class PluginRegistry implements Lifecycle {
     private readonly plugins: RegisteredPlugin[] = [];
     private readonly executionOrder: RegisteredPlugin[] = [];
     private readonly instances = new Map<PluginType, Plugin>();
+    private readonly requiredDependencies = new Map<PluginType, PluginType[]>();
 
     /**
      * Registers a new plugin with the registry.
@@ -56,6 +58,7 @@ export class PluginRegistry implements Lifecycle {
     /* Kahn's algorithm */
     private resolveExecutionOrder(): void {
         this.executionOrder.length = 0;
+        this.requiredDependencies.clear();
         const plugins = new Map(this.plugins.map((plugin) => [plugin.type, plugin]));
         const inDegree = new Map<PluginType, number>();
         const graph = new Map<PluginType, PluginType[]>();
@@ -63,6 +66,7 @@ export class PluginRegistry implements Lifecycle {
         for (const plugin of this.plugins) {
             inDegree.set(plugin.type, 0);
             graph.set(plugin.type, []);
+            this.requiredDependencies.set(plugin.type, []);
         }
 
         for (const plugin of this.plugins) {
@@ -74,6 +78,8 @@ export class PluginRegistry implements Lifecycle {
                     if (optional) continue;
                     throw new PluginDependencyNotIncludedError(dependencyType.name);
                 }
+
+                if (!optional) (this.requiredDependencies.get(plugin.type) as PluginType[]).push(dependencyType);
 
                 // If the dependency is registered, the order is respected even when it is optional.
                 (graph.get(dependencyType) as PluginType[]).push(plugin.type);
@@ -143,9 +149,10 @@ export class PluginRegistry implements Lifecycle {
                 instance = this.instances.get(type) as Plugin;
             }
 
-            try {
-                if (instance.getState() === PluginLifecycle.Error) return;
+            if (instance.getState() === PluginLifecycle.Error) continue;
+            if (methodName !== 'onStop' && this.skipIfDependencyFailed(context, type, instance)) continue;
 
+            try {
                 await instance[methodName]?.(context, options);
                 instance.setState(lifecycleState);
             } catch (error) {
@@ -153,5 +160,18 @@ export class PluginRegistry implements Lifecycle {
                 context.logger.fatal(`Error executing ${methodName} for plugin ${type.name}: ${error}`, error as Error);
             }
         }
+    }
+
+    /* A plugin cannot register or start when one of its required dependencies is in the Error state. */
+    private skipIfDependencyFailed(context: AxiSparkContext, type: PluginType, instance: Plugin): boolean {
+        const failed = (this.requiredDependencies.get(type) as PluginType[]).find(
+            (dependency) => this.instances.get(dependency)?.getState() === PluginLifecycle.Error
+        );
+        if (!failed) return false;
+
+        const error = new PluginDependencyFailedError(type.name, failed.name);
+        instance.setStateError(error);
+        context.logger.fatal(error.message, error);
+        return true;
     }
 }

@@ -268,4 +268,19 @@ describe('Metadata', () => {
             expect(Metadata.normalizeTarget(target)).toBe(target);
         });
     });
+    describe('version', () => {
+        it('should change when metadata is defined on a class, not on a property', () => {
+            class Versioned {
+                method(): void {}
+            }
+            const key = new MetadataKey('version-test');
+            const start = Metadata.version;
+
+            Metadata.define(key, 1, Versioned, 'method');
+            expect(Metadata.version).toBe(start);
+
+            Metadata.define(key, 1, Versioned);
+            expect(Metadata.version).toBe(start + 1);
+        });
+    });
 });
