@@ -35,6 +35,7 @@ describe('CacheProcessor', () => {
         (CacheProcessor as any).resolvers.clear();
         (CacheProcessor as any).stores.clear();
         (CacheProcessor as any).lastWarnings.clear();
+        CacheProcessor.setGenerationTtl(1_000);
         store = new InMemoryCacheStore();
         CacheProcessor.registerCacheStore(ExecutionTransport.Http, store);
         CacheProcessor.registerCache(ExecutionTransport.Http, resolverOf('GET /products/1'));
@@ -245,6 +246,83 @@ describe('CacheProcessor', () => {
             expect(await store.get('http:ProductController.find:1:GET /products/1')).toBeUndefined();
             expect(await store.get('http:ProductController.find:1:GET /products/2')).toEqual({ value: 'two' });
             expect(webSocketStore.delete).toHaveBeenCalledWith('websocket:ProductController.find:0:GET /products/1');
+        });
+    });
+    describe('generations in memory', () => {
+        const countingStore = () => {
+            const inner = new InMemoryCacheStore();
+            return {
+                get: jest.fn((key: string) => inner.get(key)),
+                set: jest.fn((key: string, value: unknown, ttl?: number) => inner.set(key, value, ttl)),
+                delete: jest.fn((key: string) => inner.delete(key))
+            } as unknown as jest.Mocked<CacheStore>;
+        };
+        const generationReads = (mock: jest.Mocked<CacheStore>) => mock.get.mock.calls.filter(([key]) => key.startsWith('gen:')).length;
+
+        it('reads the generation from the store once per time to live, so a cache hit costs one read', async () => {
+            const counting = countingStore();
+            CacheProcessor.registerCacheStore(ExecutionTransport.Http, counting);
+            const definition = new CacheDefinition(10_000);
+            const invoke = jest.fn().mockResolvedValue('value');
+
+            await processor.process(definition, context(), invoke);
+            counting.get.mockClear();
+            await processor.process(definition, context(), invoke);
+
+            expect(counting.get).toHaveBeenCalledTimes(1);
+            expect(generationReads(counting)).toBe(0);
+
+            now += 1_000;
+            await processor.process(definition, context(), invoke);
+            expect(generationReads(counting)).toBe(1);
+        });
+
+        it('reads the generation from the store on every request with a time to live of 0', async () => {
+            CacheProcessor.setGenerationTtl(0);
+            const counting = countingStore();
+            CacheProcessor.registerCacheStore(ExecutionTransport.Http, counting);
+
+            await processor.process(new CacheDefinition(10_000), context(), async () => 'value');
+            await processor.process(new CacheDefinition(10_000), context(), async () => 'value');
+
+            expect(generationReads(counting)).toBe(2);
+        });
+
+        it('updates the generation in memory when the handler is evicted', async () => {
+            const counting = countingStore();
+            CacheProcessor.registerCacheStore(ExecutionTransport.Http, counting);
+            const definition = new CacheDefinition(10_000);
+            const invoke = jest.fn().mockResolvedValueOnce('first').mockResolvedValueOnce('second');
+            await processor.process(definition, context(), invoke);
+
+            await processor.evict(ProductController, 'find');
+            counting.get.mockClear();
+
+            await expect(processor.process(definition, context(), invoke)).resolves.toBe('second');
+            expect(generationReads(counting)).toBe(0);
+        });
+
+        it('reads the generation from the store when another process evicted the handler and the copy expired', async () => {
+            const definition = new CacheDefinition(10_000);
+            const invoke = jest.fn().mockResolvedValueOnce('first').mockResolvedValueOnce('second');
+            await processor.process(definition, context(), invoke);
+
+            await store.set('gen:ProductController.find', 1);
+            await expect(processor.process(definition, context(), invoke)).resolves.toBe('first');
+
+            now += 1_000;
+            await expect(processor.process(definition, context(), invoke)).resolves.toBe('second');
+        });
+
+        it('ignores negative times to live', async () => {
+            CacheProcessor.setGenerationTtl(-5);
+            const counting = countingStore();
+            CacheProcessor.registerCacheStore(ExecutionTransport.Http, counting);
+
+            await processor.process(new CacheDefinition(10_000), context(), async () => 'value');
+            await processor.process(new CacheDefinition(10_000), context(), async () => 'value');
+
+            expect(generationReads(counting)).toBe(2);
         });
     });
 });
