@@ -11,9 +11,13 @@ import { PipeDefinition, PipeGenerator, PipeProcessor } from '../pipe';
  * The parameters and the pipes of a handler are read from the metadata once, the first time the handler is invoked, and kept by the identity
  * of the class and the property key. Each invocation only resolves the values of the parameters and runs the pipes, so the request hot path
  * does not read metadata.
+ *
+ * The instances of the singleton targets (middlewares, guards, interceptors, filters and handlers) are kept after their first resolution, so
+ * each execution only resolves the scoped and transient targets with the injector.
  */
 @Injectable()
 export class HandlerInvoker {
+    private readonly singletons = new Map<ClassType, any>();
     private readonly prepared = new Map<ClassType, Map<PropertyKey, Promise<PipeDefinition[]>>>();
 
     constructor(
@@ -34,8 +38,14 @@ export class HandlerInvoker {
         const pipes = prepared.map((pipe) => new PipeDefinition(this.parameterGenerator.resolve(context, pipe.parameter), pipe.steps));
         const args = await this.pipeProcessor.process(pipes, context);
 
-        const instance = await this.injector.get<any>(handler.target, context.scopedContainer);
+        const instance = this.singletons.get(handler.target) ?? (await this.resolve(handler.target, context));
         return instance[handler.propertyKey](...args);
+    }
+
+    private async resolve(target: ClassType, context: ExecutionContext): Promise<any> {
+        const instance = await this.injector.get<any>(target, context.scopedContainer);
+        if (this.injector.isSingleton(target)) this.singletons.set(target, instance);
+        return instance;
     }
 
     /* The pipes of the handler with the parameter definitions without values, generated once per handler. */
