@@ -18,7 +18,7 @@ import { TimeoutGenerator } from '../timeout';
 import { CacheGenerator } from '../cache';
 
 /**
- * A class responsible for generating execution plans based on the provided execution context. It utilizes the `StepGenerator` to generate steps and the `TimeoutGenerator` to generate timeout definitions and the `CacheGenerator` to generate cache definitions. The generated execution plan includes before, after, catch, and context steps, as well as an optional timeout definition and an optional cache definition. The class also caches registered plans for efficient reuse, by the identity of the target class and the property key, so two classes with the same name never share a plan.
+ * A class responsible for generating execution plans based on the provided execution context. It utilizes the `StepGenerator` to generate steps and the `TimeoutGenerator` to generate timeout definitions and the `CacheGenerator` to generate cache definitions. The generated execution plan includes before, after and catch steps, the handler (only its class and property key, so the cached plan keeps no reference to the context of the first request), as well as an optional timeout definition and an optional cache definition. The class also caches registered plans for efficient reuse, by the identity of the target class and the property key, so two classes with the same name never share a plan.
  */
 @Injectable()
 export class ExecutionPlanner {
@@ -60,7 +60,9 @@ export class ExecutionPlanner {
         const timeoutStep = this.timeoutGenerator.generate(context);
         const cache = this.cacheGenerator.generate(context);
 
-        return { before: beforeSteps, after: afterSteps, context, catch: catchSteps, timeout: timeoutStep, cache };
+        const handler = { target: context.target, propertyKey: context.propertyKey };
+
+        return { before: beforeSteps, after: afterSteps, handler, catch: catchSteps, timeout: timeoutStep, cache };
     }
 
     private getSteps(steps: StepDefinition[], type: StepType, global: boolean) {
