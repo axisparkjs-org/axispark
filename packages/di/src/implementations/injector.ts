@@ -28,4 +28,13 @@ export class Injector {
     public tryGet<T>(token: Token<T>): T | undefined {
         return this.container.tryResolve<T>(token);
     }
+
+    /**
+     * Checks whether a token always resolves to the same instance, so the instance can be kept and reused.
+     * @param token The token to check.
+     * @returns `true` when the token is bound to a singleton or a value.
+     */
+    public isSingleton(token: Token): boolean {
+        return this.container.isSingleton(token);
+    }
 }

@@ -14,8 +14,13 @@ export interface RotatingFileTransportOptions extends FileTransportOptions {
     maxFiles: number;
 }
 
+/**
+ * A log transport that outputs log entries to a file, and rotates it when it reaches `maxSize` bytes. The size of the file is read once and
+ * then counted in memory, and the file is closed before it is rotated.
+ */
 export class RotatingFileTransport extends FileTransport {
     protected readonly options: RotatingFileTransportOptions;
+    private size?: number;
 
     constructor(options: RotatingFileTransportOptions) {
         super(options);
@@ -23,17 +28,24 @@ export class RotatingFileTransport extends FileTransport {
     }
 
     protected override async beforeWrite(): Promise<void> {
-        let info;
-
-        try {
-            info = await stat(this.options.file);
-        } catch {
-            return;
+        if (this.size === undefined) {
+            try {
+                this.size = (await stat(this.options.file)).size;
+            } catch {
+                this.size = 0;
+            }
         }
 
-        if (info.size >= this.options.maxSize) {
+        if (this.size >= this.options.maxSize) {
+            await this.closeStream();
             await this.rotate();
+            this.size = 0;
         }
+    }
+
+    protected override append(file: string, data: string): Promise<void> {
+        this.size = (this.size ?? 0) + Buffer.byteLength(data);
+        return super.append(file, data);
     }
 
     private async rotate(): Promise<void> {

@@ -46,4 +46,18 @@ export class ParameterGenerator implements Generator<ParameterDefinition[]> {
 
         return args;
     }
+
+    /**
+     * Resolves the value of a parameter generated without values (`resolving` set to `false`) for one execution. The definition is copied,
+     * so the definitions generated once per handler can be reused by every execution.
+     * @param executionContext The execution context of the invocation.
+     * @param definition The definition of the parameter, without value.
+     * @returns A copy of the definition with the resolved value.
+     */
+    resolve(executionContext: ExecutionContext, definition: ParameterDefinition): ParameterDefinition {
+        const parameter = definition.clone();
+        const resolver = ParameterGenerator.resolvers.get(parameter.parameter);
+        if (resolver) parameter.setValue(resolver.resolve(executionContext, parameter));
+        return parameter;
+    }
 }

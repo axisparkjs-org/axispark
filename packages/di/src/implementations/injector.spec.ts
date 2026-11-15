@@ -54,4 +54,14 @@ describe('Injector', () => {
             expect(container.tryResolve).toHaveBeenCalledWith(token);
         });
     });
+
+    describe('isSingleton', () => {
+        it('should check the token with the container', () => {
+            const token = new InjectionToken('token');
+            container.isSingleton = jest.fn().mockReturnValue(true);
+
+            expect(injector.isSingleton(token)).toBe(true);
+            expect(container.isSingleton).toHaveBeenCalledWith(token);
+        });
+    });
 });

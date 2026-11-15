@@ -474,4 +474,45 @@ describe('Container', () => {
             expect(container.tryResolve(loopA)).toBeUndefined();
         });
     });
+
+    describe('isSingleton', () => {
+        class SingletonService {}
+        class ScopedService {}
+        class TransientService {}
+
+        const token = (name: string) => new InjectionToken(name);
+        const [value, alias, factory, missing, a, b, dangling] = ['value', 'alias', 'factory', 'missing', 'a', 'b', 'dangling'].map(token);
+
+        beforeEach(() => {
+            metadataMock.has.mockReturnValue(true);
+        });
+
+        it('returns true for singletons and values, also through aliases', () => {
+            const container = new Container();
+            container.bind({ token: SingletonService, useClass: SingletonService, scope: InjectableScopes.Singleton });
+            container.bind({ token: value, useValue: 1 as any });
+            container.bind({ token: alias, useExisting: value });
+            container.bind({ token: factory, useFactory: () => 1, forClass: SingletonService as any, scope: InjectableScopes.Singleton });
+
+            expect(container.isSingleton(SingletonService)).toBe(true);
+            expect(container.isSingleton(value)).toBe(true);
+            expect(container.isSingleton(alias)).toBe(true);
+            expect(container.isSingleton(factory)).toBe(true);
+        });
+
+        it('returns false for scoped, transient, missing and circular tokens', () => {
+            const container = new Container();
+            container.bind({ token: ScopedService, useClass: ScopedService, scope: InjectableScopes.Scoped });
+            container.bind({ token: TransientService, useClass: TransientService, scope: InjectableScopes.Transient });
+            container.bind({ token: a, useExisting: b });
+            container.bind({ token: b, useExisting: a });
+            container.bind({ token: dangling, useExisting: missing });
+
+            expect(container.isSingleton(ScopedService)).toBe(false);
+            expect(container.isSingleton(TransientService)).toBe(false);
+            expect(container.isSingleton(missing)).toBe(false);
+            expect(container.isSingleton(a)).toBe(false);
+            expect(container.isSingleton(dangling)).toBe(false);
+        });
+    });
 });
