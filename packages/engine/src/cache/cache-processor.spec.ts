@@ -248,6 +248,85 @@ describe('CacheProcessor', () => {
             expect(webSocketStore.delete).toHaveBeenCalledWith('websocket:ProductController.find:0:GET /products/1');
         });
     });
+    describe('single-flight', () => {
+        const deferred = <T>() => {
+            let resolve: (value: T) => void = () => undefined;
+            let reject: (error: unknown) => void = () => undefined;
+            const promise = new Promise<T>((res, rej) => {
+                resolve = res;
+                reject = rej;
+            });
+            return { promise, resolve, reject };
+        };
+        const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+        it('invokes the handler once for concurrent misses of the same key and shares its result', async () => {
+            const first = deferred<unknown>();
+            const invoke = jest.fn().mockReturnValueOnce(first.promise).mockResolvedValue('other');
+            const definition = new CacheDefinition(1_000);
+
+            const requests = [processor.process(definition, context(), invoke), processor.process(definition, context(), invoke)];
+            await flush();
+            requests.push(processor.process(definition, context(), invoke));
+            await flush();
+            first.resolve({ id: 1 });
+
+            await expect(Promise.all(requests)).resolves.toEqual([{ id: 1 }, { id: 1 }, { id: 1 }]);
+            expect(invoke).toHaveBeenCalledTimes(1);
+        });
+
+        it('does not share the invocation between different keys', async () => {
+            const first = deferred<unknown>();
+            const invoke = jest.fn().mockReturnValueOnce(first.promise).mockResolvedValue('two');
+            const definition = new CacheDefinition(1_000);
+
+            const one = processor.process(definition, context(), invoke);
+            await flush();
+            CacheProcessor.registerCache(ExecutionTransport.Http, resolverOf('GET /products/2'));
+            const two = processor.process(definition, context(), invoke);
+            first.resolve('one');
+
+            await expect(Promise.all([one, two])).resolves.toEqual(['one', 'two']);
+            expect(invoke).toHaveBeenCalledTimes(2);
+        });
+
+        it('lets the waiting requests invoke the handler when the first invocation fails', async () => {
+            const first = deferred<unknown>();
+            const error = new Error('failure');
+            const invoke = jest.fn().mockReturnValueOnce(first.promise).mockResolvedValue('retry');
+            const definition = new CacheDefinition(1_000);
+
+            const failing = processor.process(definition, context(), invoke);
+            await flush();
+            const waiting = processor.process(definition, context(), invoke);
+            await flush();
+            first.reject(error);
+
+            await expect(failing).rejects.toBe(error);
+            await expect(waiting).resolves.toBe('retry');
+            expect(invoke).toHaveBeenCalledTimes(2);
+        });
+
+        it('lets the waiting requests invoke the handler when the first result is not cached', async () => {
+            const first = deferred<unknown>();
+            const file = new FileResult(undefined, 200);
+            const invoke = jest.fn().mockReturnValueOnce(first.promise).mockResolvedValue(new FileResult(undefined, 200));
+            const definition = new CacheDefinition(1_000);
+
+            const leader = processor.process(definition, context(), invoke);
+            await flush();
+            const waiting = processor.process(definition, context(), invoke);
+            await flush();
+            first.resolve(file);
+
+            await expect(leader).resolves.toBe(file);
+            const result = await waiting;
+            expect(result).toBeInstanceOf(FileResult);
+            expect(result).not.toBe(file);
+            expect(invoke).toHaveBeenCalledTimes(2);
+        });
+    });
+
     describe('generations in memory', () => {
         const countingStore = () => {
             const inner = new InMemoryCacheStore();
