@@ -1,6 +1,7 @@
 import { RouteDefinition } from './route-definition';
 import { HttpMethod } from '../types';
 import { RouteHandler } from './route-handler';
+import { HostPattern } from '../host';
 
 describe('RouteDefinition', () => {
     class TestController {
@@ -119,4 +120,13 @@ describe('RouteDefinition', () => {
             expect(route('/users', httpMethod).httpMethod).toBe(httpMethod);
         }
     );
+    describe('host patterns', () => {
+        it('compiles the host patterns and their highest specificity when the route is created', () => {
+            const hosted = new RouteDefinition(TestController, 'test', HttpMethod.Get, '/', [], ['*.example.com', 'api.example.com'], handler);
+
+            expect(hosted.hostPatterns).toEqual([HostPattern.of('*.example.com'), HostPattern.of('api.example.com')]);
+            expect(hosted.hostSpecificity).toBe(300);
+            expect(new RouteDefinition(TestController, 'test', HttpMethod.Get, '/', [], [], handler).hostSpecificity).toBe(0);
+        });
+    });
 });
