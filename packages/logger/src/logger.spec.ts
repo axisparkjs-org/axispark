@@ -400,7 +400,7 @@ describe('Logger', () => {
             await expect(new Logger([duckTyped]).info('hello')).resolves.toBeUndefined();
         });
     });
-  
+
     describe('flush', () => {
         it('should flush every transport and ignore the failures', async () => {
             const failing = new MockTransport({ minLevel: LogLevel.Info, formatter: { format: jest.fn() } });
