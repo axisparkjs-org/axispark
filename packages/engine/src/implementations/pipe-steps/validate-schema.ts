@@ -27,6 +27,13 @@ export interface ValidateSchemaPipeStepConfig extends PipeStepConfig {
 
 const NON_SCHEMA_TYPES = new Set<unknown>([Object, Array, String, Number, Boolean, Symbol, BigInt, Function, Promise, Date]);
 
+/* The schemas resolved from the metadata, by target, property key and parameter index, so each validation does not read the metadata. */
+const schemas = new WeakMap<ClassType, Map<PropertyKey, Map<number, ClassType>>>();
+
+/**
+ * A pipe-step that validates a parameter against the class declared as its type, with the `class-validator` decorators of the class. The
+ * class is read from the `design:paramtypes` metadata once per handler and parameter, and kept for the next validations.
+ */
 @Injectable()
 export class ValidateSchemaPipeStep implements PipeStep<unknown, object> {
     async execute(parameter: ParameterDefinition, config?: ValidateSchemaPipeStepConfig): Promise<any> {
@@ -47,6 +54,27 @@ export class ValidateSchemaPipeStep implements PipeStep<unknown, object> {
     }
 
     private resolveSchema(parameter: ParameterDefinition): ClassType {
+        const { target, propertyKey, parameterIndex } = parameter;
+        let ofTarget = schemas.get(target);
+        if (!ofTarget) {
+            ofTarget = new Map();
+            schemas.set(target, ofTarget);
+        }
+        let ofMethod = ofTarget.get(propertyKey);
+        if (!ofMethod) {
+            ofMethod = new Map();
+            ofTarget.set(propertyKey, ofMethod);
+        }
+
+        let schema = ofMethod.get(parameterIndex);
+        if (!schema) {
+            schema = this.readSchema(parameter);
+            ofMethod.set(parameterIndex, schema);
+        }
+        return schema;
+    }
+
+    private readSchema(parameter: ParameterDefinition): ClassType {
         const { target, propertyKey, parameterIndex } = parameter;
         const types =
             Metadata.get<unknown[]>(MetadataKeys.DESIGN_PARAM_TYPES, target.prototype, propertyKey, false) ??
