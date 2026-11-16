@@ -33,7 +33,8 @@ export class HttpEngine implements Executable {
 
     /**
      * Executes the HTTP engine with the provided context.
-     * @param context The HTTP context for execution.
+     * @param context The HTTP context for execution, created by the adapter for this request. It is completed in place with the rest of
+     * the properties of the `HttpContext` instead of being copied.
      * @param routes The routes to map which will be executed.
      * When the group has a single route that accepts every host (`*`) and has no versions (versioning disabled), the host and version
      * matching is skipped and `context.host` and `context.version` are `undefined`.
@@ -60,18 +61,18 @@ export class HttpEngine implements Executable {
             versionDefinition.setAcceptedVersions(versionRoute.versions);
         }
 
-        const filledContext: HttpContext = {
-            ...context,
-            scopedContainer: this.scopedContainerManager.create(),
-            transport: ExecutionTransport.Http,
-            // The engine replaces it with the signal of the execution, aborted when this one is.
-            signal: context.request.signal ?? new AbortController().signal,
-            target: versionRoute.target,
-            propertyKey: versionRoute.propertyKey,
-            host: hostDefinition,
-            version: versionDefinition,
-            error: undefined
-        };
+        // The context of the adapter is created for this request, so it is filled instead of copied. Its properties, such as a lazy
+        // session getter, are kept as they are.
+        const filledContext = context as HttpContext;
+        filledContext.scopedContainer = this.scopedContainerManager.create();
+        filledContext.transport = ExecutionTransport.Http;
+        // The engine replaces it with the signal of the execution, aborted when this one is.
+        filledContext.signal = context.request.signal ?? new AbortController().signal;
+        filledContext.target = versionRoute.target;
+        filledContext.propertyKey = versionRoute.propertyKey;
+        filledContext.host = hostDefinition;
+        filledContext.version = versionDefinition;
+        filledContext.error = undefined;
 
         try {
             await this.executionEngine.execute(filledContext);
