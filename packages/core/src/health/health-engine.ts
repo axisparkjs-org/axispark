@@ -27,11 +27,15 @@ interface HealthCheckEntry {
  * - `checkAll()`: Checks the health status of all registered plugins and health checks and returns an array of `HealthData` objects representing the health of each component, including the overall application health.
  * - `checkApp()`: Checks the overall health status of the application and returns a single `HealthData` object representing the application's health.
  *
+ * The checks decorated with `@HealthCheck` are read from the `ClassRegistry` the first time the health is checked, when every file has been
+ * scanned, and the list is reused by the next checks.
+ *
  * The `HealthEngine` class is designed to be used in applications that require monitoring and reporting of component health, providing a structured way to assess the state of the application, its plugins and its external dependencies.
  */
 @Injectable()
 export class HealthEngine {
     private readonly registeredChecks: HealthCheckEntry[] = [];
+    private decoratedChecks?: HealthCheckEntry[];
 
     constructor(
         private readonly config: AxiSparkConfig,
@@ -103,8 +107,9 @@ export class HealthEngine {
         return healthDatas[0];
     }
 
+    /* The checks decorated with @HealthCheck, read from the registry and the metadata on the first health check, after the scan. */
     private getDecoratedChecks(): HealthCheckEntry[] {
-        return ClassRegistry.getWithMetadata(MetadataKeys.HEALTH_CHECK).map((target) => {
+        this.decoratedChecks ??= ClassRegistry.getWithMetadata(MetadataKeys.HEALTH_CHECK).map((target) => {
             const metadata = Metadata.get<HealthCheckMetadata>(MetadataKeys.HEALTH_CHECK, target) as HealthCheckMetadata;
             return {
                 name: metadata.name,
@@ -113,6 +118,7 @@ export class HealthEngine {
                 resolve: async () => await this.container.resolve(metadata.target as ClassType<HealthIndicator>)
             };
         });
+        return this.decoratedChecks;
     }
 
     private async runCheck(check: HealthCheckEntry): Promise<HealthData> {
