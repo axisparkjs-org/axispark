@@ -13,7 +13,7 @@ describe('ResolutionChain', () => {
 
         const fork = chain.fork();
 
-        expect(fork.steps).toBe(chain.steps);
+        expect(fork.steps).toEqual(chain.steps);
         expect(fork.state).not.toBe(chain.state);
         expect(fork.state.parent).toBe(chain.state);
         expect(chain.state.forks.has(fork.state)).toBe(true);
@@ -58,5 +58,57 @@ describe('ResolutionChain', () => {
         void second.waitFor(firstPending);
 
         expect(mine.findWaitCycle(firstPending)).toBeUndefined();
+    });
+
+    it('should start an empty chain', () => {
+        const chain = ResolutionChain.start();
+
+        expect(chain.steps).toEqual([]);
+        expect(chain.includes(A)).toBe(false);
+        expect(chain.hasSingleton()).toBe(false);
+        expect(chain.describe(false, A)).toBe('A');
+    });
+
+    it('should link the dependencies without changing the parent chain', () => {
+        const root = ResolutionChain.start().with({ classType: A, scope: InjectableScopes.Transient });
+        const left = root.with({ classType: B, scope: InjectableScopes.Scoped });
+        const right = root.with({ classType: C, scope: InjectableScopes.Singleton });
+
+        expect(root.steps).toEqual([{ classType: A, scope: InjectableScopes.Transient }]);
+        expect(left.steps.map((step) => step.classType)).toEqual([A, B]);
+        expect(right.includes(A)).toBe(true);
+        expect(right.includes(B)).toBe(false);
+        expect(left.includes(C)).toBe(false);
+        expect(left.state).toBe(root.state);
+    });
+
+    it('should know whether a singleton is in the chain', () => {
+        const transient = ResolutionChain.start().with({ classType: A, scope: InjectableScopes.Transient });
+        const singleton = transient.with({ classType: B, scope: InjectableScopes.Singleton });
+
+        expect(transient.hasSingleton()).toBe(false);
+        expect(singleton.hasSingleton()).toBe(true);
+        expect(singleton.with({ classType: C, scope: InjectableScopes.Scoped }).hasSingleton()).toBe(true);
+    });
+
+    it('should describe the classes of the chain in order, with their scopes', () => {
+        const chain = ResolutionChain.start().with({ classType: A, scope: InjectableScopes.Singleton }).with({ classType: B, scope: InjectableScopes.Scoped });
+
+        expect(chain.describe(true)).toBe('A (singleton) -> B (scoped)');
+        expect(chain.describe(false, C)).toBe('A -> B -> C');
+    });
+
+    it('should keep the links and the singleton flag of the chain in its forks', () => {
+        const chain = ResolutionChain.start()
+            .with({ classType: A, scope: InjectableScopes.Singleton })
+            .with({ classType: B, scope: InjectableScopes.Transient });
+
+        const fork = chain.fork();
+
+        expect(fork.includes(A)).toBe(true);
+        expect(fork.includes(C)).toBe(false);
+        expect(fork.hasSingleton()).toBe(true);
+        expect(fork.with({ classType: C, scope: InjectableScopes.Scoped }).describe(true)).toBe('A (singleton) -> B (transient) -> C (scoped)');
+        expect(ResolutionChain.start().fork().steps).toEqual([]);
     });
 });
