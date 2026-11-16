@@ -29,7 +29,7 @@ return {1, 0}
 `;
 
 /**
- * Counts the rate limit requests in Redis with the same sliding window as `InMemoryRateLimitStore`, so every instance of the
+ * Counts the rate limit requests in Redis with an exact sliding window (one member per request), so every instance of the
  * application connected to the same Redis shares the limits. The buckets expire with their window.
  */
 export class RedisRateLimitStore implements RateLimitStore {

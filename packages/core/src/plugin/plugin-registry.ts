@@ -5,6 +5,7 @@ import { PluginAlreadyRegisteredError } from './plugin-already-registered-error'
 import { PluginConfigMismatchError } from './plugin-config-mismatch-error';
 import { PluginCircularDependencyError } from './plugin-circular-dependency-error';
 import { PluginDependencyNotIncludedError } from './plugin-dependency-not-included-error';
+import { PluginDependencyFailedError } from './plugin-dependency-failed-error';
 import { Plugin, PluginLifecycle, PluginType, PluginOptions } from './plugin';
 
 interface RegisteredPlugin {
@@ -37,6 +38,7 @@ export class PluginRegistry implements Lifecycle {
     private readonly plugins: RegisteredPlugin[] = [];
     private readonly levels: RegisteredPlugin[][] = [];
     private readonly instances = new Map<PluginType, Plugin>();
+    private readonly requiredDependencies = new Map<PluginType, PluginType[]>();
 
     /**
      * Creates a new plugin registry.
@@ -75,6 +77,7 @@ export class PluginRegistry implements Lifecycle {
     /* Kahn's algorithm */
     private resolveExecutionOrder(): void {
         this.levels.length = 0;
+        this.requiredDependencies.clear();
         const plugins = new Map(this.plugins.map((plugin) => [plugin.type, plugin]));
         const inDegree = new Map<PluginType, number>();
         const graph = new Map<PluginType, PluginType[]>();
@@ -82,6 +85,7 @@ export class PluginRegistry implements Lifecycle {
         for (const plugin of this.plugins) {
             inDegree.set(plugin.type, 0);
             graph.set(plugin.type, []);
+            this.requiredDependencies.set(plugin.type, []);
         }
 
         for (const plugin of this.plugins) {
@@ -93,6 +97,8 @@ export class PluginRegistry implements Lifecycle {
                     if (optional) continue;
                     throw new PluginDependencyNotIncludedError(dependencyType.name);
                 }
+
+                if (!optional) (this.requiredDependencies.get(plugin.type) as PluginType[]).push(dependencyType);
 
                 // If the dependency is registered, the order is respected even when it is optional.
                 (graph.get(dependencyType) as PluginType[]).push(plugin.type);
@@ -166,7 +172,10 @@ export class PluginRegistry implements Lifecycle {
         }
     }
 
-    /* Runs one lifecycle method of one plugin. A plugin in the Error state is skipped, and its error never stops the other plugins. */
+    /*
+     * Runs one lifecycle method of one plugin. A plugin in the Error state is skipped, and so is a plugin whose required dependency is in the
+     * Error state (the dependencies are in previous levels, so their state is final). An error never stops the other plugins.
+     */
     private async executePlugin(
         context: AxiSparkContext,
         { type, options }: RegisteredPlugin,
@@ -182,6 +191,8 @@ export class PluginRegistry implements Lifecycle {
         }
 
         if (instance.getState() === PluginLifecycle.Error) return;
+        if (methodName !== 'onStop' && this.skipIfDependencyFailed(context, type, instance)) return;
+
         try {
             await instance[methodName]?.(context, options);
             instance.setState(lifecycleState);
@@ -189,5 +200,18 @@ export class PluginRegistry implements Lifecycle {
             instance.setStateError(error as Error);
             context.logger.fatal(`Error executing ${methodName} for plugin ${type.name}: ${error}`, error as Error);
         }
+    }
+
+    /* A plugin cannot register or start when one of its required dependencies is in the Error state. */
+    private skipIfDependencyFailed(context: AxiSparkContext, type: PluginType, instance: Plugin): boolean {
+        const failed = (this.requiredDependencies.get(type) as PluginType[]).find(
+            (dependency) => this.instances.get(dependency)?.getState() === PluginLifecycle.Error
+        );
+        if (!failed) return false;
+
+        const error = new PluginDependencyFailedError(type.name, failed.name);
+        instance.setStateError(error);
+        context.logger.fatal(error.message, error);
+        return true;
     }
 }
