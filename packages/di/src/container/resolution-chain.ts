@@ -24,11 +24,16 @@ export interface PendingInstance<T = unknown> {
 }
 
 /**
- * The state shared by every step of one resolution chain.
+ * The state shared by every step of one resolution chain. The dependencies of a constructor are resolved in parallel, each one in a fork
+ * of the chain with its own state, linked to the state of the chain that forks it.
  */
 export interface ResolutionChainState {
-    /** The pending instance that the chain is waiting for, if any. */
-    waitingFor?: PendingInstance;
+    /** The state of the chain that forked this one, if any. */
+    readonly parent?: ResolutionChainState;
+    /** The states of the forks of this chain. */
+    readonly forks: Set<ResolutionChainState>;
+    /** The pending instances that the chain is waiting for. */
+    readonly waitingFor: Set<PendingInstance>;
 }
 
 /**
@@ -47,7 +52,7 @@ export class ResolutionChain {
      * @returns A new resolution chain.
      */
     static start(): ResolutionChain {
-        return new ResolutionChain([], {});
+        return new ResolutionChain([], { forks: new Set(), waitingFor: new Set() });
     }
 
     /**
@@ -57,6 +62,18 @@ export class ResolutionChain {
      */
     with(step: ResolutionStep): ResolutionChain {
         return new ResolutionChain([...this.steps, step], this.state);
+    }
+
+    /**
+     * Creates a fork of the chain, with the same classes and its own state, to resolve one of several dependencies in parallel. The forks
+     * of a chain can wait for the instances created by each other, and a wait for an instance created by the chain or by one of its
+     * ancestors is still detected as a cycle.
+     * @returns A new chain with the same steps and a new state linked to the state of this chain.
+     */
+    fork(): ResolutionChain {
+        const state: ResolutionChainState = { parent: this.state, forks: new Set(), waitingFor: new Set() };
+        this.state.forks.add(state);
+        return new ResolutionChain(this.steps, state);
     }
 
     /**
@@ -88,35 +105,49 @@ export class ResolutionChain {
     }
 
     /**
-     * Finds the cycle that waiting for a pending instance would create: the instance is created by this chain, or by a chain that waits, directly or through other chains, for an instance created by this chain.
+     * Finds the cycle that waiting for a pending instance would create: the instance is created by this chain or one of its ancestors, or by
+     * a chain that waits, directly, through its forks or through other chains, for an instance created by one of them.
      * @param pending The pending instance to wait for.
      * @returns The classes of the pending instances of the cycle, or `undefined` when waiting is safe.
      */
     findWaitCycle(pending: PendingInstance): ClassType[] | undefined {
-        const classes: ClassType[] = [];
+        const ancestors = new Set<ResolutionChainState>();
+        for (let state: ResolutionChainState | undefined = this.state; state; state = state.parent) ancestors.add(state);
+
         const visited = new Set<PendingInstance>();
-        let current: PendingInstance | undefined = pending;
-        while (current && !visited.has(current)) {
+        const visit = (current: PendingInstance, path: ClassType[]): ClassType[] | undefined => {
+            if (visited.has(current)) return undefined;
             visited.add(current);
-            classes.push(current.classType);
-            if (current.owner === this.state) return classes;
-            current = current.owner.waitingFor;
-        }
-        return undefined;
+
+            const classes = [...path, current.classType];
+            if (ancestors.has(current.owner)) return classes;
+            for (const waited of ResolutionChain.waitsOf(current.owner)) {
+                const cycle = visit(waited, classes);
+                if (cycle) return cycle;
+            }
+            return undefined;
+        };
+        return visit(pending, []);
+    }
+
+    /* The pending instances that a chain waits for, directly or through its forks. */
+    private static *waitsOf(state: ResolutionChainState): Generator<PendingInstance> {
+        yield* state.waitingFor;
+        for (const fork of state.forks) yield* this.waitsOf(fork);
     }
 
     /**
-     * Waits for a pending instance, recording it as the instance this chain is waiting for.
+     * Waits for a pending instance, recording it as one of the instances this chain is waiting for.
      * @template T - The type of the instance.
      * @param pending The pending instance to wait for.
      * @returns A promise that resolves to the instance.
      */
     async waitFor<T>(pending: PendingInstance<T>): Promise<T> {
-        this.state.waitingFor = pending;
+        this.state.waitingFor.add(pending);
         try {
             return await pending.promise;
         } finally {
-            this.state.waitingFor = undefined;
+            this.state.waitingFor.delete(pending);
         }
     }
 }

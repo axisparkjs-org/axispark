@@ -153,4 +153,66 @@ describe('ClassRegistry', () => {
             expect(spy).not.toHaveBeenCalled();
         });
     });
+    describe('indexes', () => {
+        it('should filter the registry once per metadata key until it changes', () => {
+            const spy = jest.spyOn(Metadata, 'has').mockImplementation((_, target) => target === TestClassA);
+            ClassRegistry.register(TestClassA);
+            ClassRegistry.register(TestClassB);
+
+            expect(ClassRegistry.getWithMetadata(MetadataKeys.CONSTRUCTABLE)).toEqual([TestClassA]);
+            expect(ClassRegistry.getWithMetadata(MetadataKeys.CONSTRUCTABLE)).toEqual([TestClassA]);
+            expect(spy).toHaveBeenCalledTimes(2);
+
+            ClassRegistry.register(TestClassC);
+            expect(ClassRegistry.getWithMetadata(MetadataKeys.CONSTRUCTABLE)).toEqual([TestClassA]);
+            expect(spy).toHaveBeenCalledTimes(5);
+
+            ClassRegistry.remove(TestClassA);
+            expect(ClassRegistry.getWithMetadata(MetadataKeys.CONSTRUCTABLE)).toEqual([]);
+        });
+
+        it('should build the index again when metadata is defined on a class', () => {
+            ClassRegistry.register(TestClassA);
+            ClassRegistry.register(TestClassB);
+            expect(ClassRegistry.getWithMetadata(MetadataKeys.CONTROLLER)).toEqual([]);
+
+            Metadata.define(MetadataKeys.CONTROLLER, {}, TestClassB);
+
+            expect(ClassRegistry.getWithMetadata(MetadataKeys.CONTROLLER)).toEqual([TestClassB]);
+        });
+
+        it('should return a copy that callers can change', () => {
+            jest.spyOn(Metadata, 'has').mockReturnValue(true);
+            ClassRegistry.register(TestClassA);
+
+            ClassRegistry.getWithMetadata(MetadataKeys.CONSTRUCTABLE).pop();
+            ClassRegistry.getAllByName('TestClassA').pop();
+
+            expect(ClassRegistry.getWithMetadata(MetadataKeys.CONSTRUCTABLE)).toEqual([TestClassA]);
+            expect(ClassRegistry.getAllByName('TestClassA')).toEqual([TestClassA]);
+        });
+
+        it('should index the classes by name and update the index when the registry changes', () => {
+            const Same = { TestClassA: class {} }.TestClassA;
+            ClassRegistry.register(TestClassA);
+
+            expect(ClassRegistry.getAllByName('TestClassA')).toEqual([TestClassA]);
+            ClassRegistry.register(Same);
+            expect(ClassRegistry.getAllByName('TestClassA')).toEqual([TestClassA, Same]);
+            ClassRegistry.register(Same);
+            expect(ClassRegistry.getAllByName('TestClassA')).toEqual([TestClassA, Same]);
+        });
+
+        it('should not keep the index when the metadata version is not available', () => {
+            const version = jest.spyOn(Metadata, 'version', 'get').mockReturnValue(undefined as unknown as number);
+            const spy = jest.spyOn(Metadata, 'has').mockReturnValue(true);
+            ClassRegistry.register(TestClassA);
+
+            ClassRegistry.getWithMetadata(MetadataKeys.CONSTRUCTABLE);
+            ClassRegistry.getWithMetadata(MetadataKeys.CONSTRUCTABLE);
+
+            expect(spy).toHaveBeenCalledTimes(2);
+            version.mockRestore();
+        });
+    });
 });

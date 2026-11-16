@@ -40,12 +40,17 @@ interface HealthCheckState {
  * Concurrent health requests share the checks that are running, and the result of a check is reused for `cacheTtl` milliseconds (of the
  * check, or `healthChecks.cacheTtl` of the application), so frequent probes do not run the indicators every time.
  *
+
+ * The checks decorated with `@HealthCheck` are read from the `ClassRegistry` the first time the health is checked, when every file has been
+ * scanned, and the list is reused by the next checks.
+ *
  * The `HealthEngine` class is designed to be used in applications that require monitoring and reporting of component health, providing a structured way to assess the state of the application, its plugins and its external dependencies.
  */
 @Injectable()
 export class HealthEngine {
     private readonly registeredChecks: HealthCheckEntry[] = [];
     private readonly checkStates = new WeakMap<object, HealthCheckState>();
+    private decoratedChecks?: HealthCheckEntry[];
 
     constructor(
         private readonly config: AxiSparkConfig,
@@ -119,8 +124,9 @@ export class HealthEngine {
         return healthDatas[0];
     }
 
+    /* The checks decorated with @HealthCheck, read from the registry and the metadata on the first health check, after the scan. */
     private getDecoratedChecks(): HealthCheckEntry[] {
-        return ClassRegistry.getWithMetadata(MetadataKeys.HEALTH_CHECK).map((target) => {
+        this.decoratedChecks ??= ClassRegistry.getWithMetadata(MetadataKeys.HEALTH_CHECK).map((target) => {
             const metadata = Metadata.get<HealthCheckMetadata>(MetadataKeys.HEALTH_CHECK, target) as HealthCheckMetadata;
             return {
                 name: metadata.name,
@@ -131,6 +137,7 @@ export class HealthEngine {
                 resolve: async () => await this.container.resolve(metadata.target as ClassType<HealthIndicator>)
             };
         });
+        return this.decoratedChecks;
     }
 
     /*
