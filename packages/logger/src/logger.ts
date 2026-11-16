@@ -85,6 +85,9 @@ export class NonBlockingLogger {
 @Injectable()
 export class Logger {
     private nonBlockingLogger?: NonBlockingLogger;
+    /* The lowest minimum level of the transports, computed again when transports are added to or removed from the array. */
+    private lowestLevel?: { transports: number; level: number };
+
     /**
      * Constructor for the Logger class.
      * @param transports An array of LogTransport instances that define how log entries are handled (e.g., written to console, file, etc.).
@@ -172,8 +175,31 @@ export class Logger {
         return new Logger(this.transports, [...this.scopes, scope], this.mergeMetadata(this.metadata, metadata));
     }
 
+    /**
+     * Writes the entries kept in memory by the transports (buffered or batched transports) and waits for them. A failing transport does not
+     * stop the others, and its failure is ignored, so it never breaks the shutdown of the application.
+     */
+    public async flush(): Promise<void> {
+        await Promise.allSettled(this.transports.map((transport) => transport.flush?.()));
+    }
+
+    /**
+     * Whether an entry of the level would be written by at least one transport. The level methods return at once, without building the
+     * entry, when it is `false`, so the `debug` and `trace` calls cost almost nothing when no transport writes them.
+     * @param level The level to check.
+     */
+    public isLevelEnabled(level: LogLevel): boolean {
+        if (this.lowestLevel?.transports !== this.transports.length) {
+            const levels = this.transports.map((transport) => transport.minLevel ?? LogLevel.Trace);
+            this.lowestLevel = { transports: this.transports.length, level: Math.min(...levels) };
+        }
+        return level >= this.lowestLevel.level;
+    }
+
     /** Internal method to log data using the configured transports. */
     public async log(data: LogData) {
+        if (!this.isLevelEnabled(data.level)) return;
+
         const entry: LogEntry = {
             timestamp: new Date(),
             level: data.level,

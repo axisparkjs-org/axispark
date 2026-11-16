@@ -6,6 +6,16 @@ import { ClassType } from '../types';
  * Static class for managing metadata using the Reflect Metadata API. It provides methods to define, get, and check metadata on classes, methods, properties, and parameters. The class uses the Reflect Metadata API to store and retrieve metadata associated with specified keys and values.
  */
 export class MetadataStatic {
+    private classChanges = 0;
+
+    /**
+     * A counter that changes every time metadata is defined on a class (without property key). Indexes of classes by metadata, such as the
+     * one of the `ClassRegistry`, compare it to know when they must be built again.
+     */
+    get version(): number {
+        return this.classChanges;
+    }
+
     /**
      * Defines metadata for a target object or its property. It uses the Reflect Metadata API to store the metadata associated with the specified key and value. The method can be used to define metadata on classes, methods, properties, and parameters.
      * @param key - The metadata key used to identify the metadata.
@@ -16,7 +26,10 @@ export class MetadataStatic {
      */
     define(key: MetadataKey, value: unknown, target: object, propertyKey?: string | symbol, normalizeTarget = true): void {
         if (propertyKey) Reflect.defineMetadata(key.value, value, normalizeTarget ? this.normalizeTarget(target) : target, propertyKey);
-        else Reflect.defineMetadata(key.value, value, normalizeTarget ? this.normalizeTarget(target) : target);
+        else {
+            Reflect.defineMetadata(key.value, value, normalizeTarget ? this.normalizeTarget(target) : target);
+            this.classChanges++;
+        }
     }
     /**
      * Retrieves metadata for a target object or its property. It uses the Reflect Metadata API to get the metadata associated with the specified key. The method can be used to retrieve metadata from classes, methods, properties, and parameters.

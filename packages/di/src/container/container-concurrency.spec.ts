@@ -5,6 +5,7 @@ import { InjectableScopes } from '../types';
 import { CircularDependencyError, ScopeDependencyError } from '../errors';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const TA_PARALLEL = new InjectionToken('PARALLEL');
 
 @Injectable()
 class Dep {}
@@ -154,7 +155,8 @@ describe('Container (concurrent resolutions)', () => {
             for (const result of results as PromiseRejectedResult[]) {
                 expect(result.reason).toBeInstanceOf(CircularDependencyError);
             }
-            expect((results[1] as PromiseRejectedResult).reason.message).toBe('Circular dependency detected: B -> A -> B');
+            // The dependencies are resolved in parallel, so the first resolution walks the whole graph and finds the cycle in its own chain.
+            expect((results[1] as PromiseRejectedResult).reason.message).toBe('Circular dependency detected: A -> B -> A');
         });
 
         it('should still detect a circular dependency between scoped providers', async () => {
@@ -169,6 +171,71 @@ describe('Container (concurrent resolutions)', () => {
             container.bind({ token: TA, forClass: A, scope: InjectableScopes.Singleton, inject: [ReqScoped], useFactory: () => new A() });
 
             await expect(container.resolve(TA)).rejects.toThrow(new ScopeDependencyError('A (singleton) -> ReqScoped (transient)'));
+        });
+    });
+    describe('parallel constructor dependencies', () => {
+        it('should resolve the dependencies of a constructor in parallel', async () => {
+            const started: string[] = [];
+            const factoryOf = (name: string, forClass: any) => ({
+                token: new InjectionToken(name),
+                forClass,
+                scope: InjectableScopes.Singleton,
+                useFactory: async () => {
+                    started.push(name);
+                    await delay(20);
+                    return name;
+                }
+            });
+            const first = factoryOf('FIRST', A);
+            const second = factoryOf('SECOND', B);
+            container.bind(first);
+            container.bind(second);
+            container.bind({
+                token: TA_PARALLEL,
+                forClass: Db,
+                scope: InjectableScopes.Singleton,
+                inject: [first.token, second.token],
+                useFactory: (a, b) => [a, b]
+            });
+
+            const begin = Date.now();
+            await expect(container.resolve(TA_PARALLEL)).resolves.toEqual(['FIRST', 'SECOND']);
+
+            expect(started).toEqual(['FIRST', 'SECOND']);
+            expect(Date.now() - begin).toBeLessThan(39);
+        });
+
+        it('should let a dependency wait for a singleton created by another dependency of the same constructor', async () => {
+            const SHARED = new InjectionToken('SHARED');
+            const USES_SHARED = new InjectionToken('USES_SHARED');
+            const factory = jest.fn(async () => {
+                await delay(10);
+                return new Db();
+            });
+            container.bind({ token: SHARED, forClass: Db, scope: InjectableScopes.Singleton, useFactory: factory });
+            container.bind({ token: USES_SHARED, forClass: B, scope: InjectableScopes.Singleton, inject: [SHARED], useFactory: (db) => ({ db }) });
+            container.bind({
+                token: TA_PARALLEL,
+                forClass: A,
+                scope: InjectableScopes.Singleton,
+                inject: [SHARED, USES_SHARED],
+                useFactory: (db, uses) => ({ db, uses })
+            });
+
+            const result = (await container.resolve(TA_PARALLEL)) as { db: Db; uses: { db: Db } };
+
+            expect(factory).toHaveBeenCalledTimes(1);
+            expect(result.uses.db).toBe(result.db);
+        });
+
+        it('should keep the order of the dependencies whatever the order they are created in', async () => {
+            const SLOW = new InjectionToken('SLOW');
+            const FAST = new InjectionToken('FAST');
+            container.bind({ token: SLOW, forClass: A, scope: InjectableScopes.Transient, useFactory: async () => delay(15).then(() => 'slow') });
+            container.bind({ token: FAST, forClass: B, scope: InjectableScopes.Transient, useFactory: async () => 'fast' });
+            container.bind({ token: TA_PARALLEL, forClass: Db, scope: InjectableScopes.Transient, inject: [SLOW, FAST], useFactory: (...args) => args });
+
+            await expect(container.resolve(TA_PARALLEL)).resolves.toEqual(['slow', 'fast']);
         });
     });
 });

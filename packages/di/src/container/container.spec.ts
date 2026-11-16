@@ -419,4 +419,100 @@ describe('Container', () => {
     it('should create a scoped container', () => {
         expect(container.createScopedContainer()).toBeDefined();
     });
+    describe('fast path of created singletons', () => {
+        class CreatedService {}
+        const value = new InjectionToken('value');
+        const alias = new InjectionToken('alias');
+        const loopA = new InjectionToken('loop-a');
+        const loopB = new InjectionToken('loop-b');
+
+        beforeEach(() => {
+            metadataMock.has.mockReturnValue(true);
+            metadataMock.get.mockReturnValue(undefined);
+        });
+
+        it('returns a value without starting a resolution chain', async () => {
+            container.bind({ token: value, useValue: 'value' as any });
+            const resolveInChain = jest.spyOn(container, 'resolveInChain');
+
+            await expect(container.resolve(value)).resolves.toBe('value');
+            expect(resolveInChain).not.toHaveBeenCalled();
+        });
+
+        it('returns a singleton that is already created without starting a resolution chain', async () => {
+            container.bind({ token: CreatedService, useClass: CreatedService, scope: InjectableScopes.Singleton });
+            const instance = await container.resolve(CreatedService);
+            const resolveInChain = jest.spyOn(container, 'resolveInChain');
+
+            await expect(container.resolve(CreatedService)).resolves.toBe(instance);
+            expect(resolveInChain).not.toHaveBeenCalled();
+        });
+
+        it('rejects instead of throwing when the token is not bound', async () => {
+            await expect(container.resolve(new InjectionToken('missing'))).rejects.toThrow(ProviderNotFoundError);
+        });
+
+        it('returns the created singletons and the values synchronously with tryResolve, also through aliases', async () => {
+            container.bind({ token: CreatedService, useClass: CreatedService, scope: InjectableScopes.Singleton });
+            container.bind({ token: value, useValue: 'value' as any });
+            container.bind({ token: alias, useExisting: value });
+
+            expect(container.tryResolve(CreatedService)).toBeUndefined();
+            const instance = await container.resolve(CreatedService);
+            expect(container.tryResolve(CreatedService)).toBe(instance);
+            expect(container.tryResolve(value)).toBe('value');
+            expect(container.tryResolve(alias)).toBe('value');
+        });
+
+        it('returns undefined with tryResolve for scoped, transient, missing and circular tokens', () => {
+            container.bind({ token: CreatedService, useClass: CreatedService, scope: InjectableScopes.Scoped });
+            container.bind({ token: loopA, useExisting: loopB });
+            container.bind({ token: loopB, useExisting: loopA });
+
+            expect(container.tryResolve(CreatedService)).toBeUndefined();
+            expect(container.tryResolve(new InjectionToken('missing'))).toBeUndefined();
+            expect(container.tryResolve(loopA)).toBeUndefined();
+        });
+    });
+
+    describe('isSingleton', () => {
+        class SingletonService {}
+        class ScopedService {}
+        class TransientService {}
+
+        const token = (name: string) => new InjectionToken(name);
+        const [value, alias, factory, missing, a, b, dangling] = ['value', 'alias', 'factory', 'missing', 'a', 'b', 'dangling'].map(token);
+
+        beforeEach(() => {
+            metadataMock.has.mockReturnValue(true);
+        });
+
+        it('returns true for singletons and values, also through aliases', () => {
+            const container = new Container();
+            container.bind({ token: SingletonService, useClass: SingletonService, scope: InjectableScopes.Singleton });
+            container.bind({ token: value, useValue: 1 as any });
+            container.bind({ token: alias, useExisting: value });
+            container.bind({ token: factory, useFactory: () => 1, forClass: SingletonService as any, scope: InjectableScopes.Singleton });
+
+            expect(container.isSingleton(SingletonService)).toBe(true);
+            expect(container.isSingleton(value)).toBe(true);
+            expect(container.isSingleton(alias)).toBe(true);
+            expect(container.isSingleton(factory)).toBe(true);
+        });
+
+        it('returns false for scoped, transient, missing and circular tokens', () => {
+            const container = new Container();
+            container.bind({ token: ScopedService, useClass: ScopedService, scope: InjectableScopes.Scoped });
+            container.bind({ token: TransientService, useClass: TransientService, scope: InjectableScopes.Transient });
+            container.bind({ token: a, useExisting: b });
+            container.bind({ token: b, useExisting: a });
+            container.bind({ token: dangling, useExisting: missing });
+
+            expect(container.isSingleton(ScopedService)).toBe(false);
+            expect(container.isSingleton(TransientService)).toBe(false);
+            expect(container.isSingleton(missing)).toBe(false);
+            expect(container.isSingleton(a)).toBe(false);
+            expect(container.isSingleton(dangling)).toBe(false);
+        });
+    });
 });

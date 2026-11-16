@@ -6,7 +6,7 @@ import { RouteDefinition } from '../routes/route-definition';
 import { RouteValidator } from '../routes/route-validator';
 import { HTTP_ADAPTER, HTTP_LOGGER, HTTP_OPTIONS } from '../di/tokens';
 import { HttpPluginOptions } from './http-plugin-options';
-import { FileUploadGuard, HealthController, RateLimitGuard, VersionGuard } from '../implementations';
+import { FileUploadGuard, HealthController, HostGuard, RateLimitGuard, VersionGuard } from '../implementations';
 import { LogErrorFilter, LogHttpErrorFilter } from '../implementations/filters';
 import { LogHttpRequestInterceptor, LogHttpResponseInterceptor } from '../implementations';
 import { HttpCacheResolver, HttpRateLimitResolver, HttpResultResolver, HttpTimeoutResolver } from '../implementations';
@@ -316,11 +316,39 @@ describe('HttpPlugin', () => {
     });
 
     describe('configureImplementations', () => {
+        const generating = (routes: RouteDefinition[]) =>
+            injector.get.mockImplementation(async (target: any) =>
+                target === RouteGenerator ? { generate: jest.fn().mockResolvedValue(routes) } : { validate: jest.fn() }
+            );
+        const hostedRoute = (hosts: string[]) => {
+            const candidate = new RouteDefinition(class HostedController {}, 'find', HttpMethod.Get, '/hosted', [], hosts, jest.fn());
+            return new RouteDefinition(candidate.target, 'find', HttpMethod.Get, '/hosted', [], ['*'], jest.fn(), [candidate]);
+        };
+
         it('should keep all optional components when enabled', async () => {
+            generating([hostedRoute(['api.example.com'])]);
+
             await plugin.onRegister(context, { ...options, rateLimit: true, fileUpload: true });
 
             expect(ClassRegistry.remove).not.toHaveBeenCalled();
             expect(container.unbind).not.toHaveBeenCalled();
+        });
+
+        it('should disable HostGuard when no controller declares a host', async () => {
+            generating([hostedRoute(['*']), hostedRoute([' * '])]);
+
+            await plugin.onRegister(context, { ...options, rateLimit: true, fileUpload: true });
+
+            expect(ClassRegistry.remove).toHaveBeenCalledWith(HostGuard);
+            expect(container.unbind).toHaveBeenCalledWith(HostGuard);
+        });
+
+        it('should keep HostGuard when a grouped route declares a host', async () => {
+            generating([hostedRoute([':tenant.example.com'])]);
+
+            await plugin.onRegister(context, optionsWithoutComponents);
+
+            expect(ClassRegistry.remove).not.toHaveBeenCalledWith(HostGuard);
         });
 
         it.each([

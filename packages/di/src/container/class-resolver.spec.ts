@@ -291,4 +291,24 @@ describe('Resolver', () => {
             )
         ).rejects.toThrow(new ScopeDependencyError('ClassWithDependency (singleton) -> Dependency (scoped)'));
     });
+    it('should read the constructor metadata once per class', async () => {
+        class Dependency {}
+        class CachedService {
+            constructor(public readonly dependency: Dependency) {}
+        }
+        const dependency = new Dependency();
+        metadataMock.get = jest.fn((key: unknown) => (key === MetadataKeys.DESIGN_PARAM_TYPES ? [Dependency] : undefined));
+        const container = { resolveInChain: jest.fn().mockResolvedValue(dependency) } as unknown as Container;
+        const provider = { token: CachedService, useClass: CachedService, scope: InjectableScopes.Transient };
+
+        const first = await resolver.resolve(provider, container);
+        const reads = (Metadata.get as jest.Mock).mock.calls.length;
+        const second = await resolver.resolve(provider, container);
+
+        expect((Metadata.get as jest.Mock).mock.calls.length).toBe(reads);
+        expect(first).not.toBe(second);
+        expect(second.dependency).toBe(dependency);
+        expect(resolver.tokensOf(CachedService)).toEqual([Dependency]);
+        expect(new ClassResolver().tokensOf(CachedService)).toEqual([Dependency]);
+    });
 });
