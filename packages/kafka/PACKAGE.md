@@ -1,6 +1,6 @@
 # `@axisparkjs/kafka`
 
-[KafkaJS](https://kafka.js.org/) connections for AxiSpark.js.
+Kafka connections for AxiSpark.js, built on the KafkaJS-compatible API of [`@confluentinc/kafka-javascript`](https://github.com/confluentinc/confluent-kafka-javascript), the client maintained by Confluent on top of librdkafka.
 
 The complete guide is in the [Kafka documentation](https://axisparkjs.com/docs/connections/kafka).
 
@@ -33,8 +33,7 @@ app.use(
 
 ```ts title="order-publisher.ts"
 import { Injectable } from '@axisparkjs/di';
-import { InjectKafkaProducer } from '@axisparkjs/kafka';
-import { Producer } from 'kafkajs';
+import { InjectKafkaProducer, Producer } from '@axisparkjs/kafka';
 
 @Injectable()
 export class OrderPublisher {

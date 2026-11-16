@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@axisparkjs/di';
 import { KAFKA_LOGGER, KAFKA_OPTIONS } from '../di';
 import { KafkaPluginOptions } from '../plugin';
-import { ConsumerConfig, Kafka, Consumer, Producer, ProducerConfig } from 'kafkajs';
+import { Consumer, ConsumerConfig, createKafkaClient, Kafka, Producer, ProducerConfig } from '../client';
 import { Logger } from '@axisparkjs/logger';
 
 /**
@@ -21,12 +21,12 @@ export class KafkaConnectionManager {
 
     async createConnections(): Promise<void> {
         for (const connectionConfig of this.kafkaPluginOptions.connections) {
-            const { name, config, autoInitialize } = connectionConfig;
+            const { name, config, librdkafkaConfig, autoInitialize } = connectionConfig;
             if (this.connections.has(name)) {
                 throw new Error(`Connection with name '${name}' already exists. Connection names must be unique.`);
             }
 
-            const connection = new Kafka(config);
+            const connection = createKafkaClient(config, librdkafkaConfig);
             this.connections.set(name, connection);
             this.configurations.set(name, { ...connectionConfig });
 
@@ -74,7 +74,7 @@ export class KafkaConnectionManager {
             if (!connection) return undefined;
 
             const { consumerConfig } = this.configurations.get(name) as any;
-            const consumer = connection.consumer({ groupId: `${name.toLowerCase()}-group`, ...consumerConfig });
+            const consumer = connection.consumer({ kafkaJS: { groupId: `${name.toLowerCase()}-group`, ...consumerConfig } });
             await consumer.connect();
             this.logger.info(`Consumer for connection '${name}' connected.`);
             this.consumers.set(name, consumer);
@@ -90,7 +90,7 @@ export class KafkaConnectionManager {
             if (!connection) return undefined;
 
             const { producerConfig } = this.configurations.get(name) as any;
-            const producer = connection.producer(producerConfig);
+            const producer = connection.producer({ kafkaJS: { ...producerConfig } });
             await producer.connect();
             this.logger.info(`Producer for connection '${name}' connected.`);
             this.producers.set(name, producer);
