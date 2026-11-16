@@ -1,3 +1,4 @@
+import { IncrementalCleanup } from '../incremental-cleanup';
 import { CacheStore } from './cache-store';
 
 interface CacheEntry {
@@ -7,13 +8,12 @@ interface CacheEntry {
 
 /**
  * Keeps the cached values in memory. The values are local to the application process and are stored as they are, without serializing them.
- * The expired values are removed when they are read and every 256 writes.
+ * The expired values are removed when they are read, and a few of them are examined on each write, so the cleanup never scans the whole
+ * map at once.
  */
 export class InMemoryCacheStore implements CacheStore {
-    private static readonly CLEANUP_INTERVAL = 256;
-
     private readonly entries = new Map<string, CacheEntry>();
-    private writes = 0;
+    private readonly cleanup = new IncrementalCleanup(this.entries, (entry: CacheEntry, now: number) => this.isExpired(entry, now));
 
     public async get<T>(key: string): Promise<T | undefined> {
         const entry = this.entries.get(key);
@@ -30,9 +30,7 @@ export class InMemoryCacheStore implements CacheStore {
     public async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
         const now = Date.now();
         this.entries.set(key, { value, expiresAt: ttlMs === undefined ? undefined : now + ttlMs });
-
-        this.writes++;
-        if (this.writes % InMemoryCacheStore.CLEANUP_INTERVAL === 0) this.removeExpiredEntries(now);
+        this.cleanup.step(now);
     }
 
     public async delete(key: string): Promise<void> {
@@ -46,11 +44,5 @@ export class InMemoryCacheStore implements CacheStore {
 
     private isExpired(entry: CacheEntry, now: number): boolean {
         return entry.expiresAt !== undefined && entry.expiresAt <= now;
-    }
-
-    private removeExpiredEntries(now: number): void {
-        for (const [key, entry] of this.entries) {
-            if (this.isExpired(entry, now)) this.entries.delete(key);
-        }
     }
 }

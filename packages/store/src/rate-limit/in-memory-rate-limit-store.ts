@@ -1,3 +1,4 @@
+import { IncrementalCleanup } from '../incremental-cleanup';
 import { RateLimitDecision } from './rate-limit-decision';
 import { RateLimitPolicy, RateLimitStore } from './rate-limit-store';
 
@@ -14,19 +15,17 @@ interface RateLimitBucket {
  * Keeps the rate limit buckets in memory with a sliding window counter: each bucket counts the requests of the current fixed window of
  * `ttl` milliseconds and of the previous one, and estimates the requests of the sliding window as `previous * (1 - elapsed / ttl) + current`.
  * It takes constant time and memory per client and handler, whatever the limit, at the cost of an approximation: the requests of the
- * previous window are taken as spread evenly over it. The buckets are local to the application process, and the expired ones are removed
- * every 256 checks.
+ * previous window are taken as spread evenly over it. The buckets are local to the application process, and a few buckets are examined on
+ * each check to remove the expired ones, so the cleanup never scans the whole map at once.
  */
 export class InMemoryRateLimitStore implements RateLimitStore {
-    private static readonly CLEANUP_INTERVAL = 256;
-
     private readonly buckets = new Map<string, RateLimitBucket>();
-    private checkedRequests = 0;
+    // A bucket whose current window ended before the previous window of now has no request in the sliding window.
+    private readonly cleanup = new IncrementalCleanup(this.buckets, (bucket: RateLimitBucket, now: number) => now - bucket.window >= 2 * bucket.ttl);
 
     public consume(key: string, policy: RateLimitPolicy): RateLimitDecision {
         const now = Date.now();
-        this.checkedRequests++;
-        if (this.checkedRequests % InMemoryRateLimitStore.CLEANUP_INTERVAL === 0) this.removeExpiredBuckets(now);
+        this.cleanup.step(now);
 
         const { ttl, limit } = policy;
         if (limit <= 0 || ttl <= 0) return limit <= 0 ? { allowed: false, retryAfterMs: Math.max(ttl, 0) } : { allowed: true, retryAfterMs: 0 };
@@ -72,12 +71,5 @@ export class InMemoryRateLimitStore implements RateLimitStore {
         // Otherwise the current window must end, and then its requests must leave the sliding window too.
         const inNextWindow = Math.max(Math.ceil(ttl * (1 - (limit - 1) / current)), 0);
         return ttl - elapsed + inNextWindow;
-    }
-
-    private removeExpiredBuckets(now: number): void {
-        for (const [key, bucket] of this.buckets) {
-            // A bucket whose current window ended before the previous window of now has no request in the sliding window.
-            if (now - bucket.window >= 2 * bucket.ttl) this.buckets.delete(key);
-        }
     }
 }
