@@ -40,7 +40,6 @@ interface HealthCheckState {
  * Concurrent health requests share the checks that are running, and the result of a check is reused for `cacheTtl` milliseconds (of the
  * check, or `healthChecks.cacheTtl` of the application), so frequent probes do not run the indicators every time.
  *
-
  * The checks decorated with `@HealthCheck` are read from the `ClassRegistry` the first time the health is checked, when every file has been
  * scanned, and the list is reused by the next checks.
  *
