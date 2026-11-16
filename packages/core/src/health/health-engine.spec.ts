@@ -285,6 +285,21 @@ describe('HealthEngine', () => {
             expect(result[1]).toEqual(expect.objectContaining({ component: 'payments-api', status: HealthStatus.Healthy, details: { critical: false } }));
         });
 
+        it('should read the decorated checks from the registry once', async () => {
+            const container = { resolve: jest.fn().mockResolvedValue(new PaymentsApiHealth()) };
+            const { engine } = createEngine([], container);
+            const getWithMetadata = jest.spyOn(ClassRegistry, 'getWithMetadata');
+
+            await engine.checkAll();
+            await engine.checkAll();
+            const result = await engine.checkApp();
+
+            expect(getWithMetadata).toHaveBeenCalledTimes(1);
+            expect(container.resolve).toHaveBeenCalledTimes(3);
+            expect(result.details?.checks).toEqual([{ component: 'payments-api', status: HealthStatus.Healthy, critical: false }]);
+            getWithMetadata.mockRestore();
+        });
+
         it('should report a check that cannot be resolved as unhealthy', async () => {
             const container = { resolve: jest.fn().mockRejectedValue(new Error('Provider not found')) };
             const { engine } = createEngine([], container);

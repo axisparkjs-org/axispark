@@ -155,4 +155,10 @@ describe('ScopedContainer', () => {
         expect(await scopedContainer.resolve(provider2)).toBe(instance2);
         expect(await scopedContainer.resolve(provider1)).toBe(instance1);
     });
+    it('should not create its structures until a scoped provider is resolved', () => {
+        const scoped = new ScopedContainer({} as any, {} as any);
+
+        expect((scoped as any).instances).toBeUndefined();
+        expect((scoped as any).pendingInstances).toBeUndefined();
+    });
 });

@@ -71,6 +71,7 @@ export class AxiSparkCore<TSettings extends object = object> implements Lifecycl
         clearInterval(this.keepAlive);
         await this.axisparkContext.plugins.destroy(this.axisparkContext);
         await this.axisparkContext.logger.info('App destroyed');
+        await this.axisparkContext.logger.flush();
     }
 
     public use(plugin: PluginType, options?: PluginOptions): this {

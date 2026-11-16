@@ -3,16 +3,24 @@ import { Metadata, MetadataKey, ClassType } from '@axisparkjs/common';
 /**
  * A static class for managing the registration and retrieval of classes.
  * Classes are stored by identity, so two different classes with the same name are both registered.
+ *
+ * The lookups by metadata and by name are indexed: each one filters the registry the first time and keeps the result until a class is
+ * registered or removed, or metadata is defined on a class with `Metadata.define()`.
  */
 export class ClassRegistryStatic {
     private readonly registry = new Set<ClassType>();
+    private readonly byMetadata = new Map<string | symbol, ClassType[]>();
+    private readonly byName = new Map<string, ClassType[]>();
+    private indexedVersion?: number;
 
     /**
      * Registers a class in the registry. Registering the same class again has no effect.
      * @param constructor The class constructor to register.
      */
     register(constructor: ClassType): void {
+        if (this.registry.has(constructor)) return;
         this.registry.add(constructor);
+        this.invalidate();
     }
 
     /**
@@ -20,7 +28,7 @@ export class ClassRegistryStatic {
      * @param constructor The class constructor to remove.
      */
     remove(constructor: ClassType): void {
-        this.registry.delete(constructor);
+        if (this.registry.delete(constructor)) this.invalidate();
     }
 
     /**
@@ -38,7 +46,15 @@ export class ClassRegistryStatic {
      * @returns An array of the class constructors with that name, in registration order.
      */
     getAllByName(name: string): ClassType[] {
-        return this.getAll().filter((cls) => cls.name === name);
+        this.validate();
+        if (this.byName.size === 0) {
+            for (const cls of this.registry) {
+                const classes = this.byName.get(cls.name);
+                if (classes) classes.push(cls);
+                else this.byName.set(cls.name, [cls]);
+            }
+        }
+        return [...(this.byName.get(name) ?? [])];
     }
 
     /**
@@ -55,10 +71,27 @@ export class ClassRegistryStatic {
      * @returns An array of class constructors that have the specified metadata.
      */
     getWithMetadata(metadata: MetadataKey): ClassType[] {
-        const classes = this.getAll();
-        return classes.filter((cls) => {
-            return Metadata.has(metadata, cls);
-        });
+        this.validate();
+        let classes = this.byMetadata.get(metadata.value);
+        if (!classes) {
+            classes = this.getAll().filter((cls) => Metadata.has(metadata, cls));
+            this.byMetadata.set(metadata.value, classes);
+        }
+        return [...classes];
+    }
+
+    /* The indexes are built again after a class is registered or removed, or after metadata is defined on a class. */
+    private validate(): void {
+        const version = Metadata.version;
+        if (typeof version === 'number' && version === this.indexedVersion) return;
+        this.invalidate();
+        this.indexedVersion = version;
+    }
+
+    private invalidate(): void {
+        this.byMetadata.clear();
+        this.byName.clear();
+        this.indexedVersion = undefined;
     }
 }
 

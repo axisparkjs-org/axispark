@@ -77,6 +77,7 @@ export class HttpPlugin extends Plugin {
         await this.registerImplementations();
         const routes = await this.generateRoutes();
         await this.validateRoutes(routes);
+        this.disableComponentIf(HttpPlugin.hasHostRestrictions(routes), HostGuard);
 
         this.adapter = await this.context.container.resolve<HttpAdapter>(HTTP_ADAPTER);
         await this.adapter.initialize?.();
@@ -120,7 +121,6 @@ export class HttpPlugin extends Plugin {
             [this.options.logHttpResponses ?? false, LogHttpResponseInterceptor],
             [this.options.logHttpErrors ?? false, LogHttpErrorFilter],
             [this.options.logErrors ?? false, LogErrorFilter],
-            [true, HostGuard],
             [this.options.rateLimit ?? false, RateLimitGuard],
             [this.options.fileUpload ?? false, FileUploadGuard],
             [this.options.version ?? false, VersionGuard]
@@ -129,6 +129,11 @@ export class HttpPlugin extends Plugin {
         for (const [enabled, target] of items) {
             this.disableComponentIf(enabled, target);
         }
+    }
+
+    /* HostGuard only has work to do when a controller declares a host, so it is not a step of every request otherwise. */
+    private static hasHostRestrictions(routes: readonly RouteDefinition[]): boolean {
+        return routes.some((route) => route.candidates.some((candidate) => candidate.hosts.some((host) => host.trim() !== '*')));
     }
 
     private async registerImplementations(): Promise<void> {

@@ -15,6 +15,7 @@ import formbody from '@fastify/formbody';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import path from 'node:path';
+import { stat } from 'node:fs/promises';
 import os from 'node:os';
 
 /**
@@ -37,15 +38,36 @@ export class FastifyHttpAdapter implements HttpAdapter {
     }
 
     async initialize(): Promise<void> {
-        await this.app.register(fastifyStatic, {
-            root: path.join(this.axisparkConfig.basePath || process.cwd(), 'public')
-        });
+        await this.registerStaticFiles();
         if (this.options.cookies) await this.app.register(cookie, this.options.cookiesOptions ?? {});
         if (this.options.session) await this.app.register(session, this.options.sessionOptions);
         if (this.options.compression) await this.app.register(compress, this.options.compressionOptions ?? {});
         if (this.options.cors) await this.app.register(cors, this.options.corsOptions ?? {});
         if (this.options.urlEncoded) await this.app.register(formbody, this.options.urlEncodedOptions ?? {});
         if (this.options.fileUpload) await this.app.register(multipart);
+    }
+
+    /**
+     * Registers `@fastify/static`. The file results need its `reply.sendFile()`, so it is always registered, but it only serves the static
+     * files folder when `staticFiles` is `true`, or when it is not set and the folder exists.
+     */
+    private async registerStaticFiles(): Promise<void> {
+        const root = path.resolve(this.axisparkConfig.basePath || process.cwd(), this.options.staticFilesOptions?.root ?? 'public');
+        const serve = this.options.staticFiles ?? (await FastifyHttpAdapter.isDirectory(root));
+        if (!serve) {
+            await this.app.register(fastifyStatic, { serve: false });
+            return;
+        }
+
+        await this.app.register(fastifyStatic, { root, prefix: this.options.staticFilesOptions?.prefix ?? '/' });
+    }
+
+    private static async isDirectory(folder: string): Promise<boolean> {
+        try {
+            return (await stat(folder)).isDirectory();
+        } catch {
+            return false;
+        }
     }
 
     getRegisteredRoutes(): readonly RouteDefinition[] {
