@@ -1,6 +1,6 @@
 import { Processable } from '@axisparkjs/common';
 import { Injectable } from '@axisparkjs/di';
-import { ExecutionContext, ExecutionTransport } from '../execution';
+import { ClassIdentifier, ExecutionContext, ExecutionTransport } from '../execution';
 import { RateLimitDecision, RateLimitStore } from '@axisparkjs/store';
 import { RateLimitDefinition } from './rate-limit-definition';
 import { RateLimitResolver } from './rate-limit-resolver';
@@ -46,8 +46,11 @@ export class RateLimitProcessor implements Processable {
         return await store.consume(this.getKey(context, clientId), definition);
     }
 
-    /** Builds the bucket key with the transport, the client and the handler, so the key does not depend on the requested URL. */
+    /**
+     * Builds the bucket key with the transport, the client and the handler, so the key does not depend on the requested URL. The class is
+     * identified with `ClassIdentifier`, so two classes with the same name never share buckets.
+     */
     private getKey(context: ExecutionContext, clientId: string | undefined): string {
-        return JSON.stringify([context.transport, clientId ?? 'unknown', context.target.name, String(context.propertyKey)]);
+        return JSON.stringify([context.transport, clientId ?? 'unknown', ClassIdentifier.of(context.target), String(context.propertyKey)]);
     }
 }

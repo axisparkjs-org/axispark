@@ -237,4 +237,58 @@ describe('HttpEngine', () => {
             expect(executionEngine.execute).not.toHaveBeenCalled();
         });
     });
+    describe('context of the adapter', () => {
+        it('should fill the context of the adapter in place, keeping its getters', async () => {
+            class Controller {}
+            const route = createRoute(Controller, 'find');
+            hostMatcher.match.mockReturnValue([route]);
+            versionMatcher.match.mockReturnValue(route);
+            const read = jest.fn().mockReturnValue('session');
+            const context: any = { request: { headers: {}, method: 'GET', path: '/users' }, response };
+            Object.defineProperty(context, 'session', { get: read, enumerable: true });
+
+            await httpEngine.execute(context, [route]);
+
+            const executed = executionEngine.execute.mock.calls[0][0];
+            expect(executed).toBe(context);
+            expect(executed).toMatchObject({ target: Controller, propertyKey: 'find', transport: 'http', error: undefined });
+            expect(read).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('single unrestricted route', () => {
+        class Controller {}
+        const context = () => ({ request: { headers: {}, path: '/users', method: 'GET' }, response, session: {} }) as any;
+
+        it('should skip the host and version matching for a single route that accepts every host without versions', async () => {
+            const route = createRoute(Controller, 'find', [], ['*']);
+
+            await httpEngine.execute(context(), [route]);
+            await httpEngine.execute(context(), [route]);
+
+            expect(hostProcessor.process).not.toHaveBeenCalled();
+            expect(versionProcessor.process).not.toHaveBeenCalled();
+            expect(hostMatcher.match).not.toHaveBeenCalled();
+            expect(versionMatcher.match).not.toHaveBeenCalled();
+            expect(executionEngine.execute).toHaveBeenCalledWith(
+                expect.objectContaining({ target: Controller, propertyKey: 'find', host: undefined, version: undefined })
+            );
+        });
+
+        it('should match the host and the version when the route has hosts, versions or other routes', async () => {
+            for (const routes of [
+                [createRoute(Controller, 'find', [], ['api.example.com'])],
+                [createRoute(Controller, 'find', ['1'], ['*'])],
+                [createRoute(Controller, 'find', [], ['*']), createRoute(Controller, 'other', [], ['*'])]
+            ]) {
+                hostMatcher.match.mockReturnValue(routes);
+                versionMatcher.match.mockReturnValue(routes[0]);
+
+                await httpEngine.execute(context(), routes);
+            }
+
+            expect(hostMatcher.match).toHaveBeenCalledTimes(3);
+            expect(versionMatcher.match).toHaveBeenCalledTimes(3);
+        });
+    });
 });

@@ -57,7 +57,7 @@ describe('ExecutionEngine', () => {
         it('should generate the execution plan', async () => {
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: []
             };
@@ -78,7 +78,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [before1, before2],
-                context: executionContext,
+                handler: executionContext,
                 catch: [],
                 after: []
             };
@@ -102,7 +102,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [before],
-                context: executionContext,
+                handler: executionContext,
                 catch: [],
                 after: []
             };
@@ -125,7 +125,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: []
             };
@@ -142,7 +142,7 @@ describe('ExecutionEngine', () => {
         it('should process undefined when the main handler returns undefined', async () => {
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: []
             };
@@ -161,7 +161,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [after1, after2]
             };
@@ -186,7 +186,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [before],
-                context: {},
+                handler: {},
                 catch: [],
                 after: []
             };
@@ -206,7 +206,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: []
             };
@@ -231,7 +231,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [catchStep],
                 after: []
             };
@@ -258,7 +258,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [catchStep],
                 after: []
             };
@@ -288,7 +288,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [firstCatch, secondCatch],
                 after: []
             };
@@ -321,7 +321,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [firstCatch, secondCatch],
                 after: []
             };
@@ -355,7 +355,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [firstCatch, secondCatch],
                 after: []
             };
@@ -380,7 +380,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [after]
             };
@@ -407,7 +407,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [catchStep],
                 after: [after]
             };
@@ -428,7 +428,7 @@ describe('ExecutionEngine', () => {
 
     describe('timeout', () => {
         it('should not use the cache processor when the plan has no cache', async () => {
-            planGenerator.plan.mockResolvedValue({ before: [], context: {}, catch: [], after: [] } as any);
+            planGenerator.plan.mockResolvedValue({ before: [], handler: {}, catch: [], after: [] } as any);
             handlerInvoker.invoke.mockResolvedValue('result');
 
             await engine.execute(context);
@@ -443,7 +443,7 @@ describe('ExecutionEngine', () => {
             const after = {};
             const cache = new CacheDefinition(1_000);
             const calls: string[] = [];
-            planGenerator.plan.mockResolvedValue({ before: [before], context: handler, catch: [], after: [after], cache } as any);
+            planGenerator.plan.mockResolvedValue({ before: [before], handler, catch: [], after: [after], cache } as any);
             handlerInvoker.invoke.mockImplementation(async (step) => {
                 calls.push(step === before ? 'before' : step === handler ? 'handler' : 'after');
                 return step === handler ? 'fresh' : undefined;
@@ -464,7 +464,7 @@ describe('ExecutionEngine', () => {
             const before = { name: 'before' };
             const handler = { name: 'handler' };
             const after = { name: 'after' };
-            planGenerator.plan.mockResolvedValue({ before: [before], context: handler, catch: [], after: [after], cache: new CacheDefinition(1_000) } as any);
+            planGenerator.plan.mockResolvedValue({ before: [before], handler, catch: [], after: [after], cache: new CacheDefinition(1_000) } as any);
             cacheProcessor.process.mockResolvedValue('cached');
 
             await engine.execute(context);
@@ -475,7 +475,7 @@ describe('ExecutionEngine', () => {
 
         it('should not reach the cache when a before step throws', async () => {
             const before = {};
-            planGenerator.plan.mockResolvedValue({ before: [before], context: {}, catch: [], after: [], cache: new CacheDefinition(1_000) } as any);
+            planGenerator.plan.mockResolvedValue({ before: [before], handler: {}, catch: [], after: [], cache: new CacheDefinition(1_000) } as any);
             handlerInvoker.invoke.mockRejectedValue(new Error('Forbidden'));
 
             await engine.execute(context);
@@ -487,7 +487,7 @@ describe('ExecutionEngine', () => {
         it('should not invoke the timeout processor when there is no timeout', async () => {
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [],
                 timeout: undefined
@@ -509,7 +509,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [],
                 timeout
@@ -532,7 +532,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [],
                 timeout
@@ -576,7 +576,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [],
                 timeout
@@ -618,7 +618,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [],
                 timeout
@@ -642,7 +642,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [],
                 timeout
@@ -680,7 +680,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [after],
                 timeout
@@ -724,7 +724,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [catchStep],
                 after: [],
                 timeout
@@ -778,7 +778,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: []
             };
@@ -795,7 +795,7 @@ describe('ExecutionEngine', () => {
 
             const plan = {
                 before: [],
-                context: {},
+                handler: {},
                 catch: [],
                 after: [{}]
             };
@@ -811,7 +811,7 @@ describe('ExecutionEngine', () => {
     });
 
     describe('signal', () => {
-        const plan = (overrides: Record<string, unknown> = {}) => ({ before: [], context: {}, catch: [], after: [], ...overrides }) as any;
+        const plan = (overrides: Record<string, unknown> = {}) => ({ before: [], handler: {}, catch: [], after: [], ...overrides }) as any;
         const abortable = (signal: AbortSignal) =>
             new Promise((_resolve, reject) => {
                 signal.addEventListener('abort', () => reject(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })));

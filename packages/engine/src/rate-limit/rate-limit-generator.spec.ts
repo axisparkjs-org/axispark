@@ -3,6 +3,7 @@ import { ExecutionContext, ExecutionTransport } from '../execution';
 import { RateLimitMetadata } from '../metadata';
 import { RateLimitDefinition } from './rate-limit-definition';
 import { RateLimitGenerator } from './rate-limit-generator';
+import { RateLimit } from '../decorators';
 
 describe('RateLimitGenerator', () => {
     let generator: RateLimitGenerator;
@@ -76,5 +77,53 @@ describe('RateLimitGenerator', () => {
         expect(generator.generate(context(ExecutionTransport.WebSocket))).toBeUndefined();
         RateLimitGenerator.registerRateLimit(ExecutionTransport.Http);
         expect(generator.generate(context())).toBeUndefined();
+    });
+    describe('kept policies', () => {
+        it('generates the policy of a handler once per transport', () => {
+            class Kept {
+                @RateLimit({ limit: 3 })
+                find() {}
+            }
+            const get = jest.spyOn(Metadata, 'get');
+            const ctx = { transport: ExecutionTransport.Http, target: Kept, propertyKey: 'find' } as unknown as ExecutionContext;
+
+            const first = generator.generate(ctx);
+            const reads = get.mock.calls.length;
+            expect(generator.generate(ctx)).toBe(first);
+            expect(get.mock.calls.length).toBe(reads);
+
+            generator.generate({ ...ctx, transport: ExecutionTransport.WebSocket } as ExecutionContext);
+            expect(get.mock.calls.length).toBeGreaterThan(reads);
+            get.mockRestore();
+        });
+
+        it('keeps the handlers without policy too', () => {
+            class Free {
+                find() {}
+            }
+            const get = jest.spyOn(Metadata, 'get');
+            const ctx = { transport: ExecutionTransport.Mcp, target: Free, propertyKey: 'find' } as unknown as ExecutionContext;
+
+            expect(generator.generate(ctx)).toBeUndefined();
+            const reads = get.mock.calls.length;
+            expect(generator.generate(ctx)).toBeUndefined();
+            expect(get.mock.calls.length).toBe(reads);
+            get.mockRestore();
+        });
+
+        it('generates the policies again when a default policy changes', () => {
+            class Defaulted {
+                find() {}
+            }
+            const ctx = { transport: ExecutionTransport.Http, target: Defaulted, propertyKey: 'find' } as unknown as ExecutionContext;
+            RateLimitGenerator.registerRateLimit(ExecutionTransport.Http, { ttl: 1_000, limit: 1 });
+            expect(generator.generate(ctx)).toEqual(new RateLimitDefinition(1_000, 1));
+
+            RateLimitGenerator.registerRateLimit(ExecutionTransport.Http, { ttl: 2_000, limit: 2 });
+            expect(generator.generate(ctx)).toEqual(new RateLimitDefinition(2_000, 2));
+
+            RateLimitGenerator.registerRateLimit(ExecutionTransport.Http);
+            expect(generator.generate(ctx)).toBeUndefined();
+        });
     });
 });

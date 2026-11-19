@@ -1,3 +1,4 @@
+import { IncrementalCleanup } from '../incremental-cleanup';
 import { CacheStore } from './cache-store';
 
 interface CacheEntry {
@@ -21,16 +22,15 @@ export interface InMemoryCacheStoreOptions {
 
 /**
  * Keeps the cached values in memory. The values are local to the application process and are stored as they are, without serializing them.
- * The expired values are removed when they are read and every 256 writes, and the least recently used values are removed when the store
- * reaches `maxEntries`, so the memory is bounded however many different keys are cached.
+ * The expired values are removed when they are read, and a few of them are examined on each write, so the cleanup never scans the whole
+ * map at once. The least recently used values are removed when the store reaches `maxEntries`, so the memory is bounded however many
+ * different keys are cached.
  */
 export class InMemoryCacheStore implements CacheStore {
-    private static readonly CLEANUP_INTERVAL = 256;
-
     // The order of the map is the order of use: a value is moved to the end when it is read or written, so the first one is the least recently used.
     private readonly entries = new Map<string, CacheEntry>();
     private readonly maxEntries: number;
-    private writes = 0;
+    private readonly cleanup = new IncrementalCleanup(this.entries, (entry: CacheEntry, now: number) => this.isExpired(entry, now));
 
     constructor(options: InMemoryCacheStoreOptions = {}) {
         this.maxEntries = Math.max(1, options.maxEntries ?? DEFAULT_CACHE_MAX_ENTRIES);
@@ -53,8 +53,7 @@ export class InMemoryCacheStore implements CacheStore {
         this.entries.set(key, { value, expiresAt: ttlMs === undefined ? undefined : now + ttlMs });
         if (this.entries.size > this.maxEntries) this.entries.delete(this.entries.keys().next().value as string);
 
-        this.writes++;
-        if (this.writes % InMemoryCacheStore.CLEANUP_INTERVAL === 0) this.removeExpiredEntries(now);
+        this.cleanup.step(now);
     }
 
     public async delete(key: string): Promise<void> {
@@ -68,11 +67,5 @@ export class InMemoryCacheStore implements CacheStore {
 
     private isExpired(entry: CacheEntry, now: number): boolean {
         return entry.expiresAt !== undefined && entry.expiresAt <= now;
-    }
-
-    private removeExpiredEntries(now: number): void {
-        for (const [key, entry] of this.entries) {
-            if (this.isExpired(entry, now)) this.entries.delete(key);
-        }
     }
 }

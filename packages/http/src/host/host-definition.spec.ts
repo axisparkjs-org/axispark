@@ -90,4 +90,15 @@ describe('HostDefinition', () => {
     it('does not match a host that has a different static label', () => {
         expect(HostDefinition.patternsOverlap('admin.example.com', ':tenant.other.com')).toBe(false);
     });
+    it('checks a host pattern against the host of the definition and against any host', () => {
+        const definition = new HostDefinition();
+        definition.setHost('Acme.Example.com:443');
+
+        expect(definition.hostLabels).toEqual(['acme', 'example', 'com']);
+        expect(definition.matches(':tenant.example.com')).toBe(true);
+        expect(definition.matches('api.example.com')).toBe(false);
+        expect(HostDefinition.matches('acme.example.com', ':tenant.example.com')).toBe(true);
+        expect(HostDefinition.isHostAccepted('acme.example.com', ['api.example.com', '*.example.com'])).toBe(true);
+        expect(HostDefinition.isHostAccepted(undefined, ['api.example.com'])).toBe(false);
+    });
 });

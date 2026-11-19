@@ -1,4 +1,4 @@
-import { Metadata, MetadataKeys } from '@axisparkjs/common';
+import { ClassType, Metadata, MetadataKeys } from '@axisparkjs/common';
 import { Injectable } from '@axisparkjs/di';
 import { CacheDefinition, CacheResolver, ExecutionContext } from '@axisparkjs/engine';
 import { CacheVaryMetadata } from '../../metadata/cache-vary-metadata';
@@ -14,9 +14,13 @@ const PRIVATE_HEADERS = ['authorization', 'cookie'];
  * The requests with an `Authorization` or `Cookie` header are not cached, so the response of one user is never returned to another one.
  * A custom `key` in `@Cache()`, such as `(ctx) => ctx.session.userId`, replaces the method, host, path and query of the key, and enables
  * the cache of these requests explicitly.
+ *
+ * The headers of `@CacheVary()` are read from the metadata once per handler and kept, so the cached requests do not read metadata.
  */
 @Injectable()
 export class HttpCacheResolver implements CacheResolver {
+    private readonly varyHeaders = new WeakMap<ClassType, Map<PropertyKey, string[]>>();
+
     public async resolve(context: ExecutionContext, definition: CacheDefinition): Promise<string | undefined> {
         const { request } = context as HttpContext;
         const method = request.method.toUpperCase();
@@ -38,10 +42,21 @@ export class HttpCacheResolver implements CacheResolver {
     }
 
     private getVaryHeaders(context: ExecutionContext): string[] {
-        const metadata =
-            Metadata.get<CacheVaryMetadata>(MetadataKeys.CACHE_VARY, context.target, context.propertyKey) ??
-            Metadata.get<CacheVaryMetadata>(MetadataKeys.CACHE_VARY, context.target);
-        return metadata?.headers ?? [];
+        let ofTarget = this.varyHeaders.get(context.target);
+        if (!ofTarget) {
+            ofTarget = new Map();
+            this.varyHeaders.set(context.target, ofTarget);
+        }
+
+        let headers = ofTarget.get(context.propertyKey);
+        if (!headers) {
+            const metadata =
+                Metadata.get<CacheVaryMetadata>(MetadataKeys.CACHE_VARY, context.target, context.propertyKey) ??
+                Metadata.get<CacheVaryMetadata>(MetadataKeys.CACHE_VARY, context.target);
+            headers = metadata?.headers ?? [];
+            ofTarget.set(context.propertyKey, headers);
+        }
+        return headers;
     }
 
     private sortQuery(query: Readonly<Record<string, string | string[]>>): [string, string | string[]][] {
