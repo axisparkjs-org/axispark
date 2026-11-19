@@ -35,4 +35,12 @@ describe('MemoryStore', () => {
 
         expect(() => provider('session', context)).toThrow(StoreKindNotSupportedError);
     });
+    it('passes the cache options to the cache stores', async () => {
+        const cache = MemoryStore({ cache: { maxEntries: 1 } })('cache', {} as any) as InMemoryCacheStore;
+        await cache.set('a', 1);
+        await cache.set('b', 2);
+
+        expect(cache).toBeInstanceOf(InMemoryCacheStore);
+        expect(cache.size).toBe(1);
+    });
 });
