@@ -25,6 +25,11 @@ jest.mock('./commands/create', () => ({
     createCommand
 }));
 
+const manifestCommand = { name: 'manifest' };
+jest.mock('./commands/manifest', () => ({
+    manifestCommand
+}));
+
 jest.mock('./errors', () => ({
     handleCliError
 }));
@@ -55,6 +60,7 @@ describe('CLI', () => {
         expect(description).toHaveBeenCalledWith('CLI for AxiSpark.js');
         expect(option).toHaveBeenCalledWith('--verbose', 'print the stack trace of the errors');
         expect(addCommand).toHaveBeenCalledWith(createCommand);
+        expect(addCommand).toHaveBeenCalledWith(manifestCommand);
         expect(parseAsync).toHaveBeenCalledTimes(1);
         expect(handleCliError).not.toHaveBeenCalled();
     });
