@@ -8,8 +8,8 @@ The complete guide is in the [Data Plugin documentation](https://axisparkjs.com/
 
 - Creates one or more named TypeORM data sources and closes them when the application stops.
 - Discovers classes decorated with `@Repository()` and binds them in the dependency injection container.
-- Provides `BaseRepository` with the common CRUD operations of the entity.
-- Implements derived queries from method names, such as `findByStatusOrderByAgeDesc` or `countByStatus`, for SQL databases and MongoDB.
+- Provides `BaseRepository` with the common CRUD operations of the entity, the access by primary key (`findById`, `findByIds`, `existsById`, `deleteById`) and paged queries (`findPage`).
+- Implements derived queries from method names, such as `findByStatusOrderByAgeDesc`, `findByNameContainingIgnoreCase`, `countByStatus` or `deleteByStatus`, for SQL databases and MongoDB. A `findBy` method that receives a `PageRequest` resolves with a `Page` with the totals.
 - Runs several repository calls in one transaction with the `@Transactional` decorator or the `TransactionManager` service.
 
 ## Install and register
@@ -43,7 +43,7 @@ app.use(
 Declare a repository for a TypeORM entity. It can be injected in any injectable class:
 
 ```ts title="customer.repository.ts"
-import { BaseRepository, Repository } from '@axisparkjs/data';
+import { BaseRepository, Page, PageRequest, Repository } from '@axisparkjs/data';
 import { Customer } from './customer';
 
 @Repository({ entity: Customer })
@@ -51,6 +51,10 @@ export class CustomerRepository extends BaseRepository<Customer> {
     declare findOneByEmail: (email: string) => Promise<Customer | null>;
 
     declare countByStatus: (status: string) => Promise<number>;
+
+    declare findByStatus: (status: string, page: PageRequest) => Promise<Page<Customer>>;
+
+    declare deleteByStatus: (status: string) => Promise<number>;
 }
 ```
 

@@ -45,4 +45,23 @@ describe('Injector', () => {
             expect(result).toBe(instance);
         });
     });
+    describe('tryGet', () => {
+        it('should return the instance available in the container synchronously', () => {
+            const token = new InjectionToken('token');
+            container.tryResolve = jest.fn().mockReturnValue('instance');
+
+            expect(injector.tryGet(token)).toBe('instance');
+            expect(container.tryResolve).toHaveBeenCalledWith(token);
+        });
+    });
+
+    describe('isSingleton', () => {
+        it('should check the token with the container', () => {
+            const token = new InjectionToken('token');
+            container.isSingleton = jest.fn().mockReturnValue(true);
+
+            expect(injector.isSingleton(token)).toBe(true);
+            expect(container.isSingleton).toHaveBeenCalledWith(token);
+        });
+    });
 });

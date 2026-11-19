@@ -1,7 +1,7 @@
 import { Logger } from '@axisparkjs/logger';
 import { Timeout, Scheduler } from '@axisparkjs/schedule';
-import { InjectKafkaConnection, InjectKafkaConsumer, InjectKafkaProducer, KafkaConnectionManager } from '@axisparkjs/kafka';
-import { Inject, InjectionToken } from '@axisparkjs/di';
+import { InjectKafkaConnection, InjectKafkaConsumer, InjectKafkaProducer, KafkaConnectionManager, kafkaConnectionToken } from '@axisparkjs/kafka';
+import { Inject } from '@axisparkjs/di';
 import { Consumer, Kafka, Producer } from 'kafkajs';
 
 @Scheduler()
@@ -9,7 +9,7 @@ export class UsingKafkaExample {
     constructor(
         private readonly logger: Logger,
         @InjectKafkaConnection('1') private readonly kafkaConnection1: Kafka,
-        @Inject(new InjectionToken('KAFKA_CONNECTION_2')) private readonly kafkaConnection2: Kafka,
+        @Inject(kafkaConnectionToken('2')) private readonly kafkaConnection2: Kafka,
         @InjectKafkaConnection('3') private readonly kafkaConnection3: Kafka,
         @InjectKafkaConnection('4') private readonly kafkaConnection4: Kafka,
         private readonly kafkaConnectionMaganer: KafkaConnectionManager,

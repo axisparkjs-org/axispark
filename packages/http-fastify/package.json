@@ -1,18 +1,40 @@
 {
     "name": "@axisparkjs/http-fastify",
-    "version": "1.5.1",
+    "version": "1.6.0",
     "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/http-fastify",
     "author": "Pablo Gálvez Ortuño",
     "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/axisparkjs-org/axispark.git",
+        "directory": "packages/http-fastify"
+    },
+    "homepage": "https://axisparkjs.com",
+    "bugs": "https://github.com/axisparkjs-org/axispark/issues",
+    "keywords": [
+        "axispark",
+        "nodejs",
+        "typescript",
+        "framework",
+        "http",
+        "fastify",
+        "adapter"
+    ],
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./lib/index.d.ts",
+            "default": "./lib/index.js"
+        },
+        "./package.json": "./package.json"
+    },
     "files": [
         "lib",
         "package.json",
         "PACKAGE.md",
         "README.md",
-        "LICENSE",
-        "tsconfig.build.json"
+        "LICENSE"
     ],
     "scripts": {
         "build": "tsc -b tsconfig.build.json",
@@ -25,18 +47,18 @@
         "node": ">= 24"
     },
     "dependencies": {
-        "@axisparkjs/common": "1.5.1",
-        "@axisparkjs/core": "1.5.1",
-        "@axisparkjs/di": "1.5.1",
-        "@axisparkjs/http": "1.5.1",
-        "@axisparkjs/logger": "1.5.1",
+        "@axisparkjs/common": "1.6.0",
+        "@axisparkjs/core": "1.6.0",
+        "@axisparkjs/di": "1.6.0",
+        "@axisparkjs/http": "1.6.0",
+        "@axisparkjs/logger": "1.6.0",
         "@fastify/compress": "^9.3.0",
         "@fastify/cookie": "^11.1.5",
-        "@fastify/cors": "^11.3.1",
+        "@fastify/cors": "^11.4.3",
         "@fastify/formbody": "^9.0.1",
-        "@fastify/multipart": "^10.1.6",
+        "@fastify/multipart": "^10.1.8",
         "@fastify/session": "^11.1.6",
-        "@fastify/static": "^10.1.8",
-        "fastify": "^5.12.7"
+        "@fastify/static": "^10.1.11",
+        "fastify": "^5.12.8"
     }
 }

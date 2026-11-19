@@ -1,9 +1,9 @@
 import { AxiSparkContext, HealthEngine, Plugin } from '@axisparkjs/core';
 import { Logger } from '@axisparkjs/logger';
 import { RabbitMQPluginOptions } from './rabbitmq-plugin-options';
-import { RABBITMQ_LOGGER, RABBITMQ_OPTIONS } from '../di';
+import { RABBITMQ_LOGGER, RABBITMQ_OPTIONS, rabbitMQConnectionToken } from '../di';
 import { PluginNotConfiguredError } from '@axisparkjs/core';
-import { Injectable, InjectionToken, Injector } from '@axisparkjs/di';
+import { Injectable, Injector } from '@axisparkjs/di';
 import { RabbitMQConnectionManager } from '../connections';
 import { RabbitMQHealthIndicator } from '../health';
 
@@ -13,7 +13,7 @@ import { RabbitMQHealthIndicator } from '../health';
 @Injectable()
 export class RabbitMQPlugin extends Plugin {
     private context: AxiSparkContext;
-    protected options: RabbitMQPluginOptions;
+    declare protected options: RabbitMQPluginOptions;
     private connectionManager: RabbitMQConnectionManager;
 
     constructor(
@@ -42,7 +42,7 @@ export class RabbitMQPlugin extends Plugin {
         const connections = this.connectionManager.getAllConnections();
 
         for (const [name, connection] of connections.entries()) {
-            this.context.container.bind({ token: new InjectionToken(`RABBITMQ_CONNECTION_${name}`), useValue: connection });
+            this.context.container.bind({ token: rabbitMQConnectionToken(name), useValue: connection });
         }
     }
 

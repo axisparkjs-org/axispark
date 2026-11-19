@@ -1,3 +1,4 @@
+import { pipeline } from 'node:stream/promises';
 import { HttpResponse } from '@axisparkjs/http';
 import { CookieOptions, Response } from 'express';
 
@@ -32,12 +33,19 @@ export class ExpressHttpResponse implements HttpResponse {
         this.response.send(body);
     }
 
-    file(filePath: string): void {
-        this.response.sendFile(filePath);
+    file(filePath: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.response.sendFile(filePath, { dotfiles: 'allow' }, (error?: Error) => {
+                // Once the response has started, the error (such as a client that disconnects) can not be answered.
+                if (error && !this.response.headersSent) reject(error);
+                else resolve();
+            });
+        });
     }
 
-    stream(stream: NodeJS.ReadableStream): void {
-        stream.pipe(this.response);
+    async stream(stream: NodeJS.ReadableStream): Promise<void> {
+        // pipeline() destroys the response when the source fails, and the source when the client closes the connection.
+        await pipeline(stream, this.response);
     }
 
     end(): void {

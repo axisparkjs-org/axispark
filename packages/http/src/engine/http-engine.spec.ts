@@ -13,13 +13,17 @@ describe('HttpEngine', () => {
     let hostMatcher: jest.Mocked<HostMatcher>;
     let versionMatcher: jest.Mocked<VersionMatcher>;
     let scopedContainerManager: { create: jest.Mock };
+    let logger: { error: jest.Mock };
+    let options: { logErrors?: boolean };
 
     class UsersController {}
     class AdminController {}
 
+    let response: { isCommitted: jest.Mock; status: jest.Mock; json: jest.Mock };
+
     const createContext = (): Pick<HttpContext, 'request' | 'response' | 'session'> => ({
         request: {} as any,
-        response: {} as any,
+        response: response as any,
         session: {} as any
     });
 
@@ -34,7 +38,61 @@ describe('HttpEngine', () => {
         versionMatcher = { match: jest.fn() } as unknown as jest.Mocked<VersionMatcher>;
         scopedContainerManager = { create: jest.fn().mockReturnValue({ scoped: true }) };
 
-        httpEngine = new HttpEngine(executionEngine, hostProcessor, versionProcessor, hostMatcher, versionMatcher, scopedContainerManager as any);
+        logger = { error: jest.fn().mockResolvedValue(undefined) };
+        response = { isCommitted: jest.fn().mockReturnValue(true), status: jest.fn(), json: jest.fn() };
+        options = { logErrors: true };
+
+        httpEngine = new HttpEngine(
+            executionEngine,
+            hostProcessor,
+            versionProcessor,
+            hostMatcher,
+            versionMatcher,
+            scopedContainerManager as any,
+            logger as any,
+            options as any
+        );
+    });
+
+    describe('errors while sending the response', () => {
+        const error = new Error('upstream failed');
+
+        beforeEach(() => {
+            const route = createRoute(UsersController, 'download');
+            hostMatcher.match.mockReturnValue([route]);
+            versionMatcher.match.mockReturnValue(route);
+            executionEngine.execute.mockRejectedValue(error);
+        });
+
+        it('should log the error with the route instead of throwing it', async () => {
+            await expect(httpEngine.execute(createContext(), [])).resolves.toBeUndefined();
+
+            expect(logger.error).toHaveBeenCalledWith('Error while sending the response of UsersController.download: Error -> upstream failed', error);
+        });
+
+        it('should not answer again a response that has started', async () => {
+            await httpEngine.execute(createContext(), []);
+
+            expect(response.status).not.toHaveBeenCalled();
+            expect(response.json).not.toHaveBeenCalled();
+        });
+
+        it('should answer 500 in the format of the framework when the response has not started', async () => {
+            response.isCommitted.mockReturnValue(false);
+
+            await httpEngine.execute(createContext(), []);
+
+            expect(response.status).toHaveBeenCalledWith(500);
+            expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Internal server error', status: 500 }));
+        });
+
+        it('should not log the error when logErrors is disabled', async () => {
+            options.logErrors = false;
+
+            await expect(httpEngine.execute(createContext(), [])).resolves.toBeUndefined();
+
+            expect(logger.error).not.toHaveBeenCalled();
+        });
     });
 
     describe('execute', () => {
@@ -178,15 +236,59 @@ describe('HttpEngine', () => {
             expect(versionMatcher.match).not.toHaveBeenCalled();
             expect(executionEngine.execute).not.toHaveBeenCalled();
         });
-
-        it('should propagate an error when execution fails', async () => {
-            const error = new Error('Execution failed');
-            const route = createRoute(UsersController, 'list');
+    });
+    describe('context of the adapter', () => {
+        it('should fill the context of the adapter in place, keeping its getters', async () => {
+            class Controller {}
+            const route = createRoute(Controller, 'find');
             hostMatcher.match.mockReturnValue([route]);
             versionMatcher.match.mockReturnValue(route);
-            executionEngine.execute.mockRejectedValue(error);
+            const read = jest.fn().mockReturnValue('session');
+            const context: any = { request: { headers: {}, method: 'GET', path: '/users' }, response };
+            Object.defineProperty(context, 'session', { get: read, enumerable: true });
 
-            await expect(httpEngine.execute(createContext(), [route])).rejects.toThrow(error);
+            await httpEngine.execute(context, [route]);
+
+            const executed = executionEngine.execute.mock.calls[0][0];
+            expect(executed).toBe(context);
+            expect(executed).toMatchObject({ target: Controller, propertyKey: 'find', transport: 'http', error: undefined });
+            expect(read).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('single unrestricted route', () => {
+        class Controller {}
+        const context = () => ({ request: { headers: {}, path: '/users', method: 'GET' }, response, session: {} }) as any;
+
+        it('should skip the host and version matching for a single route that accepts every host without versions', async () => {
+            const route = createRoute(Controller, 'find', [], ['*']);
+
+            await httpEngine.execute(context(), [route]);
+            await httpEngine.execute(context(), [route]);
+
+            expect(hostProcessor.process).not.toHaveBeenCalled();
+            expect(versionProcessor.process).not.toHaveBeenCalled();
+            expect(hostMatcher.match).not.toHaveBeenCalled();
+            expect(versionMatcher.match).not.toHaveBeenCalled();
+            expect(executionEngine.execute).toHaveBeenCalledWith(
+                expect.objectContaining({ target: Controller, propertyKey: 'find', host: undefined, version: undefined })
+            );
+        });
+
+        it('should match the host and the version when the route has hosts, versions or other routes', async () => {
+            for (const routes of [
+                [createRoute(Controller, 'find', [], ['api.example.com'])],
+                [createRoute(Controller, 'find', ['1'], ['*'])],
+                [createRoute(Controller, 'find', [], ['*']), createRoute(Controller, 'other', [], ['*'])]
+            ]) {
+                hostMatcher.match.mockReturnValue(routes);
+                versionMatcher.match.mockReturnValue(routes[0]);
+
+                await httpEngine.execute(context(), routes);
+            }
+
+            expect(hostMatcher.match).toHaveBeenCalledTimes(3);
+            expect(versionMatcher.match).toHaveBeenCalledTimes(3);
         });
     });
 });

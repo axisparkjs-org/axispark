@@ -1,7 +1,7 @@
 import { Logger } from '@axisparkjs/logger';
 import { Timeout, Scheduler } from '@axisparkjs/schedule';
-import { InjectRedisConnection, RedisConnectionManager } from '@axisparkjs/redis';
-import { Inject, InjectionToken } from '@axisparkjs/di';
+import { InjectRedisConnection, RedisConnectionManager, redisConnectionToken } from '@axisparkjs/redis';
+import { Inject } from '@axisparkjs/di';
 import { RedisClientType } from 'redis';
 import { SessionCache } from './session-cache';
 
@@ -11,7 +11,7 @@ export class UsingRedisExample {
         private readonly logger: Logger,
         private readonly sessionCache: SessionCache,
         @InjectRedisConnection('CACHE') private readonly cache: RedisClientType,
-        @Inject(new InjectionToken('REDIS_CONNECTION_LOCKS')) private readonly locks: RedisClientType,
+        @Inject(redisConnectionToken('LOCKS')) private readonly locks: RedisClientType,
         @InjectRedisConnection('BROKEN') private readonly broken: RedisClientType,
         private readonly redisConnectionManager: RedisConnectionManager
     ) {}

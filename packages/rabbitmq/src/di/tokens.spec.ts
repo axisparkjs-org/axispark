@@ -1,5 +1,5 @@
 import { Metadata, MetadataKeys } from '@axisparkjs/common';
-import { InjectRabbitMQConnection, RABBITMQ_LOGGER, RABBITMQ_OPTIONS } from './tokens';
+import { InjectRabbitMQConnection, RABBITMQ_LOGGER, RABBITMQ_OPTIONS, rabbitMQConnectionToken } from './tokens';
 
 describe('RabbitMQ injection tokens', () => {
     it('exports stable tokens for plugin options and logger', () => {
@@ -14,5 +14,11 @@ describe('RabbitMQ injection tokens', () => {
         const metadata = Metadata.get<{ params: Map<number, { description: string }> }>(MetadataKeys.INJECT, Consumer);
 
         expect(metadata?.params.get(0)?.description).toBe('RABBITMQ_CONNECTION_PRIMARY');
+        expect(metadata?.params.get(0)).toBe(rabbitMQConnectionToken('PRIMARY'));
+    });
+
+    it('returns the same token instance for the same connection name', () => {
+        expect(rabbitMQConnectionToken('PRIMARY')).toBe(rabbitMQConnectionToken('PRIMARY'));
+        expect(rabbitMQConnectionToken('PRIMARY')).not.toBe(rabbitMQConnectionToken('REPORTS'));
     });
 });

@@ -15,6 +15,8 @@ import formbody from '@fastify/formbody';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import path from 'node:path';
+import { stat } from 'node:fs/promises';
+import os from 'node:os';
 
 /**
  * An HTTP adapter for integrating Fastify with the HTTP Plugin.
@@ -35,15 +37,36 @@ export class FastifyHttpAdapter implements HttpAdapter {
     }
 
     async initialize(): Promise<void> {
-        await this.app.register(fastifyStatic, {
-            root: path.join(this.axisparkConfig.basePath || process.cwd(), 'public')
-        });
+        await this.registerStaticFiles();
         if (this.options.cookies) await this.app.register(cookie, this.options.cookiesOptions ?? {});
         if (this.options.session) await this.app.register(session, this.options.sessionOptions);
         if (this.options.compression) await this.app.register(compress, this.options.compressionOptions ?? {});
         if (this.options.cors) await this.app.register(cors, this.options.corsOptions ?? {});
         if (this.options.urlEncoded) await this.app.register(formbody, this.options.urlEncodedOptions ?? {});
         if (this.options.fileUpload) await this.app.register(multipart);
+    }
+
+    /**
+     * Registers `@fastify/static`. The file results need its `reply.sendFile()`, so it is always registered, but it only serves the static
+     * files folder when `staticFiles` is `true`, or when it is not set and the folder exists.
+     */
+    private async registerStaticFiles(): Promise<void> {
+        const root = path.resolve(this.axisparkConfig.basePath || process.cwd(), this.options.staticFilesOptions?.root ?? 'public');
+        const serve = this.options.staticFiles ?? (await FastifyHttpAdapter.isDirectory(root));
+        if (!serve) {
+            await this.app.register(fastifyStatic, { serve: false });
+            return;
+        }
+
+        await this.app.register(fastifyStatic, { root, prefix: this.options.staticFilesOptions?.prefix ?? '/' });
+    }
+
+    private static async isDirectory(folder: string): Promise<boolean> {
+        try {
+            return (await stat(folder)).isDirectory();
+        } catch {
+            return false;
+        }
     }
 
     getRegisteredRoutes(): readonly RouteDefinition[] {
@@ -63,22 +86,48 @@ export class FastifyHttpAdapter implements HttpAdapter {
                 url: path,
                 handler: async (request, reply) => {
                     await route.handler(this.createContext(request, reply));
+                    // Some replies, such as files and streams, are sent after the handler ends: returning the reply makes Fastify wait for them instead of sending an empty reply.
+                    return reply;
                 }
             });
         }
     }
 
+    /*
+     * The context of a request. The session wrapper is created the first time the session is read, so the requests that do not use the
+     * session (or the applications without sessions) do not allocate it. The HTTP engine fills this object instead of copying it.
+     */
     private createContext(request: FastifyRequest, reply: FastifyReply) {
-        const req = new FastifyHttpRequest(request);
-        const res = new FastifyHttpResponse(reply);
-        const ses = request.session ? new FastifyHttpSession(request.session) : undefined;
-        return { request: req, response: res, session: ses };
+        let session: FastifyHttpSession | undefined;
+        let sessionCreated = false;
+        return {
+            request: new FastifyHttpRequest(request, reply.raw),
+            response: new FastifyHttpResponse(reply),
+            get session(): FastifyHttpSession | undefined {
+                if (!sessionCreated) {
+                    sessionCreated = true;
+                    session = request.session ? new FastifyHttpSession(request.session) : undefined;
+                }
+                return session;
+            }
+        };
     }
 
+    /**
+     * Starts listening on the configured port and host. Without a host, the server listens on every network interface, as the Express adapter and Node.js do: `::` when IPv6 is available, and `0.0.0.0` otherwise.
+     * @returns A promise that resolves when the server is listening, and rejects with the `listen` error, such as `EADDRINUSE`.
+     */
     async start(): Promise<void> {
-        await this.app.listen({
-            port: this.options.port
-        });
+        await this.app.listen({ port: this.options.port, host: this.options.host ?? FastifyHttpAdapter.getDefaultHost() });
+    }
+
+    /**
+     * Returns the unspecified address used when no host is configured: `::` when a network interface has an IPv6 address, and `0.0.0.0` otherwise.
+     * @returns The default host.
+     */
+    static getDefaultHost(): string {
+        const hasIPv6 = Object.values(os.networkInterfaces()).some((addresses) => addresses?.some((address) => address.family === 'IPv6'));
+        return hasIPv6 ? '::' : '0.0.0.0';
     }
 
     async stop(): Promise<void> {

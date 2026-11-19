@@ -1,19 +1,22 @@
 import { Initializable, Metadata, MetadataKeys, ClassType } from '@axisparkjs/common';
 import { ClassResolver } from './class-resolver';
-import { ProviderNotFoundError, DecoratorNotIncludedError, ScopedContainerNotProvidedError } from '../errors';
-import { ClassProvider, Provider, InjectableScopes, FactoryProvider } from '../types';
+import { ProviderNotFoundError, DecoratorNotIncludedError, ScopedContainerNotProvidedError, CircularDependencyError } from '../errors';
+import { ClassProvider, Provider, InjectableScopes, FactoryProvider, ExistingProvider } from '../types';
 import { Token, TokenUtils } from '../token';
 import { ScopedContainer } from './scoped-container';
 import { Injectable } from '../decorators';
 import { ClassRegistry } from '../registry';
 import { InjectableScopeMetadata, InjectableTokenMetadata } from '../metadata';
+import { ResolutionChain } from './resolution-chain';
+import { PendingInstances } from './pending-instances';
 
 /**
  * Container is a dependency injection container that manages the registration and resolution of providers. It allows for binding providers, resolving instances, and managing scopes. The container supports singleton, scoped, and transient lifetimes for providers, enabling flexible dependency management in applications.
  */
 export class Container implements Initializable {
-    private readonly providers = new Map<string, Provider>();
+    private readonly providers = new Map<Token, Provider>();
     private readonly resolver = new ClassResolver();
+    private readonly pendingSingletons = new PendingInstances();
 
     /**
      * Initializes the container by scanning for classes decorated with `@Injectable` and binding them to the container. It retrieves metadata for injectable classes and registers them with their respective tokens and scopes. This method should be called after all providers have been registered to ensure that the container is properly initialized.
@@ -27,7 +30,7 @@ export class Container implements Initializable {
             };
             if (injectableTokenMetadata) this.bind({ token: injectableTokenMetadata.injectionToken, useClass: entry, scope: injectableScopeMetadata.scope });
 
-            if (!this.providers.has(TokenUtils.getName(entry))) this.bind({ token: entry, useClass: entry, scope: injectableScopeMetadata.scope });
+            if (!this.providers.has(entry)) this.bind({ token: entry, useClass: entry, scope: injectableScopeMetadata.scope });
         });
     }
 
@@ -45,7 +48,7 @@ export class Container implements Initializable {
         if ('useClass' in provider && !Metadata.has(MetadataKeys.INJECTABLE, provider.useClass))
             throw new DecoratorNotIncludedError(TokenUtils.getName(provider.useClass), Injectable.name);
 
-        this.providers.set(TokenUtils.getName(provider.token), provider);
+        this.providers.set(provider.token, provider);
     }
 
     /**
@@ -54,7 +57,7 @@ export class Container implements Initializable {
      * @param token - The token for the provider to unbind.
      */
     unbind<T>(token: Token<T>): void {
-        this.providers.delete(TokenUtils.getName(token));
+        this.providers.delete(token);
     }
 
     /**
@@ -66,6 +69,24 @@ export class Container implements Initializable {
     }
 
     /**
+     * Checks whether a token always resolves to the same instance: a value provider, or a class or factory provider with the singleton scope,
+     * also through `useExisting` aliases. The engine uses it to keep the instances that it can reuse between executions.
+     * @param token - The token to check.
+     * @returns `true` when the token is bound to a singleton, `false` when it is scoped, transient or not bound.
+     */
+    isSingleton(token: Token): boolean {
+        const aliases = new Set<Token>();
+        let provider = this.providers.get(token);
+        while (provider && 'useExisting' in provider && !aliases.has(provider.token)) {
+            aliases.add(provider.token);
+            provider = this.providers.get(provider.useExisting);
+        }
+
+        if (!provider || 'useExisting' in provider) return false;
+        return 'useValue' in provider || provider.scope === InjectableScopes.Singleton;
+    }
+
+    /**
      * Resolves a provider based on the provided token, returning an instance of the associated class or the result of a factory function. The method handles different scopes (singleton, scoped, transient) and manages the resolution process accordingly. If a scoped container is provided, it is used for resolving scoped instances. If the provider is not found, an error is thrown.
      * @template T - The type of the instance being resolved.
      * @param token - The token for the provider to resolve.
@@ -73,43 +94,111 @@ export class Container implements Initializable {
      * @returns A promise that resolves to an instance of the class or the result of the factory function associated with the provided token.
      * @throws {ProviderNotFoundError} If the provider associated with the provided token is not found in the container.
      * @throws {ScopedContainerNotProvidedError} If a scoped provider is being resolved but no scoped container is provided.
+     * @throws {CircularDependencyError} If a chain of `useExisting` providers points back to one of its own tokens.
      */
-    async resolve<T>(token: Token<T>, scopedContainer?: ScopedContainer): Promise<T> {
-        const provider = this.providers.get(TokenUtils.getName(token)) as Provider<T> | undefined;
+    resolve<T>(token: Token<T>, scopedContainer?: ScopedContainer): Promise<T> {
+        // Fast path: a singleton that is already created (or a value) is returned without starting a resolution chain.
+        const provider = this.providers.get(token);
+        if (provider && 'useValue' in provider) return Promise.resolve(provider.useValue as T);
+
+        return this.resolveInChain(token, scopedContainer, ResolutionChain.start());
+    }
+
+    /**
+     * Returns the instance of a token synchronously when it is already available: a value provider, or a singleton that is already created,
+     * also through `useExisting` aliases. It never creates instances, so it can be used in hot paths before falling back to `resolve()`.
+     * @template T - The type of the instance.
+     * @param token - The token of the instance.
+     * @returns The instance, or `undefined` when the token is not bound, is scoped or transient, or is a singleton that is not created yet.
+     */
+    tryResolve<T>(token: Token<T>): T | undefined {
+        const aliases = new Set<Token>();
+        let provider = this.providers.get(token);
+        while (provider && 'useExisting' in provider && !aliases.has(provider.token)) {
+            aliases.add(provider.token);
+            provider = this.providers.get(provider.useExisting);
+        }
+
+        return provider && 'useValue' in provider ? (provider.useValue as T) : undefined;
+    }
+
+    /**
+     * Resolves a provider as a dependency of the classes of a resolution chain. Used by the resolver to resolve the dependencies of a class, so each resolution keeps its own chain. Use `resolve()` instead.
+     * @internal
+     * @template T - The type of the instance being resolved.
+     * @param token - The token for the provider to resolve.
+     * @param scopedContainer - An optional scoped container for managing scoped instances during resolution.
+     * @param chain - The resolution chain of the classes that depend on the token.
+     * @returns A promise that resolves to an instance of the class or the result of the factory function associated with the provided token.
+     */
+    async resolveInChain<T>(token: Token<T>, scopedContainer: ScopedContainer | undefined, chain: ResolutionChain): Promise<T> {
+        const provider = this.providers.get(token) as Provider<T> | undefined;
         if (!provider) throw new ProviderNotFoundError(token);
 
         if ('useValue' in provider) return provider.useValue;
-        if ('useExisting' in provider) return await this.resolve(provider.useExisting);
+        if ('useExisting' in provider) return await this.resolveExisting(provider, scopedContainer, chain);
 
         let instance: T;
         switch (provider.scope) {
             case InjectableScopes.Singleton:
-                instance = await this.resolveSingleton(provider);
+                instance = await this.resolveSingleton(provider, scopedContainer, chain);
                 break;
             case InjectableScopes.Scoped:
                 if (!scopedContainer) throw new ScopedContainerNotProvidedError(token);
-                instance = await scopedContainer.resolve(provider);
+                instance = await scopedContainer.resolve(provider, chain);
                 break;
             case InjectableScopes.Transient:
-                instance = await this.resolveTransient(provider);
+                instance = await this.resolveTransient(provider, scopedContainer, chain);
                 break;
         }
 
         return instance;
     }
 
-    private async resolveSingleton<T>(provider: ClassProvider<T> | FactoryProvider<T>, scopedContainer?: ScopedContainer): Promise<T> {
-        const instance = await this.resolveInstance(provider, scopedContainer);
-        this.bind({ token: provider.token, useValue: instance });
-        return instance;
+    private async resolveExisting<T>(provider: ExistingProvider<T>, scopedContainer: ScopedContainer | undefined, chain: ResolutionChain): Promise<T> {
+        const aliases: Token[] = [provider.token];
+        let target: Token<T> = provider.useExisting;
+        let targetProvider = this.providers.get(target) as Provider<T> | undefined;
+        while (targetProvider && 'useExisting' in targetProvider) {
+            if (aliases.includes(target)) {
+                throw new CircularDependencyError([...aliases, target].map((t) => TokenUtils.getName(t)).join(' -> '));
+            }
+            aliases.push(target);
+            target = targetProvider.useExisting;
+            targetProvider = this.providers.get(target) as Provider<T> | undefined;
+        }
+
+        return await this.resolveInChain(target, scopedContainer, chain);
     }
 
-    private async resolveTransient<T>(provider: ClassProvider<T> | FactoryProvider<T>, scopedContainer?: ScopedContainer): Promise<T> {
-        return await this.resolveInstance(provider, scopedContainer);
+    private async resolveSingleton<T>(
+        provider: ClassProvider<T> | FactoryProvider<T>,
+        scopedContainer: ScopedContainer | undefined,
+        chain: ResolutionChain
+    ): Promise<T> {
+        const classType = 'useClass' in provider ? provider.useClass : provider.forClass;
+        if (chain.includes(classType)) return await this.resolveInstance(provider, scopedContainer, chain);
+
+        return await this.pendingSingletons.getOrCreate(provider, classType, chain, async () => {
+            const instance = await this.resolveInstance(provider, scopedContainer, chain);
+            this.bind({ token: provider.token, useValue: instance });
+            return instance;
+        });
     }
 
-    private async resolveInstance<T>(provider: ClassProvider<T> | FactoryProvider<T>, scopedContainer?: ScopedContainer): Promise<T> {
-        const instance = await this.resolver.resolve(provider, this, scopedContainer);
-        return instance;
+    private async resolveTransient<T>(
+        provider: ClassProvider<T> | FactoryProvider<T>,
+        scopedContainer: ScopedContainer | undefined,
+        chain: ResolutionChain
+    ): Promise<T> {
+        return await this.resolveInstance(provider, scopedContainer, chain);
+    }
+
+    private async resolveInstance<T>(
+        provider: ClassProvider<T> | FactoryProvider<T>,
+        scopedContainer: ScopedContainer | undefined,
+        chain: ResolutionChain
+    ): Promise<T> {
+        return await this.resolver.resolve(provider, this, scopedContainer, chain);
     }
 }

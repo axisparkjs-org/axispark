@@ -26,13 +26,13 @@ To get started with AxiSpark.js, checkout the [official documentation](https://a
 
 ## Support
 
-AxiSpark.js is an open-source project and we welcome contributions from the community. If you encounter any issues or have questions, check our [support guide](https://github.com/axisparkjs/.github/blob/main/SUPPORT.md) or open an issue in our [GitHub repository](https://github.com/axisparkjs/axispark/issues/new/choose).
+AxiSpark.js is an open-source project and we welcome contributions from the community. If you encounter any issues or have questions, check our [support guide](https://github.com/axisparkjs-org/.github/blob/main/SUPPORT.md) or open an issue in our [GitHub repository](https://github.com/axisparkjs-org/axispark/issues/new/choose).
 
-To report a security vulnerability, follow our [Security Policy](https://github.com/axisparkjs/.github/blob/main/SECURITY.md). Please do not open public issues for security problems.
+To report a security vulnerability, follow our [Security Policy](https://github.com/axisparkjs-org/.github/blob/main/SECURITY.md). Please do not open public issues for security problems.
 
 ### Contributors
 
-Contributors are welcome! If you would like to contribute to AxiSpark.js, please read our [contributing guidelines](https://github.com/axisparkjs/.github/blob/main/CONTRIBUTING.md), the [development guide](https://github.com/axisparkjs/axispark/blob/main/DEVELOPMENT.md) and our [Code of Conduct](https://github.com/axisparkjs/.github/blob/main/CODE_OF_CONDUCT.md).
+Contributors are welcome! If you would like to contribute to AxiSpark.js, please read our [contributing guidelines](https://github.com/axisparkjs-org/.github/blob/main/CONTRIBUTING.md), the [development guide](https://github.com/axisparkjs-org/axispark/blob/main/DEVELOPMENT.md) and our [Code of Conduct](https://github.com/axisparkjs-org/.github/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 

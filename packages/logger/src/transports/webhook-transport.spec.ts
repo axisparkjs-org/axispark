@@ -41,6 +41,7 @@ describe('WebhookTransport', () => {
 
         expect(fetch).toHaveBeenCalledWith('https://discord.com/api/webhooks/test', {
             method: 'POST',
+            signal: expect.any(AbortSignal),
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -48,6 +49,18 @@ describe('WebhookTransport', () => {
                 content: 'formatted'
             })
         });
+    });
+
+    it('should abort the request after 5 seconds by default, or after the configured timeout', async () => {
+        const timeout = jest.spyOn(AbortSignal, 'timeout');
+
+        await transport.write(createEntry(LogLevel.Info));
+        await new WebhookTransport({ url: 'https://discord.com/api/webhooks/test', formatter, minLevel: LogLevel.Info, timeout: 100 }).write(
+            createEntry(LogLevel.Info)
+        );
+
+        expect(timeout).toHaveBeenNthCalledWith(1, 5000);
+        expect(timeout).toHaveBeenNthCalledWith(2, 100);
     });
 
     it('should not send logs below minLevel', async () => {

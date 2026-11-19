@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, access } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -118,7 +118,46 @@ describe('create command - CLI', () => {
             })
         ).rejects.toThrow('Invalid project name');
     });
+
+    it('reports an invalid project name in one line, without a stack trace', async () => {
+        const result = await execFileAsync(process.execPath, [CLI_PATH, 'create', 'my project', '--template', 'default'], {
+            cwd: tempDirectory,
+            env: { ...process.env, DEBUG: '' }
+        }).catch((error: { code: number; stderr: string }) => error);
+
+        expect(result).toMatchObject({ code: 1 });
+        const { stderr } = result as { stderr: string };
+        expect(stderr).toContain('✗ Invalid project name "my project". Use only letters, numbers, "-" and "_".');
+        expect(stderr).not.toMatch(/\n\s+at /);
+    });
+
+    it.each([
+        ['the name prompt', ['\u001b']],
+        ['the template prompt', ['cancelled-project\r', '\u001b']]
+    ])('stops with the exit code 130 and creates nothing when %s is cancelled', async (_, keys) => {
+        const { code, output } = await runWithKeys(['create'], keys, tempDirectory);
+
+        expect(code).toBe(130);
+        expect(output).toContain('Cancelled.');
+        expect(output).not.toMatch(/\n\s+at /);
+        await expect(access(path.join(tempDirectory, 'cancelled-project'))).rejects.toThrow();
+    });
 });
+
+/**
+ * Runs the CLI and types the given keys, one every 500 milliseconds, as a user would do in the prompts.
+ */
+function runWithKeys(args: string[], keys: string[], cwd: string): Promise<{ code: number | null; output: string }> {
+    return new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, [CLI_PATH, ...args], { cwd, env: { ...process.env, DEBUG: '' } });
+        let output = '';
+        child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
+        child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
+        child.on('error', reject);
+        child.on('close', (code) => resolve({ code, output }));
+        keys.forEach((key, index) => setTimeout(() => child.stdin.write(key), 500 * (index + 1)));
+    });
+}
 
 async function expectFileToExist(filePath: string): Promise<void> {
     await expect(access(filePath)).resolves.toBeUndefined();

@@ -1,7 +1,7 @@
 import { createApp } from './app';
 
-const port = Number(process.env.PORT ?? 3000);
-const app = createApp(port);
+// PORT and REDIS_URL are read from the environment or from the .env file (see .env.example). Start a second instance with PORT=3001.
+const app = createApp();
 
 const bootstrap = async () => {
     try {

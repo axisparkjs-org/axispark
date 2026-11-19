@@ -69,19 +69,21 @@ describe('ExecutionPlanner', () => {
             expect(result).toEqual({
                 before: [],
                 after: [],
-                context,
+                handler: { target: context.target, propertyKey: context.propertyKey },
                 catch: [],
                 timeout: undefined,
                 cache: undefined
             });
         });
 
-        it('should use the provided execution context in the plan', async () => {
+        it('should keep only the handler of the context in the plan', async () => {
             const context = createContext();
 
             const result = await planner.plan(context);
 
-            expect(result.context).toBe(context);
+            expect(result.handler).toEqual({ target: context.target, propertyKey: context.propertyKey });
+            expect(Object.values(result)).not.toContain(context);
+            expect((result as any).context).toBeUndefined();
         });
 
         it('should generate steps using StepGenerator', async () => {
@@ -381,7 +383,7 @@ describe('ExecutionPlanner', () => {
             expect(timeoutGenerator.generate).toHaveBeenCalledTimes(2);
         });
 
-        it('should use the target name and property key as cache key', async () => {
+        it('should use the target class and property key as cache key', async () => {
             const firstContext = createContext();
 
             const secondContext = {
@@ -392,6 +394,49 @@ describe('ExecutionPlanner', () => {
             await planner.plan(firstContext);
             await planner.plan(secondContext);
 
+            expect(stepGenerator.generate).toHaveBeenCalledTimes(2);
+        });
+
+        it('should generate different plans for two classes with the same name', async () => {
+            const createController = () => class Controller {};
+            const FirstController = createController();
+            const SecondController = createController();
+
+            const firstContext = { ...createContext(), target: FirstController } as ExecutionContext;
+            const secondContext = { ...createContext(), target: SecondController } as ExecutionContext;
+
+            const firstPlan = await planner.plan(firstContext);
+            const secondPlan = await planner.plan(secondContext);
+
+            expect(FirstController.name).toBe(SecondController.name);
+            expect(firstPlan).not.toBe(secondPlan);
+            expect(firstPlan.handler.target).toBe(FirstController);
+            expect(secondPlan.handler.target).toBe(SecondController);
+            await expect(planner.plan(firstContext)).resolves.toBe(firstPlan);
+            await expect(planner.plan(secondContext)).resolves.toBe(secondPlan);
+        });
+    });
+    describe('concurrent generation', () => {
+        it('should generate the plan of a handler once for concurrent first executions', async () => {
+            let release: (steps: unknown[]) => void = () => undefined;
+            stepGenerator.generate = jest.fn().mockReturnValue(new Promise((resolve) => (release = resolve)));
+            const context = createContext();
+
+            const plans = Promise.all([planner.plan(context), planner.plan(context), planner.plan(createContext())]);
+            release([]);
+            const [first, second] = await plans;
+
+            expect(stepGenerator.generate).toHaveBeenCalledTimes(1);
+            expect(first).toBe(second);
+        });
+
+        it('should generate the plan again after a failed generation', async () => {
+            const error = new Error('steps');
+            stepGenerator.generate = jest.fn().mockRejectedValueOnce(error).mockResolvedValueOnce([]);
+            const context = createContext();
+
+            await expect(planner.plan(context)).rejects.toBe(error);
+            await expect(planner.plan(context)).resolves.toBeDefined();
             expect(stepGenerator.generate).toHaveBeenCalledTimes(2);
         });
     });

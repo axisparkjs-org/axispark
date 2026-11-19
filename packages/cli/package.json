@@ -1,9 +1,25 @@
 {
     "name": "@axisparkjs/cli",
-    "version": "1.5.1",
+    "version": "1.6.0",
     "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/cli",
     "author": "Pablo Gálvez Ortuño",
     "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/axisparkjs-org/axispark.git",
+        "directory": "packages/cli"
+    },
+    "homepage": "https://axisparkjs.com",
+    "bugs": "https://github.com/axisparkjs-org/axispark/issues",
+    "keywords": [
+        "axispark",
+        "nodejs",
+        "typescript",
+        "framework",
+        "cli",
+        "scaffolding",
+        "generator"
+    ],
     "bin": {
         "axispark": "./lib/index.js"
     },
@@ -12,8 +28,7 @@
         "package.json",
         "PACKAGE.md",
         "README.md",
-        "LICENSE",
-        "tsconfig.build.json"
+        "LICENSE"
     ],
     "scripts": {
         "build": "tsc -b tsconfig.build.json",
@@ -27,11 +42,11 @@
     },
     "dependencies": {
         "chalk": "^5.6.2",
-        "commander": "^15.0.0",
+        "commander": "^15.1.0",
         "execa": "^5.1.1",
         "ora": "^10.0.0",
         "prompts": "^2.4.2",
-        "tar": "^7.5.22"
+        "tar": "^7.5.23"
     },
     "devDependencies": {
         "@types/node": "^26.6.6",

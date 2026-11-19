@@ -1,6 +1,6 @@
 # Developing AxiSpark.js
 
-This guide covers the development workflow of the `axispark` monorepo. Before contributing, read the organization [contributing guidelines](https://github.com/axisparkjs/.github/blob/main/CONTRIBUTING.md) for issues, branching, commit messages and pull requests.
+This guide covers the development workflow of the `axispark` monorepo. Before contributing, read the organization [contributing guidelines](https://github.com/axisparkjs-org/.github/blob/main/CONTRIBUTING.md) for issues, branching, commit messages and pull requests.
 
 ## Development Setup
 
@@ -8,7 +8,7 @@ You need [Node.js](https://nodejs.org/) version 24 or higher. AxiSpark.js suppor
 
 - Fork the repository on GitHub.
 - Clone your forked repository to your local machine.
-- Install the necessary dependencies using `npm ci`. The documentation lives in the [website repository](https://github.com/axisparkjs/website), where its guides are written and the API reference is generated from the TSDoc comments of this repository.
+- Install the necessary dependencies using `npm ci`. The documentation lives in the [website repository](https://github.com/axisparkjs-org/website), where its guides are written and the API reference is generated from the TSDoc comments of this repository.
 
 ## Versioning
 
@@ -20,13 +20,17 @@ You would run `npm run cd:changeset` and select the type of change you are makin
 - "Minor" option if you are adding a new feature
 - "Major" option if you are making a breaking change
 
+## Package metadata
+
+Every package in `packages/` must declare `repository` (with the `directory` of the package), `homepage`, `bugs`, `keywords` and, for libraries, its public entry point in `exports`. npm needs the `repository.url` to publish the production versions with provenance. Run `npm run check:packages` to check them; the CI pipeline runs it too. Packages are imported from their root only: code that needs an internal type must have it exported from the `index.ts` of its package.
+
 ## Need to test your package before submitting a pull request?
 
 There is a pipeline that builds a snapshot of your branch and publishes it to GitHub Packages. You can use this snapshot to test your changes in another project before submitting a pull request. To do this, follow these steps:
 
 1. Make sure your branch contains a changeset (`npm run cd:changeset`). Without a changeset, no snapshot version is generated.
 2. Push your branch to the repository. Snapshots can be published from `feature/`, `fix/`, `update/` and `docs/` branches.
-3. Open the [CD workflow](https://github.com/axisparkjs/axispark/actions/workflows/cd.yml), click **Run workflow**, select your branch and the `snapshot` environment.
+3. Open the [CD workflow](https://github.com/axisparkjs-org/axispark/actions/workflows/cd.yml), click **Run workflow**, select your branch and the `snapshot` environment.
 4. When the workflow finishes, the **Show snapshot information** step prints the npm tag of the snapshot. The tag is the branch name without its prefix, with invalid characters replaced by `-`. For example, `fix/login-validation` is published with the `login-validation` tag.
 5. In the project where you want to test the snapshot, configure the GitHub Packages registry for the `@axisparkjs` scope in its `.npmrc` file. You need a GitHub [personal access token](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry#authenticating-to-github-packages) with the `read:packages` scope:
 

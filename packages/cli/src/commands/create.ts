@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import prompts from 'prompts';
+import prompts, { PromptObject } from 'prompts';
 import ora from 'ora';
 import chalk from 'chalk';
 import path from 'node:path';
@@ -7,6 +7,7 @@ import { TEMPLATES, validateTemplate } from '../templates';
 import { directoryExists, removeDirectory, updatePackageJson } from '../utils/filesystem';
 import { installDependencies } from '../utils/package-manager';
 import { downloadTemplate } from '../utils/template';
+import { CancelledError } from '../errors';
 
 export const createCommand = new Command('create')
     .description('Create a new framework project')
@@ -17,15 +18,15 @@ export const createCommand = new Command('create')
     .action(async (name: string, options: Record<string, any>) => {
         // 1. Ask for the project name if it was not provided
         if (!name) {
-            const response = await prompts({
+            name = await ask<string>({
                 type: 'text',
                 name: 'name',
-                message: 'What is your project name?'
+                message: 'What is your project name?',
+                validate: (value: string) => isValidProjectName(value) || PROJECT_NAME_RULE
             });
-            name = response.name;
         }
 
-        validateProjectName(name as string);
+        validateProjectName(name);
         if (options.template) validateTemplate(options.template as string);
         const projectPath = path.resolve(process.cwd(), name as string);
 
@@ -37,14 +38,13 @@ export const createCommand = new Command('create')
 
         // 3. Copy the template
         if (!options.template) {
-            const response = await prompts({
+            options.template = await ask<string>({
                 type: 'select',
                 name: 'template',
                 message: 'Select a template:',
                 choices: TEMPLATES.map(({ title, value }) => ({ title, value })),
                 initial: 0
             });
-            options.template = response.template;
             validateTemplate(options.template as string);
         }
 
@@ -63,14 +63,21 @@ export const createCommand = new Command('create')
         }
 
         // 4. Ask whether to install dependencies
+        // The project already exists at this point, so cancelling this prompt means "do not install".
+        let installCancelled = false;
         if (options.install === undefined) {
-            const response = await prompts({
-                type: 'confirm',
-                name: 'install',
-                message: 'Install dependencies?',
-                initial: true
-            });
-            options.install = response.install;
+            try {
+                options.install = await ask<boolean>({
+                    type: 'confirm',
+                    name: 'install',
+                    message: 'Install dependencies?',
+                    initial: true
+                });
+            } catch (error) {
+                if (!(error instanceof CancelledError)) throw error;
+                installCancelled = true;
+                options.install = false;
+            }
         }
 
         if (options.install) {
@@ -85,6 +92,8 @@ export const createCommand = new Command('create')
             }
         }
 
+        if (installCancelled) console.log(chalk.yellow('! Dependencies not installed.'));
+
         // 5. Show the result
         console.log();
         console.log(chalk.green('✓ Project ready!'));
@@ -92,12 +101,38 @@ export const createCommand = new Command('create')
         console.log(chalk.gray('Next steps:'));
         console.log();
         console.log(`  cd ${name}`);
+        if (!options.install) console.log(`  npm install`);
         console.log(`  npm run dev`);
         console.log();
     });
 
-function validateProjectName(name: string) {
-    if (!/^[a-zA-Z0-9-_]+$/.test(name)) {
-        throw new Error('Invalid project name');
+const PROJECT_NAME_RULE = 'Use only letters, numbers, "-" and "_".';
+
+function isValidProjectName(name: unknown): name is string {
+    return typeof name === 'string' && /^[a-zA-Z0-9-_]+$/.test(name);
+}
+
+function validateProjectName(name: unknown): asserts name is string {
+    if (!isValidProjectName(name)) {
+        throw new Error(`Invalid project name "${String(name ?? '')}". ${PROJECT_NAME_RULE}`);
     }
+}
+
+/**
+ * Asks a single question, and stops the command when the user cancels it.
+ * @param question The question to ask.
+ * @returns The answer of the user.
+ * @throws {CancelledError} If the user cancels the prompt (Ctrl+C or Esc).
+ */
+async function ask<T>(question: PromptObject<string> & { name: string }): Promise<T> {
+    let cancelled = false;
+    const response = await prompts(question, {
+        onCancel: () => {
+            cancelled = true;
+            return false;
+        }
+    });
+    const answer = response[question.name] as T | undefined;
+    if (cancelled || answer === undefined) throw new CancelledError();
+    return answer;
 }

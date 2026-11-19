@@ -7,8 +7,42 @@ import { LogTransport } from './log-transport';
 /**
  * A class for handling logging operations with support for multiple transports and scoping.
  */
+/** The minimum time between two reports of the failures of the same transport on `process.stderr`. */
+export const TRANSPORT_ERROR_REPORT_INTERVAL = 60_000;
+
+const lastReports = new WeakMap<LogTransport, number>();
+
+/**
+ * Reports the failure of a transport without logging it, to avoid a recursion: with the `onError` callback of the transport,
+ * or on `process.stderr` at most once per transport every minute.
+ */
+function reportTransportError(transport: LogTransport, error: Error, entry: LogEntry): void {
+    const { onError } = transport.errorOptions ?? {};
+    if (onError) {
+        try {
+            onError(error, entry);
+        } catch {
+            // A failing callback must not break the code that logs either.
+        }
+        return;
+    }
+
+    const now = Date.now();
+    const lastReport = lastReports.get(transport);
+    if (lastReport !== undefined && now - lastReport < TRANSPORT_ERROR_REPORT_INTERVAL) return;
+    lastReports.set(transport, now);
+
+    process.stderr.write(
+        `[AxiSpark] The log transport ${transport.constructor.name} failed to write an entry: ${error.name} -> ${error.message}. ` +
+            `Its next failures are not reported for ${TRANSPORT_ERROR_REPORT_INTERVAL / 1000} seconds.\n`
+    );
+}
+
 @Injectable()
 export class Logger {
+    /* The lowest minimum level of the transports, computed again when transports are added to or removed from the array. */
+    private lowestLevel?: { transports: number; level: number };
+
     /**
      * Constructor for the Logger class.
      * @param transports An array of LogTransport instances that define how log entries are handled (e.g., written to console, file, etc.).
@@ -87,8 +121,31 @@ export class Logger {
         return new Logger(this.transports, [...this.scopes, scope], this.mergeMetadata(this.metadata, metadata));
     }
 
+    /**
+     * Writes the entries kept in memory by the transports (buffered or batched transports) and waits for them. A failing transport does not
+     * stop the others, and its failure is ignored, so it never breaks the shutdown of the application.
+     */
+    public async flush(): Promise<void> {
+        await Promise.allSettled(this.transports.map((transport) => transport.flush?.()));
+    }
+
+    /**
+     * Whether an entry of the level would be written by at least one transport. The level methods return at once, without building the
+     * entry, when it is `false`, so the `debug` and `trace` calls cost almost nothing when no transport writes them.
+     * @param level The level to check.
+     */
+    public isLevelEnabled(level: LogLevel): boolean {
+        if (this.lowestLevel?.transports !== this.transports.length) {
+            const levels = this.transports.map((transport) => transport.minLevel ?? LogLevel.Trace);
+            this.lowestLevel = { transports: this.transports.length, level: Math.min(...levels) };
+        }
+        return level >= this.lowestLevel.level;
+    }
+
     /** Internal method to log data using the configured transports. */
     public async log(data: LogData) {
+        if (!this.isLevelEnabled(data.level)) return;
+
         const entry: LogEntry = {
             timestamp: new Date(),
             level: data.level,
@@ -98,7 +155,18 @@ export class Logger {
             metadata: this.mergeMetadata(this.metadata, data.metadata)
         };
 
-        await Promise.all(this.transports.map((t) => t.write(entry)));
+        const results = await Promise.allSettled(this.transports.map((transport) => transport.write(entry)));
+
+        let failure: Error | undefined;
+        results.forEach((result, index) => {
+            if (result.status === 'fulfilled') return;
+            const transport = this.transports[index];
+            const error = result.reason instanceof Error ? result.reason : new Error(String(result.reason));
+            reportTransportError(transport, error, entry);
+            if (transport.errorOptions?.failOnError) failure ??= error;
+        });
+
+        if (failure) throw failure;
     }
 
     private mergeMetadata(bound?: LogMetadata, metadata?: LogMetadata): LogMetadata | undefined {

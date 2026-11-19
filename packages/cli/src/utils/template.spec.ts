@@ -131,7 +131,7 @@ describe('downloadTemplate', () => {
 
             expect(global.fetch).toHaveBeenCalledTimes(1);
 
-            expect(global.fetch).toHaveBeenCalledWith('https://github.com/axisparkjs/axispark/archive/refs/heads/main.tar.gz');
+            expect(global.fetch).toHaveBeenCalledWith('https://github.com/axisparkjs-org/axispark/archive/refs/heads/main.tar.gz');
         });
 
         it('uses the response body to create a readable stream', async () => {

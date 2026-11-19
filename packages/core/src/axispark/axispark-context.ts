@@ -5,21 +5,23 @@ import { AxiSparkConfig, AXISPARK_CONFIG } from './axispark-config';
 import { Scanner, FileSystemScanner, NullScanner } from '../scanner';
 import { HealthEngine } from '../health';
 import { AxiSparkPrivateConfig } from './axispark-private-config';
+import { AXISPARK_ENV_SETTINGS, DeepReadonly, SettingsLoader } from '../settings';
 
 /**
  * A class representing the context of the Axispark framework. It encapsulates various components and services that are essential for the operation of the framework, including logging, plugin management, dependency injection, configuration, and scanning capabilities.
  *
  * The `AxiSparkContext` class provides a centralized context for managing the state and behavior of the Axispark framework. It initializes and configures essential services such as logging, plugin registry, dependency injection container, and scanner based on the provided configuration options.
  */
-export class AxiSparkContext {
+export class AxiSparkContext<TSettings extends object = object> {
     public readonly logger: Logger;
     public readonly plugins: PluginRegistry;
     public readonly container: Container;
-    public readonly config: AxiSparkConfig;
+    public readonly config: AxiSparkConfig<TSettings>;
     public readonly privateConfig: AxiSparkPrivateConfig;
     public readonly scanner: Scanner;
+    public readonly settings: DeepReadonly<TSettings>;
 
-    public constructor(config?: AxiSparkConfig, privateConfig?: AxiSparkPrivateConfig) {
+    public constructor(config?: AxiSparkConfig<TSettings>, privateConfig?: AxiSparkPrivateConfig) {
         this.config = {
             name: 'App',
             environment: 'development',
@@ -32,6 +34,7 @@ export class AxiSparkContext {
             wait: true,
             ...privateConfig
         };
+        this.settings = this.loadSettings();
         this.logger = new Logger(this.config.logTransports as LogTransport[], [this.config.name as string]);
         this.plugins = new PluginRegistry();
         this.container = new Container();
@@ -44,6 +47,10 @@ export class AxiSparkContext {
         this.container.bind({
             token: AXISPARK_CONFIG,
             useValue: this.config
+        });
+        this.container.bind({
+            token: AXISPARK_ENV_SETTINGS,
+            useValue: this.settings
         });
         this.container.bind({
             token: Logger,
@@ -67,5 +74,12 @@ export class AxiSparkContext {
             token: HealthEngine,
             useValue: healthEngine
         });
+    }
+
+    private loadSettings(): DeepReadonly<TSettings> {
+        const loader = new SettingsLoader();
+        if (this.privateConfig.settings) return loader.freeze(this.privateConfig.settings as TSettings);
+        if (this.config.settings) return loader.load(this.config.settings);
+        return loader.freeze({} as TSettings);
     }
 }

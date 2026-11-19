@@ -25,7 +25,7 @@ export class McpPlugin extends Plugin {
     static override readonly dependencies = [{ plugin: HttpPlugin, optional: true }];
 
     private context: AxiSparkContext;
-    protected options: McpPluginOptions;
+    declare protected options: McpPluginOptions;
     private transport: McpTransport;
     private endpoint: string;
 

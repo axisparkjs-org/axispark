@@ -13,7 +13,7 @@ describe('Logger', () => {
 
     beforeEach(() => {
         const config: LogTransportOptions = {
-            minLevel: LogLevel.Info,
+            minLevel: LogLevel.Trace,
             formatter: {
                 format: jest.fn().mockReturnValue('formatted message')
             }
@@ -292,6 +292,177 @@ describe('Logger', () => {
 
             expect(bound).toEqual({ requestId: 'abc' });
             expect(transport1.write.mock.calls[1][0].metadata).toBeUndefined();
+        });
+    });
+
+    describe('transport errors', () => {
+        const config = (options: Partial<LogTransportOptions> = {}): LogTransportOptions => ({
+            minLevel: LogLevel.Trace,
+            formatter: { format: jest.fn() },
+            ...options
+        });
+
+        class FailingTransport extends LogTransport {
+            write = jest.fn().mockRejectedValue(new Error('log endpoint down'));
+        }
+
+        let stderr: jest.SpyInstance;
+
+        beforeEach(() => {
+            stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        });
+
+        afterEach(() => {
+            stderr.mockRestore();
+            jest.useRealTimers();
+        });
+
+        it.each(['info', 'warn', 'error', 'debug', 'trace', 'fatal'] as const)('should not reject %s() when a transport fails', async (method) => {
+            const failingLogger = new Logger([new FailingTransport(config())]);
+
+            await expect(failingLogger[method]('hello')).resolves.toBeUndefined();
+        });
+
+        it('should still send the entry to the other transports', async () => {
+            const working = new MockTransport(config());
+            const failingLogger = new Logger([new FailingTransport(config()), working]);
+
+            await failingLogger.info('hello');
+
+            expect(working.write).toHaveBeenCalledWith(expect.objectContaining({ message: 'hello' }));
+        });
+
+        it('should convert a rejection that is not an error', async () => {
+            const transport = new MockTransport(config());
+            transport.write.mockRejectedValue('timeout');
+
+            await new Logger([transport]).info('hello');
+
+            expect(stderr).toHaveBeenCalledWith(expect.stringContaining('MockTransport failed to write an entry: Error -> timeout'));
+        });
+
+        it('should report the failure on stderr at most once per transport every minute', async () => {
+            jest.useFakeTimers({ now: 0 });
+            const failing = new FailingTransport(config());
+            const other = new FailingTransport(config());
+            const failingLogger = new Logger([failing]);
+
+            await failingLogger.info('first');
+            await failingLogger.child('scope').info('second');
+            await new Logger([other]).info('other transport');
+
+            expect(stderr).toHaveBeenCalledTimes(2);
+            expect(stderr).toHaveBeenCalledWith(
+                '[AxiSpark] The log transport FailingTransport failed to write an entry: Error -> log endpoint down. Its next failures are not reported for 60 seconds.\n'
+            );
+
+            jest.setSystemTime(60_000);
+            await failingLogger.info('third');
+
+            expect(stderr).toHaveBeenCalledTimes(3);
+        });
+
+        it('should call onError instead of writing to stderr', async () => {
+            const onError = jest.fn();
+            const failing = new FailingTransport(config({ onError }));
+
+            await new Logger([failing]).info('hello');
+            await new Logger([failing]).info('again');
+
+            expect(onError).toHaveBeenCalledTimes(2);
+            expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'log endpoint down' }), expect.objectContaining({ message: 'hello' }));
+            expect(stderr).not.toHaveBeenCalled();
+        });
+
+        it('should not reject when onError throws', async () => {
+            const failing = new FailingTransport(
+                config({
+                    onError: () => {
+                        throw new Error('callback failed');
+                    }
+                })
+            );
+
+            await expect(new Logger([failing]).info('hello')).resolves.toBeUndefined();
+        });
+
+        it('should reject with the error of a transport with failOnError, after writing to the other transports', async () => {
+            const working = new MockTransport(config());
+            const strict = new FailingTransport(config({ failOnError: true, onError: jest.fn() }));
+
+            await expect(new Logger([strict, working]).info('audit')).rejects.toThrow('log endpoint down');
+            expect(working.write).toHaveBeenCalled();
+        });
+
+        it('should handle transports that do not extend LogTransport', async () => {
+            const duckTyped = { write: jest.fn().mockRejectedValue(new Error('down')) } as unknown as LogTransport;
+
+            await expect(new Logger([duckTyped]).info('hello')).resolves.toBeUndefined();
+        });
+    });
+
+    describe('flush', () => {
+        it('should flush every transport and ignore the failures', async () => {
+            const failing = new MockTransport({ minLevel: LogLevel.Info, formatter: { format: jest.fn() } });
+            jest.spyOn(failing, 'flush').mockRejectedValue(new Error('closed'));
+            const working = new MockTransport({ minLevel: LogLevel.Info, formatter: { format: jest.fn() } });
+            const flush = jest.spyOn(working, 'flush');
+
+            await expect(new Logger([failing, working]).flush()).resolves.toBeUndefined();
+
+            expect(flush).toHaveBeenCalledTimes(1);
+        });
+
+        it('should do nothing for the transports that keep nothing in memory', async () => {
+            await expect(new MockTransport({ minLevel: LogLevel.Info, formatter: { format: jest.fn() } }).flush()).resolves.toBeUndefined();
+        });
+    });
+
+    describe('minimum level', () => {
+        const transportWith = (minLevel: LogLevel) => new MockTransport({ minLevel, formatter: { format: jest.fn() } });
+
+        it('should not build the entry nor call the transports below the lowest minimum level', async () => {
+            const info = transportWith(LogLevel.Info);
+            const warn = transportWith(LogLevel.Warn);
+            const filtered = new Logger([info, warn]);
+            const now = jest.spyOn(global, 'Date');
+
+            await filtered.debug('debug message');
+            await filtered.trace('trace message');
+
+            expect(info.write).not.toHaveBeenCalled();
+            expect(warn.write).not.toHaveBeenCalled();
+            expect(now).not.toHaveBeenCalled();
+            now.mockRestore();
+
+            await filtered.info('info message');
+            expect(info.write).toHaveBeenCalledTimes(1);
+            expect(warn.write).toHaveBeenCalledTimes(1);
+        });
+
+        it('should apply the lowest level of the transports to child loggers and to the transports added later', async () => {
+            const transports: LogTransport[] = [transportWith(LogLevel.Error)];
+            const parent = new Logger(transports);
+            const child = parent.child('scope');
+
+            expect(child.isLevelEnabled(LogLevel.Warn)).toBe(false);
+            expect(parent.isLevelEnabled(LogLevel.Fatal)).toBe(true);
+
+            const debug = transportWith(LogLevel.Debug);
+            transports.push(debug);
+            await child.debug('debug message');
+
+            expect(debug.write).toHaveBeenCalledTimes(1);
+            expect(child.isLevelEnabled(LogLevel.Trace)).toBe(false);
+        });
+
+        it('should write every level when the transports have no minimum level or there are no transports', async () => {
+            const custom = new MockTransport({ formatter: { format: jest.fn() } } as unknown as LogTransportOptions);
+
+            await new Logger([custom]).trace('trace message');
+
+            expect(custom.write).toHaveBeenCalledTimes(1);
+            expect(new Logger([]).isLevelEnabled(LogLevel.Fatal)).toBe(false);
         });
     });
 });

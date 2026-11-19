@@ -9,6 +9,7 @@ The complete guide is in the [Engine System documentation](https://axisparkjs.co
 - Runs each execution through middlewares, guards, interceptors, the handler and filters.
 - Declares engine steps with `@Middleware()`, `@Guard()`, `@Interceptor()` and `@Filter()`, globally or per transport.
 - Resolves handler parameters with decorators such as `@Context()`, and transforms or validates them with pipes (`@Pipe()`).
+- Gives every execution an `AbortSignal` (`@Signal()`), aborted when the execution times out or its client stops waiting, so handlers can stop their work.
 - Supports timeouts and rate limiting for executions. The rate limit buckets and the sliding window are shared by every transport, which only identifies its clients. The buckets are kept by a `RateLimitStore` from `@axisparkjs/store`.
 
 ## Install and use
@@ -46,5 +47,27 @@ export class TodoController {
     getTodo(@Path('index') @Pipe(ParseInt(10)) index: number) {
         return { index };
     }
+}
+```
+
+The built-in steps parse (`ParseInt`, `ParseFloat`, `ParseBoolean`, `ParseUuid`, `ParseEnum`, `ParseDate`, `ParseArray`), validate (`Min`, `Max`, `Range`, `MinLength`, `MaxLength`, `NotEmpty`, `Regex`, `ValidateSchema`) and transform (`Trim`, `LowerCase`, `UpperCase`) the parameters. `Default()` and `Optional()` handle the missing ones:
+
+```ts
+@Get()
+list(
+    @Query('page') @Pipe(Default(1), ParseInt()) page: number,
+    @Query('from') @Pipe(Optional(), ParseDate()) from: Date | undefined,
+    @Query('ids') @Pipe(Default([]), ParseArray({ items: ParseInt() })) ids: number[]
+) {}
+```
+
+Stop the work of a handler when it times out or the client disconnects:
+
+```ts
+@Get('report')
+@Timeout(5000)
+async report(@Signal() signal: AbortSignal) {
+    const response = await fetch(this.reportsUrl, { signal });
+    return response.json();
 }
 ```

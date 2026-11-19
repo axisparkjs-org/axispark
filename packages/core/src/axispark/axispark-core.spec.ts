@@ -9,7 +9,8 @@ describe('AxiSparkCore', () => {
     beforeEach(() => {
         context = {
             logger: {
-                info: jest.fn().mockResolvedValue(undefined)
+                info: jest.fn().mockResolvedValue(undefined),
+                flush: jest.fn().mockResolvedValue(undefined)
             },
             plugins: {
                 init: jest.fn(),
@@ -30,7 +31,8 @@ describe('AxiSparkCore', () => {
             },
             scanner: {
                 scan: jest.fn()
-            }
+            },
+            settings: Object.freeze({ port: 3000 })
         } as unknown as jest.Mocked<AxiSparkContext>;
 
         core = new AxiSparkCore(context);
@@ -41,6 +43,12 @@ describe('AxiSparkCore', () => {
             const config = core.config;
 
             expect(config).toBe(context.config);
+        });
+    });
+
+    describe('settings', () => {
+        it('should return the context settings', () => {
+            expect(core.settings).toBe(context.settings);
         });
     });
 
@@ -138,6 +146,14 @@ describe('AxiSparkCore', () => {
 
             expect(context.plugins.destroy).toHaveBeenCalledWith(context);
             expect(context.logger.info).toHaveBeenCalledWith('App destroyed');
+        });
+
+        it('should flush the logger after the last entry', async () => {
+            await core.destroy();
+
+            expect((context.logger.flush as jest.Mock).mock.invocationCallOrder[0]).toBeGreaterThan(
+                (context.logger.info as jest.Mock).mock.invocationCallOrder.at(-1) as number
+            );
         });
     });
 

@@ -1,5 +1,4 @@
 import { Metadata, MetadataKeys } from '@axisparkjs/common';
-import { InjectionToken } from '@axisparkjs/di';
 import { InjectRedisConnection, REDIS_LOGGER, REDIS_OPTIONS, redisConnectionToken } from './tokens';
 
 describe('Redis injection tokens', () => {
@@ -9,7 +8,12 @@ describe('Redis injection tokens', () => {
     });
 
     it('creates the token of a named connection', () => {
-        expect(redisConnectionToken('CACHE')).toEqual(new InjectionToken('REDIS_CONNECTION_CACHE'));
+        expect(redisConnectionToken('CACHE').description).toBe('REDIS_CONNECTION_CACHE');
+    });
+
+    it('returns the same token instance for the same connection name', () => {
+        expect(redisConnectionToken('CACHE')).toBe(redisConnectionToken('CACHE'));
+        expect(redisConnectionToken('CACHE')).not.toBe(redisConnectionToken('LOCKS'));
     });
 
     it('creates an injection decorator for the named Redis connection', () => {
@@ -18,6 +22,6 @@ describe('Redis injection tokens', () => {
         connectionDecorator(SessionCache, undefined, 0);
         const metadata = Metadata.get<{ params: Map<number, { description: string }> }>(MetadataKeys.INJECT, SessionCache);
 
-        expect(metadata?.params.get(0)?.description).toBe('REDIS_CONNECTION_CACHE');
+        expect(metadata?.params.get(0)).toBe(redisConnectionToken('CACHE'));
     });
 });

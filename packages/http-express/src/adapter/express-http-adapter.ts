@@ -59,14 +59,14 @@ export class ExpressHttpAdapter implements HttpAdapter {
     }
 
     private createContext(request: Request, response: Response) {
-        const req = new ExpressHttpRequest(request);
+        const req = new ExpressHttpRequest(request, response);
         const res = new ExpressHttpResponse(response);
         const ses = request.session ? new ExpressHttpSession(request.session) : undefined;
         return { request: req, response: res, session: ses };
     }
 
     /**
-     * Starts listening on the configured port.
+     * Starts listening on the configured port and host. Without a host, the server listens on every network interface.
      * @returns A promise that resolves when the server is listening, and rejects with the `listen` error, such as `EADDRINUSE`.
      */
     async start(): Promise<void> {
@@ -76,10 +76,12 @@ export class ExpressHttpAdapter implements HttpAdapter {
         await new Promise<void>((resolve, reject) => {
             const onError = (error: Error) => reject(error);
             server.once('error', onError);
-            server.listen(this.options.port, () => {
+            const onListening = () => {
                 server.off('error', onError);
                 resolve();
-            });
+            };
+            if (this.options.host === undefined) server.listen(this.options.port, onListening);
+            else server.listen(this.options.port, this.options.host, onListening);
         });
     }
 

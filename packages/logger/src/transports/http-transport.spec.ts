@@ -39,6 +39,7 @@ describe('HttpTransport', () => {
 
         expect(fetch).toHaveBeenCalledWith('https://example.com/logs', {
             method: 'POST',
+            signal: expect.any(AbortSignal),
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -46,6 +47,25 @@ describe('HttpTransport', () => {
         });
 
         expect(formatter.format).not.toHaveBeenCalled();
+    });
+
+    it('should abort the request after 5 seconds by default', async () => {
+        const timeout = jest.spyOn(AbortSignal, 'timeout');
+
+        await transport.write(createEntry(LogLevel.Info));
+
+        expect(timeout).toHaveBeenCalledWith(5000);
+        timeout.mockRestore();
+    });
+
+    it('should abort the request after the configured timeout', async () => {
+        const timeout = jest.spyOn(AbortSignal, 'timeout');
+        const withTimeout = new HttpTransport({ url: 'https://example.com/logs', formatter, minLevel: LogLevel.Info, timeout: 250 });
+
+        await withTimeout.write(createEntry(LogLevel.Info));
+
+        expect(timeout).toHaveBeenCalledWith(250);
+        timeout.mockRestore();
     });
 
     it('should send the error with its name, message and stack', async () => {

@@ -23,7 +23,7 @@ export class OpenApiPlugin extends Plugin {
     static override readonly dependencies = [HttpPlugin];
 
     private context: AxiSparkContext;
-    protected options: OpenApiPluginOptions;
+    declare protected options: OpenApiPluginOptions;
     private httpOptions: HttpPluginOptions;
     private httpAdapter: HttpAdapter;
     private docsUrls: { jsonUrl: string; yamlUrl: string };

@@ -61,21 +61,21 @@ export abstract class StepDefinition implements ExecutionHandler {
  * It extends the `StepDefinition` class and specifies the step type as `Middleware`.
  */
 export class HandleStepDefinition extends StepDefinition {
-    override readonly type: StepType.Middleware;
+    declare readonly type: StepType.Middleware;
 }
 /**
  * A class representing a guard step definition.
  * It extends the `StepDefinition` class and specifies the step type as `Guard`.
  */
 export class CheckStepDefinition extends StepDefinition {
-    override readonly type: StepType.Guard;
+    declare readonly type: StepType.Guard;
 }
 /**
  * A class representing a before interceptor step definition.
  * It extends the `StepDefinition` class and specifies the step type as `Interceptor`.
  */
 export class BeforeStepDefinition extends StepDefinition {
-    override readonly type: StepType.Interceptor;
+    declare readonly type: StepType.Interceptor;
 
     public constructor(
         global: boolean,
@@ -94,7 +94,7 @@ export class BeforeStepDefinition extends StepDefinition {
  * It extends the `StepDefinition` class and specifies the step type as `Interceptor`.
  */
 export class AfterStepDefinition extends StepDefinition {
-    override readonly type: StepType.Interceptor;
+    declare readonly type: StepType.Interceptor;
 
     public constructor(
         global: boolean,
@@ -113,7 +113,7 @@ export class AfterStepDefinition extends StepDefinition {
  * It extends the `StepDefinition` class and specifies the step type as `Filter`.
  */
 export class CatchStepDefinition extends StepDefinition {
-    override readonly type: StepType.Filter;
+    declare readonly type: StepType.Filter;
 
     public constructor(
         global: boolean,

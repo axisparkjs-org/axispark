@@ -1,4 +1,5 @@
 import fastify from 'fastify';
+import os from 'node:os';
 import cookie from '@fastify/cookie';
 import session from '@fastify/session';
 import compress from '@fastify/compress';
@@ -6,6 +7,8 @@ import cors from '@fastify/cors';
 import formbody from '@fastify/formbody';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import { HttpMethod, RouteDefinition } from '@axisparkjs/http';
 
@@ -119,12 +122,7 @@ describe('FastifyHttpAdapter', () => {
 
             await adapter.initialize();
 
-            expect(app.register).toHaveBeenCalledWith(
-                fastifyStatic,
-                expect.objectContaining({
-                    root: expect.stringContaining('public')
-                })
-            );
+            expect(app.register).toHaveBeenCalledWith(fastifyStatic, expect.any(Object));
 
             expect(app.register).toHaveBeenCalledWith(cookie, {});
             expect(app.register).toHaveBeenCalledWith(session, {
@@ -156,12 +154,7 @@ describe('FastifyHttpAdapter', () => {
 
             await adapter.initialize();
 
-            expect(app.register).toHaveBeenCalledWith(
-                fastifyStatic,
-                expect.objectContaining({
-                    root: expect.stringContaining('public')
-                })
-            );
+            expect(app.register).toHaveBeenCalledWith(fastifyStatic, expect.any(Object));
 
             expect(app.register).toHaveBeenCalledWith(cookie, {});
             expect(app.register).toHaveBeenCalledWith(session, {
@@ -179,6 +172,62 @@ describe('FastifyHttpAdapter', () => {
 
             expect(app.register).toHaveBeenCalledTimes(1);
             expect(app.register).toHaveBeenCalledWith(fastifyStatic, expect.any(Object));
+        });
+    });
+
+    describe('static files', () => {
+        let basePath: string;
+
+        beforeEach(async () => {
+            basePath = await mkdtemp(path.join(os.tmpdir(), 'axispark-static-'));
+        });
+
+        afterEach(async () => {
+            await rm(basePath, { recursive: true, force: true });
+        });
+
+        it('should only decorate sendFile when the public folder does not exist', async () => {
+            await new FastifyHttpAdapter(baseConfig, { basePath } as any).initialize();
+
+            expect(app.register).toHaveBeenCalledWith(fastifyStatic, { serve: false });
+        });
+
+        it('should serve the public folder when it exists', async () => {
+            await mkdir(path.join(basePath, 'public'));
+
+            await new FastifyHttpAdapter(baseConfig, { basePath } as any).initialize();
+
+            expect(app.register).toHaveBeenCalledWith(fastifyStatic, { root: path.join(basePath, 'public'), prefix: '/' });
+        });
+
+        it('should not serve a public file that is not a folder', async () => {
+            await writeFile(path.join(basePath, 'public'), '');
+
+            await new FastifyHttpAdapter(baseConfig, { basePath } as any).initialize();
+
+            expect(app.register).toHaveBeenCalledWith(fastifyStatic, { serve: false });
+        });
+
+        it('should never serve the static files when staticFiles is false', async () => {
+            await mkdir(path.join(basePath, 'public'));
+
+            await new FastifyHttpAdapter({ ...baseConfig, staticFiles: false }, { basePath } as any).initialize();
+
+            expect(app.register).toHaveBeenCalledWith(fastifyStatic, { serve: false });
+        });
+
+        it('should serve the configured folder and prefix when staticFiles is true', async () => {
+            const options = { ...baseConfig, staticFiles: true, staticFilesOptions: { root: 'assets', prefix: '/assets/' } };
+
+            await new FastifyHttpAdapter(options, { basePath } as any).initialize();
+
+            expect(app.register).toHaveBeenCalledWith(fastifyStatic, { root: path.join(basePath, 'assets'), prefix: '/assets/' });
+        });
+
+        it('should resolve the folder from the working directory without basePath', async () => {
+            await new FastifyHttpAdapter({ ...baseConfig, staticFiles: true }, {} as any).initialize();
+
+            expect(app.register).toHaveBeenCalledWith(fastifyStatic, { root: path.join(process.cwd(), 'public'), prefix: '/' });
         });
     });
 
@@ -217,6 +266,15 @@ describe('FastifyHttpAdapter', () => {
             });
         });
 
+        it('should return the reply, so Fastify waits for the replies that are sent after the handler ends', async () => {
+            const adapter = new FastifyHttpAdapter(baseConfig, axisparkConfig as any);
+            adapter.registerRoutes([route(class {}, '/', jest.fn(), 'test')]);
+            const callback = app.route.mock.calls[0][0].handler;
+            const reply = {};
+
+            await expect(callback({}, reply)).resolves.toBe(reply);
+        });
+
         it('should include session when available', async () => {
             const adapter = new FastifyHttpAdapter(
                 {
@@ -244,6 +302,22 @@ describe('FastifyHttpAdapter', () => {
                 response: expect.any(FastifyHttpResponse),
                 session: expect.any(FastifyHttpSession)
             });
+        });
+
+        it('should create the session wrapper only when the session is read, once per request', async () => {
+            const adapter = new FastifyHttpAdapter({ ...baseConfig, session: true }, axisparkConfig as any);
+            const handler = jest.fn();
+            adapter.registerRoutes([route(class {}, '/', handler, 'test')]);
+            const fastifySession: any = {};
+
+            await app.route.mock.calls[0][0].handler({ session: fastifySession }, {});
+            const context = handler.mock.calls[0][0];
+
+            expect(fastifySession.data).toBeUndefined();
+            const first = context.session;
+            expect(first).toBeInstanceOf(FastifyHttpSession);
+            expect(context.session).toBe(first);
+            expect(fastifySession.data).toEqual({});
         });
 
         it('should delegate host-based dispatch to the framework route handler', async () => {
@@ -289,8 +363,40 @@ describe('FastifyHttpAdapter', () => {
             await adapter.start();
 
             expect(app.listen).toHaveBeenCalledWith({
-                port: 8080
+                port: 8080,
+                host: FastifyHttpAdapter.getDefaultHost()
             });
+        });
+
+        it('should listen on the configured host', async () => {
+            const adapter = new FastifyHttpAdapter({ ...baseConfig, host: '127.0.0.1' } as any, axisparkConfig as any);
+
+            await adapter.start();
+
+            expect(app.listen).toHaveBeenCalledWith({ port: 8080, host: '127.0.0.1' });
+        });
+    });
+
+    describe('getDefaultHost', () => {
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        it('should return :: when a network interface has an IPv6 address', () => {
+            jest.spyOn(os, 'networkInterfaces').mockReturnValue({
+                lo: [{ address: '::1', family: 'IPv6' } as os.NetworkInterfaceInfo]
+            });
+
+            expect(FastifyHttpAdapter.getDefaultHost()).toBe('::');
+        });
+
+        it('should return 0.0.0.0 when no network interface has an IPv6 address', () => {
+            jest.spyOn(os, 'networkInterfaces').mockReturnValue({
+                lo: [{ address: '127.0.0.1', family: 'IPv4' } as os.NetworkInterfaceInfo],
+                eth0: undefined
+            });
+
+            expect(FastifyHttpAdapter.getDefaultHost()).toBe('0.0.0.0');
         });
     });
 

@@ -1,18 +1,40 @@
 {
     "name": "@axisparkjs/openapi",
-    "version": "1.5.1",
+    "version": "1.6.0",
     "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/openapi",
     "author": "Pablo Gálvez Ortuño",
     "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/axisparkjs-org/axispark.git",
+        "directory": "packages/openapi"
+    },
+    "homepage": "https://axisparkjs.com",
+    "bugs": "https://github.com/axisparkjs-org/axispark/issues",
+    "keywords": [
+        "axispark",
+        "nodejs",
+        "typescript",
+        "framework",
+        "openapi",
+        "swagger",
+        "api-documentation"
+    ],
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./lib/index.d.ts",
+            "default": "./lib/index.js"
+        },
+        "./package.json": "./package.json"
+    },
     "files": [
         "lib",
         "package.json",
         "PACKAGE.md",
         "README.md",
-        "LICENSE",
-        "tsconfig.build.json"
+        "LICENSE"
     ],
     "scripts": {
         "build": "tsc -b tsconfig.build.json",
@@ -25,12 +47,12 @@
         "node": ">= 24"
     },
     "dependencies": {
-        "@axisparkjs/common": "1.5.1",
-        "@axisparkjs/core": "1.5.1",
-        "@axisparkjs/di": "1.5.1",
-        "@axisparkjs/engine": "1.5.1",
-        "@axisparkjs/http": "1.5.1",
-        "@axisparkjs/logger": "1.5.1",
+        "@axisparkjs/common": "1.6.0",
+        "@axisparkjs/core": "1.6.0",
+        "@axisparkjs/di": "1.6.0",
+        "@axisparkjs/engine": "1.6.0",
+        "@axisparkjs/http": "1.6.0",
+        "@axisparkjs/logger": "1.6.0",
         "yaml": "^2.9.1"
     }
 }

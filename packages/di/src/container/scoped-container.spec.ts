@@ -3,6 +3,7 @@ import { ClassResolver } from './class-resolver';
 import { Container } from './container';
 import { InjectionToken } from '../token';
 import { InjectableScopes } from '../types';
+import { ResolutionChain } from './resolution-chain';
 
 describe('ScopedContainer', () => {
     let container: Container;
@@ -34,7 +35,7 @@ describe('ScopedContainer', () => {
 
         await expect(scopedContainer.resolve(provider)).resolves.toBe(instance);
 
-        expect(resolver.resolve).toHaveBeenCalledWith(provider, container, scopedContainer);
+        expect(resolver.resolve).toHaveBeenCalledWith(provider, container, scopedContainer, expect.any(ResolutionChain));
     });
 
     it('should cache resolved scoped instances', async () => {
@@ -123,5 +124,41 @@ describe('ScopedContainer', () => {
         expect(await scopedContainer.resolve(provider)).toBe(instance1);
 
         expect(resolver.resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([0, '', false, null, undefined])('should cache a falsy scoped instance (%p)', async (value) => {
+        (resolver.resolve as jest.Mock).mockResolvedValue(value);
+
+        const provider = {
+            token: new InjectionToken('falsy'),
+            useFactory: jest.fn(),
+            scope: InjectableScopes.Scoped,
+            forClass: Object
+        };
+
+        expect(await scopedContainer.resolve(provider)).toBe(value);
+        expect(await scopedContainer.resolve(provider)).toBe(value);
+
+        expect(resolver.resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it('should cache two tokens with the same description independently', async () => {
+        const instance1 = { id: 1 };
+        const instance2 = { id: 2 };
+
+        (resolver.resolve as jest.Mock).mockResolvedValueOnce(instance1).mockResolvedValueOnce(instance2);
+
+        const provider1 = { token: new InjectionToken('service'), useClass: class Service {}, scope: InjectableScopes.Scoped };
+        const provider2 = { token: new InjectionToken('service'), useClass: class Service {}, scope: InjectableScopes.Scoped };
+
+        expect(await scopedContainer.resolve(provider1)).toBe(instance1);
+        expect(await scopedContainer.resolve(provider2)).toBe(instance2);
+        expect(await scopedContainer.resolve(provider1)).toBe(instance1);
+    });
+    it('should not create its structures until a scoped provider is resolved', () => {
+        const scoped = new ScopedContainer({} as any, {} as any);
+
+        expect((scoped as any).instances).toBeUndefined();
+        expect((scoped as any).pendingInstances).toBeUndefined();
     });
 });

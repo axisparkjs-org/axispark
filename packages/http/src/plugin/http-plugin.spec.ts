@@ -6,7 +6,7 @@ import { RouteDefinition } from '../routes/route-definition';
 import { RouteValidator } from '../routes/route-validator';
 import { HTTP_ADAPTER, HTTP_LOGGER, HTTP_OPTIONS } from '../di/tokens';
 import { HttpPluginOptions } from './http-plugin-options';
-import { FileUploadGuard, HealthController, RateLimitGuard, VersionGuard } from '../implementations';
+import { FileUploadGuard, HealthController, HostGuard, RateLimitGuard, VersionGuard } from '../implementations';
 import { LogErrorFilter, LogHttpErrorFilter } from '../implementations/filters';
 import { LogHttpRequestInterceptor, LogHttpResponseInterceptor } from '../implementations';
 import { HttpCacheResolver, HttpRateLimitResolver, HttpResultResolver, HttpTimeoutResolver } from '../implementations';
@@ -128,7 +128,8 @@ describe('HttpPlugin', () => {
             registerRoutes: jest.fn().mockResolvedValue(undefined),
             start: jest.fn().mockResolvedValue(undefined),
             stop: jest.fn().mockResolvedValue(undefined),
-            initialize: jest.fn().mockResolvedValue(undefined)
+            initialize: jest.fn().mockResolvedValue(undefined),
+            getHttpServer: jest.fn().mockReturnValue(undefined)
         };
 
         container = {
@@ -315,11 +316,39 @@ describe('HttpPlugin', () => {
     });
 
     describe('configureImplementations', () => {
+        const generating = (routes: RouteDefinition[]) =>
+            injector.get.mockImplementation(async (target: any) =>
+                target === RouteGenerator ? { generate: jest.fn().mockResolvedValue(routes) } : { validate: jest.fn() }
+            );
+        const hostedRoute = (hosts: string[]) => {
+            const candidate = new RouteDefinition(class HostedController {}, 'find', HttpMethod.Get, '/hosted', [], hosts, jest.fn());
+            return new RouteDefinition(candidate.target, 'find', HttpMethod.Get, '/hosted', [], ['*'], jest.fn(), [candidate]);
+        };
+
         it('should keep all optional components when enabled', async () => {
+            generating([hostedRoute(['api.example.com'])]);
+
             await plugin.onRegister(context, { ...options, rateLimit: true, fileUpload: true });
 
             expect(ClassRegistry.remove).not.toHaveBeenCalled();
             expect(container.unbind).not.toHaveBeenCalled();
+        });
+
+        it('should disable HostGuard when no controller declares a host', async () => {
+            generating([hostedRoute(['*']), hostedRoute([' * '])]);
+
+            await plugin.onRegister(context, { ...options, rateLimit: true, fileUpload: true });
+
+            expect(ClassRegistry.remove).toHaveBeenCalledWith(HostGuard);
+            expect(container.unbind).toHaveBeenCalledWith(HostGuard);
+        });
+
+        it('should keep HostGuard when a grouped route declares a host', async () => {
+            generating([hostedRoute([':tenant.example.com'])]);
+
+            await plugin.onRegister(context, optionsWithoutComponents);
+
+            expect(ClassRegistry.remove).not.toHaveBeenCalledWith(HostGuard);
         });
 
         it.each([
@@ -554,10 +583,24 @@ describe('HttpPlugin', () => {
             expect(adapter.start).toHaveBeenCalledTimes(1);
         });
 
-        it('should log the start message', async () => {
+        it('should log the start message with the port when the adapter has no server', async () => {
             await plugin.onStart();
 
             expect(logger.info).toHaveBeenCalledWith('Plugin started. Listening on port 3000');
+        });
+
+        it.each([
+            [{ address: '0.0.0.0', family: 'IPv4', port: 3000 }, '0.0.0.0:3000'],
+            [{ address: '127.0.0.1', family: 'IPv4', port: 4000 }, '127.0.0.1:4000'],
+            [{ address: '::', family: 'IPv6', port: 3000 }, '[::]:3000'],
+            ['/tmp/app.sock', '/tmp/app.sock'],
+            [null, 'port 3000']
+        ])('should log the address returned by the server (%p)', async (address, expected) => {
+            adapter.getHttpServer = jest.fn().mockReturnValue({ address: () => address });
+
+            await plugin.onStart();
+
+            expect(logger.info).toHaveBeenCalledWith(`Plugin started. Listening on ${expected}`);
         });
 
         it('should not register a rate limit store when the rate limit is disabled', async () => {
