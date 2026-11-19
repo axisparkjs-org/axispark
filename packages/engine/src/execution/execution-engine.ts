@@ -50,7 +50,7 @@ export class ExecutionEngine implements Executable {
         try {
             const execution = async () => {
                 for (const step of plan.before) await this.handlerInvoker.invoke(step, context);
-                const invoke = async () => await this.handlerInvoker.invoke(plan.context, context);
+                const invoke = async () => await this.handlerInvoker.invoke(plan.handler, context);
                 return plan.cache ? await this.cacheProcessor.process(plan.cache, context, invoke) : await invoke();
             };
 

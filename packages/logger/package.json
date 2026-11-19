@@ -47,6 +47,7 @@
     },
     "dependencies": {
         "@axisparkjs/common": "1.6.0",
-        "@axisparkjs/di": "1.6.0"
+        "@axisparkjs/di": "1.6.0",
+        "sonic-boom": "^5.0.2"
     }
 }

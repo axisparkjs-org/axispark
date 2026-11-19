@@ -15,7 +15,26 @@ export class Injector {
      * @param scopedContainer The scoped container to use for resolution.
      * @returns A promise resolving to the resolved dependency.
      */
-    public async get<T>(token: Token<T>, scopedContainer?: ScopedContainer): Promise<T> {
-        return await this.container.resolve<T>(token, scopedContainer);
+    public get<T>(token: Token<T>, scopedContainer?: ScopedContainer): Promise<T> {
+        return this.container.resolve<T>(token, scopedContainer);
+    }
+
+    /**
+     * Returns the instance of a token synchronously when it is already available (a value, or a singleton that is already created), without
+     * creating it. Use it in hot paths and fall back to `get()` when it returns `undefined`.
+     * @param token The token of the instance.
+     * @returns The instance, or `undefined` when it is not available without a resolution.
+     */
+    public tryGet<T>(token: Token<T>): T | undefined {
+        return this.container.tryResolve<T>(token);
+    }
+
+    /**
+     * Checks whether a token always resolves to the same instance, so the instance can be kept and reused.
+     * @param token The token to check.
+     * @returns `true` when the token is bound to a singleton or a value.
+     */
+    public isSingleton(token: Token): boolean {
+        return this.container.isSingleton(token);
     }
 }

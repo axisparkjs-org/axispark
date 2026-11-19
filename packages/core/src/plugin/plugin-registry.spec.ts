@@ -6,6 +6,7 @@ import { PluginAlreadyRegisteredError } from './plugin-already-registered-error'
 import { PluginConfigMismatchError } from './plugin-config-mismatch-error';
 import { PluginCircularDependencyError } from './plugin-circular-dependency-error';
 import { PluginDependencyNotIncludedError } from './plugin-dependency-not-included-error';
+import { PluginDependencyFailedError } from './plugin-dependency-failed-error';
 
 const onRegisterMock = jest.fn();
 const onStartMock = jest.fn();
@@ -105,6 +106,65 @@ class RequiredObjectDepPlugin extends Plugin {
 
     async onRegister() {
         executionOrder.push('required-object-plugin');
+    }
+}
+
+const lifecycleCalls: string[] = [];
+
+@Injectable()
+class FailingRegisterPlugin extends Plugin {
+    async onRegister() {
+        throw new Error('Error in onRegister');
+    }
+}
+
+@Injectable()
+class IndependentPlugin extends Plugin {
+    async onRegister() {
+        lifecycleCalls.push('independent:onRegister');
+    }
+    async onStart() {
+        lifecycleCalls.push('independent:onStart');
+    }
+    async onStop() {
+        lifecycleCalls.push('independent:onStop');
+    }
+}
+
+@Injectable()
+class DependentOnFailingPlugin extends Plugin {
+    static override dependencies = [FailingRegisterPlugin];
+
+    async onRegister() {
+        lifecycleCalls.push('dependent:onRegister');
+    }
+    async onStop() {
+        lifecycleCalls.push('dependent:onStop');
+    }
+}
+
+@Injectable()
+class OptionalOnFailingPlugin extends Plugin {
+    static override dependencies = [{ plugin: FailingRegisterPlugin, optional: true }];
+
+    async onRegister() {
+        lifecycleCalls.push('optional:onRegister');
+    }
+}
+
+@Injectable()
+class FailingStartPlugin extends Plugin {
+    async onStart() {
+        throw new Error('Error in onStart');
+    }
+}
+
+@Injectable()
+class DependentOnFailingStartPlugin extends Plugin {
+    static override dependencies = [FailingStartPlugin];
+
+    async onStart() {
+        lifecycleCalls.push('dependent-start:onStart');
     }
 }
 
@@ -232,6 +292,66 @@ describe('PluginRegistry', () => {
             await expect(registry.destroy(context)).resolves.not.toThrow();
             expect(context.logger.fatal).not.toHaveBeenCalled();
             expect(errorPluginInstance.getState()).toBe(PluginLifecycle.Error);
+        });
+
+        describe('plugins in the Error state', () => {
+            const resolveNew = () => {
+                const instances = new Map<unknown, Plugin>();
+                return jest.fn().mockImplementation((type) => {
+                    if (!instances.has(type)) instances.set(type, new type());
+                    return instances.get(type);
+                });
+            };
+
+            beforeEach(() => {
+                lifecycleCalls.length = 0;
+                context.container.resolve = resolveNew();
+            });
+
+            it('should run the lifecycle of the plugins registered after a failed plugin', async () => {
+                registry.register(FailingRegisterPlugin);
+                registry.register(IndependentPlugin);
+
+                await registry.init(context);
+                await registry.run(context);
+                await registry.destroy(context);
+
+                expect(lifecycleCalls).toEqual(['independent:onRegister', 'independent:onStart', 'independent:onStop']);
+                const [failing, independent] = registry.getAll();
+                expect(failing.instance?.getState()).toBe(PluginLifecycle.Error);
+                expect(independent.instance?.getState()).toBe(PluginLifecycle.Stopped);
+            });
+
+            it('should skip the plugins whose required dependency failed', async () => {
+                registry.register(DependentOnFailingPlugin);
+                registry.register(FailingRegisterPlugin);
+                registry.register(OptionalOnFailingPlugin);
+
+                await registry.init(context);
+                await registry.run(context);
+                await registry.destroy(context);
+
+                expect(lifecycleCalls).toEqual(['optional:onRegister']);
+                const dependent = registry.getAll()[0].instance as Plugin;
+                expect(dependent.getState()).toBe(PluginLifecycle.Error);
+                expect(dependent.getStateError()).toBeInstanceOf(PluginDependencyFailedError);
+                expect(context.logger.fatal).toHaveBeenCalledWith(
+                    'Plugin DependentOnFailingPlugin skipped because its dependency FailingRegisterPlugin failed',
+                    expect.any(PluginDependencyFailedError)
+                );
+                expect(registry.getAll()[2].instance?.getState()).toBe(PluginLifecycle.Stopped);
+            });
+
+            it('should skip the start of the plugins whose required dependency failed to start', async () => {
+                registry.register(FailingStartPlugin);
+                registry.register(DependentOnFailingStartPlugin);
+
+                await registry.init(context);
+                await registry.run(context);
+
+                expect(lifecycleCalls).toEqual([]);
+                expect(registry.getAll()[1].instance?.getStateError()).toBeInstanceOf(PluginDependencyFailedError);
+            });
         });
 
         it('should execute plugins respecting dependency order', async () => {

@@ -17,10 +17,11 @@ describe('HealthEngine', () => {
 
     const createIndicator = (check: () => Promise<HealthCheckResult>): HealthIndicator => ({ check: jest.fn(check) });
 
-    const createEngine = (plugins: any[], container: any = { resolve: jest.fn() }) => {
+    const createEngine = (plugins: any[], container: any = { resolve: jest.fn() }, healthChecks?: { cacheTtl?: number }) => {
         const config = {
             name: 'AxisApp',
-            version: '1.0.0'
+            version: '1.0.0',
+            healthChecks
         };
 
         const registry = {
@@ -260,6 +261,72 @@ describe('HealthEngine', () => {
         });
     });
 
+    describe('shared and cached results', () => {
+        let now: number;
+
+        beforeEach(() => {
+            now = 1_000;
+            jest.spyOn(Date, 'now').mockImplementation(() => now);
+        });
+
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        it('should share a running check between concurrent health requests', async () => {
+            let release: () => void = () => undefined;
+            const first = new Promise<HealthCheckResult>((resolve) => (release = () => resolve({ status: HealthStatus.Healthy })));
+            const indicator: HealthIndicator = { check: jest.fn().mockReturnValueOnce(first).mockResolvedValue({ status: HealthStatus.Healthy }) };
+            const { engine } = createEngine([]);
+            engine.register(indicator, { name: 'database' });
+
+            const requests = Promise.all([engine.checkAll(), engine.checkApp()]);
+            await new Promise((resolve) => setImmediate(resolve));
+            release();
+            const [all, app] = await requests;
+
+            expect(indicator.check).toHaveBeenCalledTimes(1);
+            expect(all[1].status).toBe(HealthStatus.Healthy);
+            expect(app.status).toBe(HealthStatus.Healthy);
+            await engine.checkAll();
+            expect(indicator.check).toHaveBeenCalledTimes(2);
+        });
+
+        it('should reuse the result of a check during the cacheTtl of the application', async () => {
+            const indicator = createIndicator(async () => ({ status: HealthStatus.Healthy }));
+            const { engine } = createEngine([], undefined, { cacheTtl: 10_000 });
+            engine.register(indicator, { name: 'broker' });
+
+            await engine.checkAll();
+            now += 9_999;
+            const cached = await engine.checkAll();
+            expect(indicator.check).toHaveBeenCalledTimes(1);
+            expect(cached[1].timestamp).toBeDefined();
+
+            now += 1;
+            await engine.checkAll();
+            expect(indicator.check).toHaveBeenCalledTimes(2);
+        });
+
+        it('should let a check override the cacheTtl of the application, and cache the failures too', async () => {
+            const always = createIndicator(async () => ({ status: HealthStatus.Healthy }));
+            const failing = createIndicator(async () => {
+                throw new Error('down');
+            });
+            const { engine } = createEngine([], undefined, { cacheTtl: 10_000 });
+            engine.register(always, { name: 'always', cacheTtl: 0 });
+            engine.register(failing, { name: 'failing', cacheTtl: 5_000 });
+
+            await engine.checkAll();
+            now += 4_000;
+            const result = await engine.checkAll();
+
+            expect(always.check).toHaveBeenCalledTimes(2);
+            expect(failing.check).toHaveBeenCalledTimes(1);
+            expect(result[2]).toEqual(expect.objectContaining({ component: 'failing', status: HealthStatus.Unhealthy }));
+        });
+    });
+
     describe('decorated checks', () => {
         class PaymentsApiHealth extends HealthIndicator {
             async check(): Promise<HealthCheckResult> {
@@ -283,6 +350,40 @@ describe('HealthEngine', () => {
 
             expect(container.resolve).toHaveBeenCalledWith(PaymentsApiHealth);
             expect(result[1]).toEqual(expect.objectContaining({ component: 'payments-api', status: HealthStatus.Healthy, details: { critical: false } }));
+        });
+
+        it('should cache the decorated checks with the cacheTtl of @HealthCheck', async () => {
+            class CachedHealth extends HealthIndicator {
+                async check(): Promise<HealthCheckResult> {
+                    return { status: HealthStatus.Healthy };
+                }
+            }
+            HealthCheck({ name: 'cached', cacheTtl: 60_000 })(CachedHealth);
+            const indicator = new CachedHealth();
+            const check = jest.spyOn(indicator, 'check');
+            const container = { resolve: jest.fn().mockImplementation(async (target) => (target === CachedHealth ? indicator : new PaymentsApiHealth())) };
+            const { engine } = createEngine([], container);
+
+            await engine.checkAll();
+            await engine.checkAll();
+
+            expect(check).toHaveBeenCalledTimes(1);
+            ClassRegistry.remove(CachedHealth);
+        });
+
+        it('should read the decorated checks from the registry once', async () => {
+            const container = { resolve: jest.fn().mockResolvedValue(new PaymentsApiHealth()) };
+            const { engine } = createEngine([], container);
+            const getWithMetadata = jest.spyOn(ClassRegistry, 'getWithMetadata');
+
+            await engine.checkAll();
+            await engine.checkAll();
+            const result = await engine.checkApp();
+
+            expect(getWithMetadata).toHaveBeenCalledTimes(1);
+            expect(container.resolve).toHaveBeenCalledTimes(3);
+            expect(result.details?.checks).toEqual([{ component: 'payments-api', status: HealthStatus.Healthy, critical: false }]);
+            getWithMetadata.mockRestore();
         });
 
         it('should report a check that cannot be resolved as unhealthy', async () => {
