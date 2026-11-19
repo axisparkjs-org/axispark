@@ -168,6 +168,45 @@ class DependentOnFailingStartPlugin extends Plugin {
     }
 }
 
+const timeline: string[] = [];
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+@Injectable()
+class SlowConnectionPlugin extends Plugin {
+    async onStart() {
+        timeline.push('slow:start');
+        await delay(30);
+        timeline.push('slow:started');
+    }
+    async onStop() {
+        timeline.push('slow:stop');
+    }
+}
+
+@Injectable()
+class FastConnectionPlugin extends Plugin {
+    async onStart() {
+        timeline.push('fast:start');
+        await delay(5);
+        timeline.push('fast:started');
+    }
+    async onStop() {
+        timeline.push('fast:stop');
+    }
+}
+
+@Injectable()
+class ConsumerPlugin extends Plugin {
+    static override dependencies = [SlowConnectionPlugin, FastConnectionPlugin];
+
+    async onStart() {
+        timeline.push('consumer:start');
+    }
+    async onStop() {
+        timeline.push('consumer:stop');
+    }
+}
+
 describe('PluginRegistry', () => {
     let registry: PluginRegistry;
     let context: jest.Mocked<AxiSparkContext>;
@@ -437,6 +476,106 @@ describe('PluginRegistry', () => {
 
             await registry.init(context);
             expect(executionOrder).toEqual(['dependency', 'required-object-plugin']);
+        });
+    });
+
+    describe('levels of the dependency graph', () => {
+        const resolveNew = () => {
+            const instances = new Map<unknown, Plugin>();
+            return jest.fn().mockImplementation((type) => {
+                if (!instances.has(type)) instances.set(type, new type());
+                return instances.get(type);
+            });
+        };
+        const registerAll = (target: PluginRegistry) => {
+            target.register(ConsumerPlugin);
+            target.register(SlowConnectionPlugin);
+            target.register(FastConnectionPlugin);
+        };
+
+        beforeEach(() => {
+            timeline.length = 0;
+            context.container.resolve = resolveNew();
+        });
+
+        it('should start the independent plugins at the same time and their dependents after them', async () => {
+            registerAll(registry);
+            await registry.init(context);
+
+            await registry.run(context);
+
+            expect(timeline).toEqual(['slow:start', 'fast:start', 'fast:started', 'slow:started', 'consumer:start']);
+        });
+
+        it('should stop the plugins one by one in the reverse of the dependency order', async () => {
+            registerAll(registry);
+            await registry.init(context);
+            await registry.run(context);
+            timeline.length = 0;
+
+            await registry.destroy(context);
+
+            expect(timeline).toEqual(['consumer:stop', 'fast:stop', 'slow:stop']);
+        });
+
+        it('should stop an independent plugin registered before only after the plugins registered after it end their onStop', async () => {
+            class StoreConnectionPlugin extends Plugin {
+                async onStop() {
+                    timeline.push('connection:closed');
+                }
+            }
+            class JobsPlugin extends Plugin {
+                async onStop() {
+                    timeline.push('jobs:waiting');
+                    await delay(20);
+                    timeline.push('jobs:finished');
+                }
+            }
+            Injectable()(StoreConnectionPlugin);
+            Injectable()(JobsPlugin);
+            registry.register(StoreConnectionPlugin);
+            registry.register(JobsPlugin);
+            await registry.init(context);
+            await registry.run(context);
+
+            await registry.destroy(context);
+
+            expect(timeline).toEqual(['jobs:waiting', 'jobs:finished', 'connection:closed']);
+        });
+
+        it('should run the plugins one by one when parallel is false', async () => {
+            const sequential = new PluginRegistry({ parallel: false });
+            registerAll(sequential);
+            await sequential.init(context);
+
+            await sequential.run(context);
+
+            expect(timeline).toEqual(['slow:start', 'slow:started', 'fast:start', 'fast:started', 'consumer:start']);
+        });
+
+        it('should keep running the other plugins of a level when one of them fails', async () => {
+            registry.register(ErrorPlugin);
+            registry.register(SlowConnectionPlugin);
+            context.container.resolve = jest.fn().mockImplementation((type) => (type === ErrorPlugin ? new ErrorPlugin() : new type()));
+            await registry.init(context);
+
+            await registry.run(context);
+
+            expect(timeline).toEqual(['slow:start', 'slow:started']);
+            expect(registry.getAll()[0].instance?.getState()).toBe(PluginLifecycle.Error);
+            expect(registry.getAll()[1].instance?.getState()).toBe(PluginLifecycle.Started);
+        });
+        it('should skip the dependents of a plugin that failed in a previous level', async () => {
+            registry.register(FailingStartPlugin);
+            registry.register(DependentOnFailingStartPlugin);
+            registry.register(SlowConnectionPlugin);
+            context.container.resolve = resolveNew();
+            await registry.init(context);
+
+            await registry.run(context);
+
+            expect(timeline).toEqual(['slow:start', 'slow:started']);
+            expect(registry.getAll()[1].instance?.getStateError()).toBeInstanceOf(PluginDependencyFailedError);
         });
     });
 });

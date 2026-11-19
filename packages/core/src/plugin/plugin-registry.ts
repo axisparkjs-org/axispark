@@ -19,13 +19,33 @@ interface NormalizedDependency {
 }
 
 /**
- * A registry for managing plugins and their lifecycle.
+ * Options of the plugin registry.
+ */
+export interface PluginRegistryOptions {
+    /**
+     * Whether the plugins of the same level of the dependency graph run their lifecycle methods at the same time. When `false`, the plugins
+     * run them one by one, in dependency order. Defaults to `true`.
+     */
+    parallel?: boolean;
+}
+
+/**
+ * A registry for managing plugins and their lifecycle. The plugins are grouped by level of the dependency graph: the first level has the
+ * plugins without dependencies, and each next level has the plugins whose dependencies are in the previous levels. The plugins of a level
+ * run `onRegister` and `onStart` at the same time, after the previous level ends. `onStop` runs one plugin at a time, in the reverse of the
+ * dependency order, because a plugin can use the connections of another one without declaring it (such as a shared store).
  */
 export class PluginRegistry implements Lifecycle {
     private readonly plugins: RegisteredPlugin[] = [];
-    private readonly executionOrder: RegisteredPlugin[] = [];
+    private readonly levels: RegisteredPlugin[][] = [];
     private readonly instances = new Map<PluginType, Plugin>();
     private readonly requiredDependencies = new Map<PluginType, PluginType[]>();
+
+    /**
+     * Creates a new plugin registry.
+     * @param options The options of the registry.
+     */
+    constructor(private readonly options: PluginRegistryOptions = {}) {}
 
     /**
      * Registers a new plugin with the registry.
@@ -57,7 +77,7 @@ export class PluginRegistry implements Lifecycle {
 
     /* Kahn's algorithm */
     private resolveExecutionOrder(): void {
-        this.executionOrder.length = 0;
+        this.levels.length = 0;
         this.requiredDependencies.clear();
         const plugins = new Map(this.plugins.map((plugin) => [plugin.type, plugin]));
         const inDegree = new Map<PluginType, number>();
@@ -87,23 +107,27 @@ export class PluginRegistry implements Lifecycle {
             }
         }
 
-        const queue: PluginType[] = [];
+        let level: PluginType[] = [];
         for (const [plugin, degree] of inDegree.entries()) {
-            if (degree === 0) queue.push(plugin);
+            if (degree === 0) level.push(plugin);
         }
 
-        while (queue.length > 0) {
-            const current = queue.shift() as PluginType;
-            const currentPlugin = plugins.get(current) as RegisteredPlugin;
-            this.executionOrder.push(currentPlugin);
+        let resolved = 0;
+        while (level.length > 0) {
+            this.levels.push(level.map((type) => plugins.get(type) as RegisteredPlugin));
+            resolved += level.length;
 
-            for (const neighbor of graph.get(current) as PluginType[]) {
-                inDegree.set(neighbor, (inDegree.get(neighbor) as number) - 1);
-                if (inDegree.get(neighbor) === 0) queue.push(neighbor);
+            const next: PluginType[] = [];
+            for (const current of level) {
+                for (const neighbor of graph.get(current) as PluginType[]) {
+                    inDegree.set(neighbor, (inDegree.get(neighbor) as number) - 1);
+                    if (inDegree.get(neighbor) === 0) next.push(neighbor);
+                }
             }
+            level = next;
         }
 
-        if (this.executionOrder.length !== this.plugins.length) {
+        if (resolved !== this.plugins.length) {
             throw new PluginCircularDependencyError();
         }
     }
@@ -126,7 +150,7 @@ export class PluginRegistry implements Lifecycle {
     }
 
     /**
-     * Destroys the registered plugins by executing their `onStop` lifecycle method in reverse order.
+     * Destroys the registered plugins by executing their `onStop` lifecycle method one by one, in the reverse of the dependency order.
      * @param context The AxiSparkContext to be passed to the plugins during destruction.
      */
     async destroy(context: AxiSparkContext): Promise<void> {
@@ -139,26 +163,50 @@ export class PluginRegistry implements Lifecycle {
         lifecycleState: PluginLifecycle,
         reversed = false
     ): Promise<void> {
-        const plugins = reversed ? this.executionOrder.toReversed() : this.executionOrder;
-        for (const { type, options } of plugins) {
-            let instance;
-            if (methodName === 'onRegister') {
-                instance = await context.container.resolve<Plugin>(type);
-                this.instances.set(type, instance);
+        // onStop runs one plugin at a time, in the reverse of the dependency order: a plugin can use the connections of another plugin
+        // without declaring it as a dependency (for example through the store of a StoreProvider, or an injected client), so a plugin is
+        // always stopped before the plugins registered before it, and the work that it finishes while stopping can still use them.
+        if (reversed) {
+            for (const plugin of this.levels.flat().toReversed()) await this.executePlugin(context, plugin, methodName, lifecycleState);
+            return;
+        }
+
+        for (const level of this.levels) {
+            if (this.options.parallel === false) {
+                for (const plugin of level) await this.executePlugin(context, plugin, methodName, lifecycleState);
             } else {
-                instance = this.instances.get(type) as Plugin;
+                await Promise.all(level.map((plugin) => this.executePlugin(context, plugin, methodName, lifecycleState)));
             }
+        }
+    }
 
-            if (instance.getState() === PluginLifecycle.Error) continue;
-            if (methodName !== 'onStop' && this.skipIfDependencyFailed(context, type, instance)) continue;
+    /*
+     * Runs one lifecycle method of one plugin. A plugin in the Error state is skipped, and so is a plugin whose required dependency is in the
+     * Error state (the dependencies are in previous levels, so their state is final). An error never stops the other plugins.
+     */
+    private async executePlugin(
+        context: AxiSparkContext,
+        { type, options }: RegisteredPlugin,
+        methodName: 'onRegister' | 'onStart' | 'onStop',
+        lifecycleState: PluginLifecycle
+    ): Promise<void> {
+        let instance;
+        if (methodName === 'onRegister') {
+            instance = await context.container.resolve<Plugin>(type);
+            this.instances.set(type, instance);
+        } else {
+            instance = this.instances.get(type) as Plugin;
+        }
 
-            try {
-                await instance[methodName]?.(context, options);
-                instance.setState(lifecycleState);
-            } catch (error) {
-                instance.setStateError(error as Error);
-                context.logger.fatal(`Error executing ${methodName} for plugin ${type.name}: ${error}`, error as Error);
-            }
+        if (instance.getState() === PluginLifecycle.Error) return;
+        if (methodName !== 'onStop' && this.skipIfDependencyFailed(context, type, instance)) return;
+
+        try {
+            await instance[methodName]?.(context, options);
+            instance.setState(lifecycleState);
+        } catch (error) {
+            instance.setStateError(error as Error);
+            context.logger.fatal(`Error executing ${methodName} for plugin ${type.name}: ${error}`, error as Error);
         }
     }
 

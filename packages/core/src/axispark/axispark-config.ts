@@ -90,6 +90,14 @@ export interface AxiSparkConfig<TSettings extends object = object> {
     settings?: SettingsOptions<TSettings>;
 
     /**
+     * How the plugins run their lifecycle methods. With `'parallel'` (the default), the plugins that do not depend on each other, such as
+     * the connections to Redis, Kafka and RabbitMQ, run `onRegister` and `onStart` at the same time, level by level of the dependency graph.
+     * With `'sequential'`, they run one by one in dependency order, for plugins with undeclared dependencies. `onStop` always runs one by
+     * one in reverse order, so a plugin finishes its work before the connections that it uses are closed.
+     */
+    pluginLifecycle?: 'parallel' | 'sequential';
+
+    /**
      * Options of the health checks run by the `HealthEngine`. `cacheTtl` is the time in milliseconds that the result of each check is reused
      * by the next health requests, so frequent probes (such as the liveness and readiness probes of Kubernetes) do not hit the databases and
      * brokers continuously. A check can override it with its own `cacheTtl`. Defaults to `0`, which runs the checks on every request.
