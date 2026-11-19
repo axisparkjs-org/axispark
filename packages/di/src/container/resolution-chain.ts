@@ -41,10 +41,14 @@ export interface ResolutionChainState {
  */
 export class ResolutionChain {
     private constructor(
-        /** The classes of the chain, from the first one to the current one. */
-        readonly steps: readonly ResolutionStep[],
+        /** The chain of the class that depends on the class of this chain, or `undefined` for an empty chain. */
+        private readonly parent: ResolutionChain | undefined,
+        /** The class of this chain, or `undefined` for an empty chain. */
+        private readonly step: ResolutionStep | undefined,
         /** The state shared by every step of the chain. */
-        readonly state: ResolutionChainState
+        readonly state: ResolutionChainState,
+        /** Whether one of the classes of the chain has the singleton scope. */
+        private readonly singleton: boolean
     ) {}
 
     /**
@@ -52,16 +56,25 @@ export class ResolutionChain {
      * @returns A new resolution chain.
      */
     static start(): ResolutionChain {
-        return new ResolutionChain([], { forks: new Set(), waitingFor: new Set() });
+        return new ResolutionChain(undefined, undefined, { forks: new Set(), waitingFor: new Set() }, false);
     }
 
     /**
-     * Creates the chain of a dependency of the current class.
+     * The classes of the chain, from the first one to the current one. The chain is linked to its parent, so the array is built on each
+     * call: it is meant for error messages, not for the resolution hot path.
+     */
+    get steps(): readonly ResolutionStep[] {
+        // A chain with a step always has a parent: the empty chain started by `start()`.
+        return this.step ? [...(this.parent as ResolutionChain).steps, this.step] : [];
+    }
+
+    /**
+     * Creates the chain of a dependency of the current class. The new chain is linked to this one, so no array of steps is copied.
      * @param step The class of the dependency, with its scope.
      * @returns A new chain with the given step at the end, which shares the state of this chain.
      */
     with(step: ResolutionStep): ResolutionChain {
-        return new ResolutionChain([...this.steps, step], this.state);
+        return new ResolutionChain(this, step, this.state, this.singleton || step.scope === InjectableScopes.Singleton);
     }
 
     /**
@@ -73,24 +86,24 @@ export class ResolutionChain {
     fork(): ResolutionChain {
         const state: ResolutionChainState = { parent: this.state, forks: new Set(), waitingFor: new Set() };
         this.state.forks.add(state);
-        return new ResolutionChain(this.steps, state);
+        return new ResolutionChain(this.parent, this.step, state, this.singleton);
     }
 
     /**
-     * Checks whether a class is already being resolved in this chain.
+     * Checks whether a class is already being resolved in this chain. It walks the links of the chain without allocating anything.
      * @param classType The class to check.
      * @returns `true` when the class is in the chain.
      */
     includes(classType: ClassType): boolean {
-        return this.steps.some((step) => step.classType === classType);
+        return this.step !== undefined && (this.step.classType === classType || (this.parent as ResolutionChain).includes(classType));
     }
 
     /**
-     * Checks whether a singleton is being resolved in this chain.
+     * Checks whether a singleton is being resolved in this chain, in constant time.
      * @returns `true` when one of the classes of the chain has the singleton scope.
      */
     hasSingleton(): boolean {
-        return this.steps.some((step) => step.scope === InjectableScopes.Singleton);
+        return this.singleton;
     }
 
     /**

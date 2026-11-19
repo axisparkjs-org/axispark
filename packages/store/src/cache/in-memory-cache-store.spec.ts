@@ -51,15 +51,15 @@ describe('InMemoryCacheStore', () => {
         await expect(store.get('user')).resolves.toBeUndefined();
     });
 
-    it('removes the expired values every 256 writes', async () => {
+    it('removes the expired values a few at a time on each write, without scanning the whole map', async () => {
         await store.set('stale', 'value', 10);
         for (let index = 0; index < 254; index++) await store.set(`key-${index}`, index);
         expect(store.size).toBe(255);
 
         now += 11;
-        await store.set('current', 'value');
+        for (let index = 0; index < 40; index++) await store.set(`current-${index}`, index);
 
-        expect(store.size).toBe(255);
+        expect(store.size).toBe(254 + 40);
         await expect(store.get('key-0')).resolves.toBe(0);
     });
 });

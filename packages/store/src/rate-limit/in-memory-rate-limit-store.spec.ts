@@ -78,15 +78,18 @@ describe('InMemoryRateLimitStore', () => {
         expect((store as any).buckets.get('busy')).toEqual({ window: 0, current: 5_000, previous: 0, ttl: 60_000 });
     });
 
-    it('removes the expired buckets every 256 checks', () => {
+    it('removes the expired buckets a few at a time on each check, without scanning the whole map', () => {
         const window = policy(10, 1);
         store.consume('stale-client', window);
         for (let index = 0; index < 254; index++) store.consume(`client-${index}`, window);
         expect(store.size).toBe(255);
 
         now += 20;
-        store.consume('current-client', window);
+        for (let index = 0; index < 40; index++) store.consume(`current-${index}`, policy(1_000, 1));
 
-        expect(store.size).toBe(1);
+        expect(store.size).toBeLessThan(255);
+        expect(store.size).toBeGreaterThanOrEqual(40);
+        for (let index = 0; index < 40; index++) store.consume(`current-${index}`, policy(1_000, 5));
+        expect(store.size).toBe(40);
     });
 });

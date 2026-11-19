@@ -304,6 +304,22 @@ describe('FastifyHttpAdapter', () => {
             });
         });
 
+        it('should create the session wrapper only when the session is read, once per request', async () => {
+            const adapter = new FastifyHttpAdapter({ ...baseConfig, session: true }, axisparkConfig as any);
+            const handler = jest.fn();
+            adapter.registerRoutes([route(class {}, '/', handler, 'test')]);
+            const fastifySession: any = {};
+
+            await app.route.mock.calls[0][0].handler({ session: fastifySession }, {});
+            const context = handler.mock.calls[0][0];
+
+            expect(fastifySession.data).toBeUndefined();
+            const first = context.session;
+            expect(first).toBeInstanceOf(FastifyHttpSession);
+            expect(context.session).toBe(first);
+            expect(fastifySession.data).toEqual({});
+        });
+
         it('should delegate host-based dispatch to the framework route handler', async () => {
             const adapter = new FastifyHttpAdapter(baseConfig, axisparkConfig as any);
             const handler = jest.fn();

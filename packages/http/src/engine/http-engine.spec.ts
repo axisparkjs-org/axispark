@@ -237,6 +237,25 @@ describe('HttpEngine', () => {
             expect(executionEngine.execute).not.toHaveBeenCalled();
         });
     });
+    describe('context of the adapter', () => {
+        it('should fill the context of the adapter in place, keeping its getters', async () => {
+            class Controller {}
+            const route = createRoute(Controller, 'find');
+            hostMatcher.match.mockReturnValue([route]);
+            versionMatcher.match.mockReturnValue(route);
+            const read = jest.fn().mockReturnValue('session');
+            const context: any = { request: { headers: {}, method: 'GET', path: '/users' }, response };
+            Object.defineProperty(context, 'session', { get: read, enumerable: true });
+
+            await httpEngine.execute(context, [route]);
+
+            const executed = executionEngine.execute.mock.calls[0][0];
+            expect(executed).toBe(context);
+            expect(executed).toMatchObject({ target: Controller, propertyKey: 'find', transport: 'http', error: undefined });
+            expect(read).not.toHaveBeenCalled();
+        });
+    });
+
     describe('single unrestricted route', () => {
         class Controller {}
         const context = () => ({ request: { headers: {}, path: '/users', method: 'GET' }, response, session: {} }) as any;

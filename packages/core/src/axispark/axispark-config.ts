@@ -95,4 +95,11 @@ export interface AxiSparkConfig<TSettings extends object = object> {
      * and `onStop` in reverse order. With `'sequential'`, they run one by one in dependency order, for plugins with undeclared dependencies.
      */
     pluginLifecycle?: 'parallel' | 'sequential';
+
+    /**
+     * Options of the health checks run by the `HealthEngine`. `cacheTtl` is the time in milliseconds that the result of each check is reused
+     * by the next health requests, so frequent probes (such as the liveness and readiness probes of Kubernetes) do not hit the databases and
+     * brokers continuously. A check can override it with its own `cacheTtl`. Defaults to `0`, which runs the checks on every request.
+     */
+    healthChecks?: { cacheTtl?: number };
 }

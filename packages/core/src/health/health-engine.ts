@@ -16,7 +16,17 @@ interface HealthCheckEntry {
     name: string;
     timeout: number;
     critical: boolean;
+    cacheTtl?: number;
+    /** The object that identifies the check between health requests: the indicator registered, or the decorated class. */
+    key: object;
     resolve: () => Promise<HealthIndicator>;
+}
+
+/** The last result of a check, and the check that is running. */
+interface HealthCheckState {
+    data?: HealthData;
+    expiresAt: number;
+    pending?: Promise<HealthData>;
 }
 
 /**
@@ -27,6 +37,9 @@ interface HealthCheckEntry {
  * - `checkAll()`: Checks the health status of all registered plugins and health checks and returns an array of `HealthData` objects representing the health of each component, including the overall application health.
  * - `checkApp()`: Checks the overall health status of the application and returns a single `HealthData` object representing the application's health.
  *
+ * Concurrent health requests share the checks that are running, and the result of a check is reused for `cacheTtl` milliseconds (of the
+ * check, or `healthChecks.cacheTtl` of the application), so frequent probes do not run the indicators every time.
+ *
  * The checks decorated with `@HealthCheck` are read from the `ClassRegistry` the first time the health is checked, when every file has been
  * scanned, and the list is reused by the next checks.
  *
@@ -35,6 +48,7 @@ interface HealthCheckEntry {
 @Injectable()
 export class HealthEngine {
     private readonly registeredChecks: HealthCheckEntry[] = [];
+    private readonly checkStates = new WeakMap<object, HealthCheckState>();
     private decoratedChecks?: HealthCheckEntry[];
 
     constructor(
@@ -53,6 +67,8 @@ export class HealthEngine {
             name: options?.name ?? indicator.constructor.name,
             timeout: options?.timeout ?? DEFAULT_HEALTH_CHECK_TIMEOUT,
             critical: options?.critical ?? true,
+            cacheTtl: options?.cacheTtl,
+            key: indicator,
             resolve: async () => indicator
         });
     }
@@ -74,7 +90,7 @@ export class HealthEngine {
             };
         });
         const checks = [...this.registeredChecks, ...this.getDecoratedChecks()];
-        const checkHealthDatas = await Promise.all(checks.map((check) => this.runCheck(check)));
+        const checkHealthDatas = await Promise.all(checks.map((check) => this.runSharedCheck(check)));
 
         const relevantHealthDatas = [...pluginHealthDatas, ...checkHealthDatas.filter((_, index) => checks[index].critical)];
         const unhealthyPresence = relevantHealthDatas.some((state) => state.status === HealthStatus.Unhealthy);
@@ -115,10 +131,39 @@ export class HealthEngine {
                 name: metadata.name,
                 timeout: metadata.timeout,
                 critical: metadata.critical,
+                cacheTtl: metadata.cacheTtl,
+                key: target,
                 resolve: async () => await this.container.resolve(metadata.target as ClassType<HealthIndicator>)
             };
         });
         return this.decoratedChecks;
+    }
+
+    /*
+     * Runs a check, unless its last result is still valid (cacheTtl) or the check is already running for another health request, whose
+     * result is shared. The checks never reject: their failures are results.
+     */
+    private runSharedCheck(check: HealthCheckEntry): Promise<HealthData> {
+        let state = this.checkStates.get(check.key);
+        if (!state) {
+            state = { expiresAt: 0 };
+            this.checkStates.set(check.key, state);
+        }
+
+        if (state.data && state.expiresAt > Date.now()) return Promise.resolve(state.data);
+        if (state.pending) return state.pending;
+
+        const ttl = check.cacheTtl ?? this.config.healthChecks?.cacheTtl ?? 0;
+        const current = state;
+        current.pending = this.runCheck(check).then((data) => {
+            current.pending = undefined;
+            if (ttl > 0) {
+                current.data = data;
+                current.expiresAt = Date.now() + ttl;
+            }
+            return data;
+        });
+        return current.pending;
     }
 
     private async runCheck(check: HealthCheckEntry): Promise<HealthData> {
