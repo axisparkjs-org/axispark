@@ -175,14 +175,17 @@ describe('Container (concurrent resolutions)', () => {
     });
     describe('parallel constructor dependencies', () => {
         it('should resolve the dependencies of a constructor in parallel', async () => {
-            const started: string[] = [];
+            // The order of the events shows the parallelism without measuring time: resolved one by one, the first factory would end
+            // before the second one starts.
+            const events: string[] = [];
             const factoryOf = (name: string, forClass: any) => ({
                 token: new InjectionToken(name),
                 forClass,
                 scope: InjectableScopes.Singleton,
                 useFactory: async () => {
-                    started.push(name);
-                    await delay(20);
+                    events.push(`${name}:start`);
+                    await new Promise((resolve) => setImmediate(resolve));
+                    events.push(`${name}:end`);
                     return name;
                 }
             });
@@ -198,11 +201,10 @@ describe('Container (concurrent resolutions)', () => {
                 useFactory: (a, b) => [a, b]
             });
 
-            const begin = Date.now();
             await expect(container.resolve(TA_PARALLEL)).resolves.toEqual(['FIRST', 'SECOND']);
 
-            expect(started).toEqual(['FIRST', 'SECOND']);
-            expect(Date.now() - begin).toBeLessThan(39);
+            expect(events.slice(0, 2)).toEqual(['FIRST:start', 'SECOND:start']);
+            expect(events).toHaveLength(4);
         });
 
         it('should let a dependency wait for a singleton created by another dependency of the same constructor', async () => {
