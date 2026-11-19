@@ -60,4 +60,10 @@ export interface OpenApiPluginOptions extends PluginOptions {
      * If true, the OpenAPI plugin will expose the YAML document as a REST endpoint.
      */
     exposeYaml?: boolean;
+    /**
+     * If true, the JSON responses of the routes documented with `@OpenApiResponse()` are serialized with their schema by the HTTP adapters
+     * that support it (Fastify, with `fast-json-stringify`), which is faster than `JSON.stringify`. The properties that are not in the schema
+     * are not sent, so enable it only when the schemas describe every property of the responses. Defaults to false.
+     */
+    serializeResponses?: boolean;
 }

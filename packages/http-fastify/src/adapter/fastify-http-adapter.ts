@@ -25,6 +25,7 @@ import os from 'node:os';
 export class FastifyHttpAdapter implements HttpAdapter {
     private readonly app: FastifyInstance;
     private readonly registeredRoutes: RouteDefinition[] = [];
+    private readonly responseSchemas = new WeakMap<RouteDefinition, Readonly<Record<string, object>>>();
 
     constructor(
         @Inject(HTTP_OPTIONS)
@@ -85,7 +86,7 @@ export class FastifyHttpAdapter implements HttpAdapter {
                 method: httpMethod.toUpperCase(),
                 url: path,
                 handler: async (request, reply) => {
-                    await route.handler(this.createContext(request, reply));
+                    await route.handler(this.createContext(request, reply, this.responseSchemas.get(route)));
                     // Some replies, such as files and streams, are sent after the handler ends: returning the reply makes Fastify wait for them instead of sending an empty reply.
                     return reply;
                 }
@@ -93,16 +94,26 @@ export class FastifyHttpAdapter implements HttpAdapter {
         }
     }
 
+    /**
+     * Keeps the JSON schemas of the responses of a route, so its JSON responses are serialized with `fast-json-stringify` (the serializer
+     * compiler of Fastify) instead of `JSON.stringify`. The schemas are compiled the first time they are used, and cached by Fastify.
+     * @param route A route registered with `registerRoutes()`.
+     * @param schemas The self-contained JSON schemas of the responses, by status code (`'default'` for any other status).
+     */
+    registerResponseSchemas(route: RouteDefinition, schemas: Readonly<Record<string, object>>): void {
+        this.responseSchemas.set(route, schemas);
+    }
+
     /*
      * The context of a request. The session wrapper is created the first time the session is read, so the requests that do not use the
      * session (or the applications without sessions) do not allocate it. The HTTP engine fills this object instead of copying it.
      */
-    private createContext(request: FastifyRequest, reply: FastifyReply) {
+    private createContext(request: FastifyRequest, reply: FastifyReply, schemas?: Readonly<Record<string, object>>) {
         let session: FastifyHttpSession | undefined;
         let sessionCreated = false;
         return {
             request: new FastifyHttpRequest(request, reply.raw),
-            response: new FastifyHttpResponse(reply),
+            response: new FastifyHttpResponse(reply, schemas),
             get session(): FastifyHttpSession | undefined {
                 if (!sessionCreated) {
                     sessionCreated = true;

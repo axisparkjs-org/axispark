@@ -5,8 +5,16 @@ import { HttpResponse } from '@axisparkjs/http';
 import { SerializeOptions } from '@fastify/cookie';
 import { FastifyReply } from 'fastify';
 
+/**
+ * The `HttpResponse` of the Fastify adapter. When the route has response schemas, the JSON responses whose body is an object or an array
+ * that matches the root of the schema of the status code are serialized with the schema (`fast-json-stringify`); the other responses are
+ * serialized by Fastify with `JSON.stringify`.
+ */
 export class FastifyHttpResponse implements HttpResponse {
-    constructor(private readonly response: FastifyReply) {}
+    constructor(
+        private readonly response: FastifyReply,
+        private readonly schemas?: Readonly<Record<string, object>>
+    ) {}
 
     status(code: number): this {
         this.response.status(code);
@@ -29,7 +37,23 @@ export class FastifyHttpResponse implements HttpResponse {
     }
 
     json(body?: unknown): void {
+        const schema = this.schemaOf(body);
+        if (schema) {
+            if (!this.response.hasHeader('content-type')) this.response.type('application/json; charset=utf-8');
+            this.response.serializer(this.response.compileSerializationSchema(schema, String(this.response.statusCode)));
+        }
         this.response.send(body);
+    }
+
+    /* The schema of the status code, only when its root is the kind of the body: an object schema for objects, an array schema for arrays. */
+    private schemaOf(body: unknown): Record<string, unknown> | undefined {
+        if (!this.schemas || body === null || typeof body !== 'object') return undefined;
+
+        const schema = (this.schemas[String(this.response.statusCode)] ?? this.schemas.default) as Record<string, unknown> | undefined;
+        if (!schema) return undefined;
+
+        const matches = Array.isArray(body) ? schema.type === 'array' : '$ref' in schema || schema.type === 'object';
+        return matches ? schema : undefined;
     }
 
     send(body?: unknown): void {

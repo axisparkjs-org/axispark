@@ -175,6 +175,22 @@ describe('FastifyHttpAdapter', () => {
         });
     });
 
+    describe('registerResponseSchemas', () => {
+        it('should give the schemas of the route to the response of its requests', async () => {
+            const adapter = new FastifyHttpAdapter(baseConfig, axisparkConfig as any);
+            const handler = jest.fn();
+            const route = { path: '/products', httpMethod: 'get', handler } as any;
+            const schemas = { 200: { type: 'object' } };
+            adapter.registerRoutes([route]);
+            adapter.registerResponseSchemas(route, schemas);
+
+            const { handler: fastifyHandler } = (app.route as jest.Mock).mock.calls[0][0];
+            await fastifyHandler({ raw: {} }, { raw: {} });
+
+            expect((handler.mock.calls[0][0].response as any).schemas).toBe(schemas);
+        });
+    });
+
     describe('static files', () => {
         let basePath: string;
 
