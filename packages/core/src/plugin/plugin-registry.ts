@@ -32,7 +32,8 @@ export interface PluginRegistryOptions {
 /**
  * A registry for managing plugins and their lifecycle. The plugins are grouped by level of the dependency graph: the first level has the
  * plugins without dependencies, and each next level has the plugins whose dependencies are in the previous levels. The plugins of a level
- * run `onRegister` and `onStart` at the same time, after the previous level ends, and `onStop` runs level by level in reverse order.
+ * run `onRegister` and `onStart` at the same time, after the previous level ends. `onStop` runs one plugin at a time, in the reverse of the
+ * dependency order, because a plugin can use the connections of another one without declaring it (such as a shared store).
  */
 export class PluginRegistry implements Lifecycle {
     private readonly plugins: RegisteredPlugin[] = [];
@@ -149,7 +150,7 @@ export class PluginRegistry implements Lifecycle {
     }
 
     /**
-     * Destroys the registered plugins by executing their `onStop` lifecycle method, level by level in reverse order.
+     * Destroys the registered plugins by executing their `onStop` lifecycle method one by one, in the reverse of the dependency order.
      * @param context The AxiSparkContext to be passed to the plugins during destruction.
      */
     async destroy(context: AxiSparkContext): Promise<void> {
@@ -162,8 +163,15 @@ export class PluginRegistry implements Lifecycle {
         lifecycleState: PluginLifecycle,
         reversed = false
     ): Promise<void> {
-        const levels = reversed ? this.levels.toReversed() : this.levels;
-        for (const level of levels) {
+        // onStop runs one plugin at a time, in the reverse of the dependency order: a plugin can use the connections of another plugin
+        // without declaring it as a dependency (for example through the store of a StoreProvider, or an injected client), so a plugin is
+        // always stopped before the plugins registered before it, and the work that it finishes while stopping can still use them.
+        if (reversed) {
+            for (const plugin of this.levels.flat().toReversed()) await this.executePlugin(context, plugin, methodName, lifecycleState);
+            return;
+        }
+
+        for (const level of this.levels) {
             if (this.options.parallel === false) {
                 for (const plugin of level) await this.executePlugin(context, plugin, methodName, lifecycleState);
             } else {

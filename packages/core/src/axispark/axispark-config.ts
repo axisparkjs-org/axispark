@@ -91,8 +91,9 @@ export interface AxiSparkConfig<TSettings extends object = object> {
 
     /**
      * How the plugins run their lifecycle methods. With `'parallel'` (the default), the plugins that do not depend on each other, such as
-     * the connections to Redis, Kafka and RabbitMQ, run `onRegister` and `onStart` at the same time, level by level of the dependency graph,
-     * and `onStop` in reverse order. With `'sequential'`, they run one by one in dependency order, for plugins with undeclared dependencies.
+     * the connections to Redis, Kafka and RabbitMQ, run `onRegister` and `onStart` at the same time, level by level of the dependency graph.
+     * With `'sequential'`, they run one by one in dependency order, for plugins with undeclared dependencies. `onStop` always runs one by
+     * one in reverse order, so a plugin finishes its work before the connections that it uses are closed.
      */
     pluginLifecycle?: 'parallel' | 'sequential';
 

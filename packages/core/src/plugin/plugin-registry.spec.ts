@@ -507,7 +507,7 @@ describe('PluginRegistry', () => {
             expect(timeline).toEqual(['slow:start', 'fast:start', 'fast:started', 'slow:started', 'consumer:start']);
         });
 
-        it('should stop the plugins level by level in reverse order', async () => {
+        it('should stop the plugins one by one in the reverse of the dependency order', async () => {
             registerAll(registry);
             await registry.init(context);
             await registry.run(context);
@@ -515,7 +515,32 @@ describe('PluginRegistry', () => {
 
             await registry.destroy(context);
 
-            expect(timeline).toEqual(['consumer:stop', 'slow:stop', 'fast:stop']);
+            expect(timeline).toEqual(['consumer:stop', 'fast:stop', 'slow:stop']);
+        });
+
+        it('should stop an independent plugin registered before only after the plugins registered after it end their onStop', async () => {
+            class StoreConnectionPlugin extends Plugin {
+                async onStop() {
+                    timeline.push('connection:closed');
+                }
+            }
+            class JobsPlugin extends Plugin {
+                async onStop() {
+                    timeline.push('jobs:waiting');
+                    await delay(20);
+                    timeline.push('jobs:finished');
+                }
+            }
+            Injectable()(StoreConnectionPlugin);
+            Injectable()(JobsPlugin);
+            registry.register(StoreConnectionPlugin);
+            registry.register(JobsPlugin);
+            await registry.init(context);
+            await registry.run(context);
+
+            await registry.destroy(context);
+
+            expect(timeline).toEqual(['jobs:waiting', 'jobs:finished', 'connection:closed']);
         });
 
         it('should run the plugins one by one when parallel is false', async () => {
