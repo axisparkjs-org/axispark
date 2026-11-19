@@ -104,11 +104,24 @@ export class FastifyHttpAdapter implements HttpAdapter {
         this.responseSchemas.set(route, schemas);
     }
 
+    /*
+     * The context of a request. The session wrapper is created the first time the session is read, so the requests that do not use the
+     * session (or the applications without sessions) do not allocate it. The HTTP engine fills this object instead of copying it.
+     */
     private createContext(request: FastifyRequest, reply: FastifyReply, schemas?: Readonly<Record<string, object>>) {
-        const req = new FastifyHttpRequest(request, reply.raw);
-        const res = new FastifyHttpResponse(reply, schemas);
-        const ses = request.session ? new FastifyHttpSession(request.session) : undefined;
-        return { request: req, response: res, session: ses };
+        let session: FastifyHttpSession | undefined;
+        let sessionCreated = false;
+        return {
+            request: new FastifyHttpRequest(request, reply.raw),
+            response: new FastifyHttpResponse(reply, schemas),
+            get session(): FastifyHttpSession | undefined {
+                if (!sessionCreated) {
+                    sessionCreated = true;
+                    session = request.session ? new FastifyHttpSession(request.session) : undefined;
+                }
+                return session;
+            }
+        };
     }
 
     /**

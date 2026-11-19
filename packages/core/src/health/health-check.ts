@@ -14,7 +14,8 @@ export function HealthCheck(options?: HealthCheckOptions): ClassDecorator {
             target: Metadata.normalizeTarget(target),
             name: options?.name ?? target.name,
             timeout: options?.timeout ?? DEFAULT_HEALTH_CHECK_TIMEOUT,
-            critical: options?.critical ?? true
+            critical: options?.critical ?? true,
+            cacheTtl: options?.cacheTtl
         };
         Constructable(MetadataKeys.INJECTABLE)(target);
         Metadata.define(MetadataKeys.HEALTH_CHECK, metadata, target);
