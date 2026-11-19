@@ -128,7 +128,7 @@ export class CacheProcessor implements Processable {
         if (result === undefined || result instanceof ResultDefinition) {
             share(undefined);
             const reason = result === undefined ? 'it is undefined' : `it is a ${result.constructor.name}`;
-            await this.logger.debug(`The result of ${handler} is not cached because ${reason}`);
+            this.logger.nonBlocking.debug(`The result of ${handler} is not cached because ${reason}`);
             return result;
         }
 
@@ -177,7 +177,7 @@ export class CacheProcessor implements Processable {
         if (last !== undefined && now - last < CacheProcessor.WARNING_INTERVAL) return;
 
         CacheProcessor.lastWarnings.set(transport, now);
-        await this.logger.warn(
+        this.logger.nonBlocking.warn(
             `The ${transport} cache store failed, so the handlers run without cache: ${error instanceof Error ? error.message : String(error)}`
         );
     }

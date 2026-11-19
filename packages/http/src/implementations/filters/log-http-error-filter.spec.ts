@@ -10,6 +10,7 @@ describe('LogHttpErrorFilter', () => {
         logger = {
             info: jest.fn()
         } as unknown as jest.Mocked<Logger>;
+        (logger as any).nonBlocking = logger;
 
         filter = new LogHttpErrorFilter(logger);
     });

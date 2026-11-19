@@ -39,6 +39,7 @@ describe('HttpEngine', () => {
         scopedContainerManager = { create: jest.fn().mockReturnValue({ scoped: true }) };
 
         logger = { error: jest.fn().mockResolvedValue(undefined) };
+        (logger as any).nonBlocking = logger;
         response = { isCommitted: jest.fn().mockReturnValue(true), status: jest.fn(), json: jest.fn() };
         options = { logErrors: true };
 

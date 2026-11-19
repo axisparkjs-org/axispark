@@ -83,7 +83,7 @@ export class HttpEngine implements Executable {
             if (this.options.logErrors === false) return;
             const route = `${versionRoute.target.name}.${String(versionRoute.propertyKey)}`;
             const { name, message } = error as Error;
-            await this.logger.error(`Error while sending the response of ${route}: ${name} -> ${message}`, error as Error);
+            this.logger.nonBlocking.error(`Error while sending the response of ${route}: ${name} -> ${message}`, error as Error);
         }
     }
 

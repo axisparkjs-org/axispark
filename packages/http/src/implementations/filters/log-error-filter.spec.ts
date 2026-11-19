@@ -9,6 +9,7 @@ describe('LogErrorFilter', () => {
         logger = {
             info: jest.fn()
         } as any;
+        (logger as any).nonBlocking = logger;
 
         filter = new LogErrorFilter(logger);
     });

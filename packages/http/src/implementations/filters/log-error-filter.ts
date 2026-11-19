@@ -17,6 +17,6 @@ export class LogErrorFilter {
      */
     @Catch(Error)
     public async error(@ErrorParam() error: Error): Promise<void> {
-        this.logger.info(`Error during execution: ${error.name} -> ${error.message}`);
+        this.logger.nonBlocking.info(`Error during execution: ${error.name} -> ${error.message}`);
     }
 }

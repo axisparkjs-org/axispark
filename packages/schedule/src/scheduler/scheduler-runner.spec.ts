@@ -12,6 +12,7 @@ describe('SchedulerRunner', () => {
         jest.useFakeTimers();
 
         logger = { error: jest.fn(), warn: jest.fn(), debug: jest.fn() };
+        (logger as any).nonBlocking = logger;
         runner = new SchedulerRunner(logger as any);
     });
 

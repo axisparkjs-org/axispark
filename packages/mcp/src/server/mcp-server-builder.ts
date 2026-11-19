@@ -164,7 +164,7 @@ export class McpServerBuilder {
         try {
             response = await definition.handler({ request, session: this.createSession(ctx, transport), client: this.getClient(server, ctx) });
         } catch (error) {
-            await this.logger.error(`Unexpected error handling MCP ${request.capability} '${request.name}'`, error instanceof Error ? error : undefined);
+            this.logger.nonBlocking.error(`Unexpected error handling MCP ${request.capability} '${request.name}'`, error instanceof Error ? error : undefined);
             throw new ProtocolError(ProtocolErrorCode.InternalError, error instanceof Error ? error.message : String(error));
         }
 

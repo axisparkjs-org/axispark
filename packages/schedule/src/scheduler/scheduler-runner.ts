@@ -134,7 +134,9 @@ export class SchedulerRunner {
         const pending = running.filter(([name, execution]) => this.executions.get(name) === execution);
         if (pending.length === 0) return;
         pending.forEach(([, execution]) => clearInterval(execution.heartbeat));
-        this.logger.warn(`Stopped the scheduler without waiting for the running jobs after ${options.timeout}ms: ${pending.map(([name]) => name).join(', ')}`);
+        this.logger.nonBlocking.warn(
+            `Stopped the scheduler without waiting for the running jobs after ${options.timeout}ms: ${pending.map(([name]) => name).join(', ')}`
+        );
     }
 
     /**
@@ -200,7 +202,7 @@ export class SchedulerRunner {
         try {
             await this.run(job, scheduledAt, execution);
         } catch (error) {
-            this.logger.error(`Error executing job ${job.name}`, error as Error);
+            this.logger.nonBlocking.error(`Error executing job ${job.name}`, error as Error);
         } finally {
             if (this.executions.get(job.name) === execution) this.executions.delete(job.name);
             // The job may have been stopped, or stopped and started again, while it was executing.
@@ -251,11 +253,11 @@ export class SchedulerRunner {
         try {
             lock = await this.lockStore.acquire(key, ttl);
         } catch (error) {
-            this.logger.error(`Job ${job.name} skipped because its lock could not be acquired`, error as Error);
+            this.logger.nonBlocking.error(`Job ${job.name} skipped because its lock could not be acquired`, error as Error);
             return undefined;
         }
 
-        if (!lock) this.logger.debug(`Job ${job.name} skipped because another instance holds its lock`);
+        if (!lock) this.logger.nonBlocking.debug(`Job ${job.name} skipped because another instance holds its lock`);
         return lock;
     }
 
@@ -263,9 +265,9 @@ export class SchedulerRunner {
         const extendLock = () =>
             lock.extend(ttl).then(
                 (extended) => {
-                    if (!extended) this.logger.warn(`Job ${job.name} lost its lock while running`);
+                    if (!extended) this.logger.nonBlocking.warn(`Job ${job.name} lost its lock while running`);
                 },
-                (error: Error) => this.logger.error(`Job ${job.name} could not extend its lock`, error)
+                (error: Error) => this.logger.nonBlocking.error(`Job ${job.name} could not extend its lock`, error)
             );
         const heartbeat = setInterval(extendLock, Math.max(1, Math.floor(ttl / 2)));
         // The shutdown stops the heartbeat of a job that exceeds its timeout, so its lock expires with its ttl once the process exits.
@@ -275,7 +277,7 @@ export class SchedulerRunner {
             await job.execute(execution.controller.signal);
         } finally {
             clearInterval(heartbeat);
-            await lock.release().catch((error: Error) => this.logger.error(`Job ${job.name} could not release its lock`, error));
+            await lock.release().catch((error: Error) => this.logger.nonBlocking.error(`Job ${job.name} could not release its lock`, error));
         }
     }
 
@@ -291,7 +293,7 @@ export class SchedulerRunner {
 
         const rescheduledExecutionTime = job.getNextExecutionTimeAfter(new Date());
         if (rescheduledExecutionTime) {
-            this.logger.warn(
+            this.logger.nonBlocking.warn(
                 `Job ${job.name} skipped the executions missed since ${nextExecutionTime.toISOString()}. Next execution at ${rescheduledExecutionTime.toISOString()}`
             );
         }
