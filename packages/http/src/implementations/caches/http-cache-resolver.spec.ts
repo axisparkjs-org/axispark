@@ -1,6 +1,7 @@
 import { CacheDefinition, ExecutionContext, ExecutionTransport } from '@axisparkjs/engine';
 import { CacheVary } from '../../decorators/cache-vary';
 import { HttpCacheResolver } from './http-cache-resolver';
+import { Metadata } from '@axisparkjs/common';
 
 describe('HttpCacheResolver', () => {
     const resolver = new HttpCacheResolver();
@@ -120,5 +121,20 @@ describe('HttpCacheResolver', () => {
 
         await expect(resolver.resolve(context({ headers }, TenantController, 'find'), definition)).resolves.toMatch(/:\[\["x-tenant","acme"\]\]$/);
         await expect(resolver.resolve(context({ headers }, TenantController, 'accept'), definition)).resolves.toMatch(/:\[\["accept","text\/csv"\]\]$/);
+    });
+    it('reads the headers of @CacheVary() once per handler', async () => {
+        const fresh = new HttpCacheResolver();
+        const get = jest.spyOn(Metadata, 'get');
+        const headers = { 'accept-language': 'es' };
+
+        const first = await fresh.resolve(context({ headers }, ProductController, 'localized'), definition);
+        const reads = get.mock.calls.length;
+        const second = await fresh.resolve(context({ headers }, ProductController, 'localized'), definition);
+        await fresh.resolve(context({ headers }, ProductController, 'find'), definition);
+        await fresh.resolve(context({ headers }, ProductController, 'find'), definition);
+
+        expect(second).toBe(first);
+        expect(get.mock.calls.length).toBe(reads + 2);
+        get.mockRestore();
     });
 });
