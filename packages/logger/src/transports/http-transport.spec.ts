@@ -1,4 +1,4 @@
-import { HttpTransport } from './http-transport';
+import { HttpTransport, HttpTransportOptions } from './http-transport';
 import { LogEntry } from '../log-entry';
 import { LogFormatter } from '../log-formatter';
 import { LogLevel } from '../log-level';
@@ -144,5 +144,84 @@ describe('HttpTransport', () => {
         await transport.write(createEntry(LogLevel.Debug));
 
         expect(fetch).not.toHaveBeenCalled();
+    });
+    describe('batches', () => {
+        const batched = (batch: HttpTransportOptions['batch'], extra: Partial<HttpTransportOptions> = {}) =>
+            new HttpTransport({ url: 'https://example.com/logs', formatter, minLevel: LogLevel.Info, batch, ...extra });
+        const sentBodies = () => (fetch as jest.Mock).mock.calls.map(([, init]) => JSON.parse(init.body));
+        const entryWith = (message: string, level = LogLevel.Info): LogEntry => ({ timestamp: new Date(0), level, message, scopes: [] });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        it('should send the entries as one array when the batch is full, without waiting for the request', async () => {
+            let release: () => void = () => undefined;
+            (fetch as jest.Mock).mockReturnValue(new Promise((resolve) => (release = () => resolve({}))));
+            const transport = batched({ size: 2 });
+
+            await transport.write(entryWith('one'));
+            expect(fetch).not.toHaveBeenCalled();
+            await transport.write(entryWith('two'));
+            await transport.write(entryWith('debug', LogLevel.Debug));
+
+            expect(sentBodies()).toEqual([[expect.objectContaining({ message: 'one' }), expect.objectContaining({ message: 'two' })]]);
+            release();
+            await transport.flush();
+        });
+
+        it('should send the pending entries after the interval', async () => {
+            jest.useFakeTimers();
+            const transport = batched({ interval: 500 });
+
+            await transport.write(entryWith('one'));
+            await transport.write(entryWith('two'));
+            jest.advanceTimersByTime(499);
+            expect(fetch).not.toHaveBeenCalled();
+
+            jest.advanceTimersByTime(1);
+            expect(sentBodies()).toEqual([[expect.objectContaining({ message: 'one' }), expect.objectContaining({ message: 'two' })]]);
+        });
+
+        it('should send the pending entries and wait for the requests in flush', async () => {
+            const transport = batched(true);
+            await transport.write({ ...entryWith('failed'), error: new Error('boom') });
+
+            await transport.flush();
+            await transport.flush();
+
+            expect(fetch).toHaveBeenCalledTimes(1);
+            expect(sentBodies()[0][0].error).toEqual(expect.objectContaining({ name: 'Error', message: 'boom' }));
+        });
+
+        it('should report the failures of a batch to onError for each entry', async () => {
+            const error = new Error('unreachable');
+            (fetch as jest.Mock).mockRejectedValue(error);
+            const onError = jest.fn().mockImplementationOnce(() => {
+                throw new Error('callback');
+            });
+            const transport = batched({ size: 2 }, { onError });
+
+            await transport.write(entryWith('one'));
+            await transport.write(entryWith('two'));
+            await transport.flush();
+
+            expect(onError).toHaveBeenCalledTimes(2);
+            expect(onError).toHaveBeenCalledWith(error, expect.objectContaining({ message: 'two' }));
+        });
+
+        it('should report the failures of the batches on stderr at most once a minute', async () => {
+            (fetch as jest.Mock).mockRejectedValue('offline');
+            const stderr = jest.spyOn(process.stderr, 'write').mockReturnValue(true);
+            const transport = batched({ size: 1 });
+
+            await transport.write(entryWith('one'));
+            await transport.flush();
+            await transport.write(entryWith('two'));
+            await transport.flush();
+
+            expect(stderr).toHaveBeenCalledTimes(1);
+            expect(stderr.mock.calls[0][0]).toContain('failed to send a batch of 1 entries: Error -> offline');
+        });
     });
 });
