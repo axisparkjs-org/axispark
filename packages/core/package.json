@@ -1,6 +1,6 @@
 {
     "name": "@axisparkjs/core",
-    "version": "1.6.0",
+    "version": "1.6.1",
     "description": "AxiSpark.js - The Ultimate Node.js Framework - @axisparkjs/core",
     "author": "Pablo Gálvez Ortuño",
     "license": "Apache-2.0",
@@ -48,9 +48,9 @@
         "node": ">= 24"
     },
     "dependencies": {
-        "@axisparkjs/common": "1.6.0",
-        "@axisparkjs/di": "1.6.0",
-        "@axisparkjs/logger": "1.6.0",
+        "@axisparkjs/common": "1.6.1",
+        "@axisparkjs/di": "1.6.1",
+        "@axisparkjs/logger": "1.6.1",
         "fast-glob": "^3.3.3"
     }
 }
