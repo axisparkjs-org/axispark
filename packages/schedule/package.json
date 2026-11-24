@@ -52,6 +52,6 @@
         "@axisparkjs/di": "1.6.0",
         "@axisparkjs/logger": "1.6.0",
         "@axisparkjs/store": "1.6.0",
-        "cron": "^4.4.0"
+        "cron": "^4.4.1"
     }
 }
